@@ -142,6 +142,7 @@ type WarmupStatusResponse = {
 };
 
 type AuthMode = 'login' | 'register';
+type AuthStep = 'credentials' | 'verify-email' | 'verify-login';
 
 const statusLabels: Record<string, string> = {
   completed: 'готово',
@@ -210,9 +211,13 @@ function readStoredJobId(): string | null {
 export default function DashboardPage() {
   const [token, setToken] = useState<string | null>(null);
   const [mode, setMode] = useState<AuthMode>('login');
+  const [authStep, setAuthStep] = useState<AuthStep>('credentials');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [betaKey, setBetaKey] = useState('');
+  const [verificationCode, setVerificationCode] = useState('');
+  const [loginChallengeId, setLoginChallengeId] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [matches, setMatches] = useState<VacancyMatch[]>([]);
@@ -434,16 +439,19 @@ export default function DashboardPage() {
         await fetch(`${API_BASE_URL}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, full_name: fullName || null })
+          body: JSON.stringify({ email, password, full_name: fullName || null, beta_key: betaKey })
         }).then(async (response) => {
           if (!response.ok) {
             const payload = await response.json();
             throw new Error(payload.detail || 'Не удалось создать аккаунт');
           }
         });
+        setAuthStep('verify-email');
+        setMessage('Код подтверждения отправлен на email.');
+        return;
       }
 
-      const auth = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const auth = await fetch(`${API_BASE_URL}/api/auth/login/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -452,14 +460,71 @@ export default function DashboardPage() {
           const payload = await response.json();
           throw new Error(payload.detail || 'Не удалось войти');
         }
+        return response.json() as Promise<{ challenge_id: string }>;
+      });
+
+      setLoginChallengeId(auth.challenge_id);
+      setAuthStep('verify-login');
+      setMessage('Код входа отправлен на email.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Ошибка авторизации');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleVerifyEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setMessage('');
+    try {
+      await fetch(`${API_BASE_URL}/api/auth/verify-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code: verificationCode })
+      }).then(async (response) => {
+        if (!response.ok) {
+          const payload = await response.json();
+          throw new Error(payload.detail || 'Не удалось подтвердить email');
+        }
+      });
+
+      setAuthStep('credentials');
+      setMode('login');
+      setVerificationCode('');
+      setMessage('Email подтвержден. Теперь выполните вход.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Ошибка подтверждения email');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleVerifyLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setMessage('');
+    try {
+      const auth = await fetch(`${API_BASE_URL}/api/auth/login/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, challenge_id: loginChallengeId, code: verificationCode })
+      }).then(async (response) => {
+        if (!response.ok) {
+          const payload = await response.json();
+          throw new Error(payload.detail || 'Не удалось подтвердить вход');
+        }
         return response.json() as Promise<{ access_token: string }>;
       });
 
       window.localStorage.setItem('access_token', auth.access_token);
       setToken(auth.access_token);
+      setVerificationCode('');
+      setLoginChallengeId('');
+      setAuthStep('credentials');
       setMessage('');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Ошибка авторизации');
+      setMessage(error instanceof Error ? error.message : 'Ошибка подтверждения входа');
     } finally {
       setBusy(false);
     }
@@ -931,18 +996,97 @@ export default function DashboardPage() {
 
         {!token ? (
           <section className="panel">
-            <h2>{mode === 'login' ? 'Вход в кабинет' : 'Создание аккаунта'}</h2>
-            <form className="form" onSubmit={handleAuth}>
-              {mode === 'register' ? <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Имя" /> : null}
-              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" type="email" />
-              <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Пароль" type="password" />
-              <button className="primary" disabled={busy}>
-                {mode === 'login' ? 'Войти' : 'Создать и войти'}
-              </button>
-              <button className="secondary" type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
-                {mode === 'login' ? 'Создать аккаунт' : 'У меня уже есть аккаунт'}
-              </button>
-            </form>
+            <h2>
+              {authStep === 'verify-email'
+                ? 'Подтверждение email'
+                : authStep === 'verify-login'
+                  ? 'Подтверждение входа'
+                  : mode === 'login'
+                    ? 'Вход в кабинет'
+                    : 'Создание аккаунта'}
+            </h2>
+            {authStep === 'credentials' ? (
+              <form className="form" onSubmit={handleAuth}>
+                {mode === 'register' ? (
+                  <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Имя" />
+                ) : null}
+                <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" type="email" />
+                <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Пароль" type="password" />
+                {mode === 'register' ? (
+                  <input
+                    value={betaKey}
+                    onChange={(event) => setBetaKey(event.target.value)}
+                    placeholder="Ключ бета-тестера"
+                    type="password"
+                  />
+                ) : null}
+                <button className="primary" disabled={busy}>
+                  {mode === 'login' ? 'Получить код входа' : 'Создать аккаунт'}
+                </button>
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => {
+                    setMode(mode === 'login' ? 'register' : 'login');
+                    setMessage('');
+                    setAuthStep('credentials');
+                    setVerificationCode('');
+                    setLoginChallengeId('');
+                  }}
+                >
+                  {mode === 'login' ? 'Создать аккаунт' : 'У меня уже есть аккаунт'}
+                </button>
+              </form>
+            ) : null}
+            {authStep === 'verify-email' ? (
+              <form className="form" onSubmit={handleVerifyEmail}>
+                <input value={email} disabled placeholder="Email" type="email" />
+                <input
+                  value={verificationCode}
+                  onChange={(event) => setVerificationCode(event.target.value)}
+                  placeholder="Код из письма"
+                />
+                <button className="primary" disabled={busy}>
+                  Подтвердить email
+                </button>
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => {
+                    setAuthStep('credentials');
+                    setVerificationCode('');
+                    setMessage('');
+                  }}
+                >
+                  Назад
+                </button>
+              </form>
+            ) : null}
+            {authStep === 'verify-login' ? (
+              <form className="form" onSubmit={handleVerifyLogin}>
+                <input value={email} disabled placeholder="Email" type="email" />
+                <input
+                  value={verificationCode}
+                  onChange={(event) => setVerificationCode(event.target.value)}
+                  placeholder="Код входа"
+                />
+                <button className="primary" disabled={busy}>
+                  Войти
+                </button>
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => {
+                    setAuthStep('credentials');
+                    setVerificationCode('');
+                    setLoginChallengeId('');
+                    setMessage('');
+                  }}
+                >
+                  Назад
+                </button>
+              </form>
+            ) : null}
             {message ? <p className="message">{message}</p> : null}
           </section>
         ) : (

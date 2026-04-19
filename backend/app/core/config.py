@@ -14,6 +14,18 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(default="change-me-before-production")
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+    beta_tester_keys: str | None = None
+    auth_email_delivery_mode: str = "console"
+    auth_email_from: str = "no-reply@hr-assistant.local"
+    auth_email_smtp_host: str | None = None
+    auth_email_smtp_port: int = 587
+    auth_email_smtp_username: str | None = None
+    auth_email_smtp_password: str | None = None
+    auth_email_smtp_starttls: bool = True
+    auth_email_smtp_ssl: bool = False
+    auth_email_code_ttl_minutes: int = 15
+    auth_login_code_ttl_minutes: int = 10
+    auth_code_max_attempts: int = 5
     openai_api_key: str | None = None
     openai_base_url: str | None = None
     openai_analysis_model: str = "gpt-5.4-mini"
@@ -67,6 +79,10 @@ class Settings(BaseSettings):
         "hh_api_token",
         "superjob_api_key",
         "habr_career_api_token",
+        "beta_tester_keys",
+        "auth_email_smtp_host",
+        "auth_email_smtp_username",
+        "auth_email_smtp_password",
         mode="before",
     )
     @classmethod
@@ -94,6 +110,14 @@ settings = get_settings()
 def validate_runtime_settings() -> None:
     is_production = settings.app_env.lower() == "production"
     weak_jwt_secret = not settings.jwt_secret_key or settings.jwt_secret_key == "change-me-before-production"
+    beta_keys = {item.strip() for item in (settings.beta_tester_keys or "").split(",") if item.strip()}
 
     if is_production and weak_jwt_secret:
         raise RuntimeError("JWT_SECRET_KEY must be configured with a strong secret in production")
+    if is_production and not beta_keys:
+        raise RuntimeError("BETA_TESTER_KEYS must be configured in production")
+    if is_production and settings.auth_email_delivery_mode.lower() != "smtp":
+        raise RuntimeError("AUTH_EMAIL_DELIVERY_MODE must be smtp in production")
+    if is_production and settings.auth_email_delivery_mode.lower() == "smtp":
+        if not settings.auth_email_smtp_host or not settings.auth_email_smtp_username or not settings.auth_email_smtp_password:
+            raise RuntimeError("SMTP settings must be configured in production")

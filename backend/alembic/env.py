@@ -6,7 +6,7 @@ from sqlalchemy import pool
 
 from app.core.config import settings
 from app.db.base import Base
-from app.models import resume, resume_profile, user, user_vacancy_feedback, vacancy, vacancy_profile
+from app.models import auth_otp_code, resume, resume_profile, user, user_vacancy_feedback, vacancy, vacancy_profile
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

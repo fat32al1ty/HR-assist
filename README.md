@@ -1,81 +1,95 @@
-# Resume Intelligence Platform
+# HR Assist
 
-Enterprise-oriented resume analysis platform.
+Платформа для анализа резюме и интеллектуального подбора вакансий.
 
-## Stage 1 scope
+## Что уже готово
 
-- FastAPI backend
-- PostgreSQL persistence
-- JWT authentication
-- PDF and DOCX resume uploads
-- Text extraction
-- OpenAI-powered structured resume analysis
-- Qdrant vector database for semantic resume and vacancy matching
-- Next.js personal dashboard
-- Docker Compose local runtime
+- Личный кабинет на Next.js.
+- Backend на FastAPI + PostgreSQL.
+- Загрузка PDF/DOCX и структурный анализ резюме через OpenAI.
+- Семантический поиск и хранение эмбеддингов в Qdrant.
+- Фоновое наполнение вакансий.
+- Защищенная авторизация: beta-key + подтверждение email + код входа.
+- Базовая защита от prompt-injection в LLM-контурах.
 
-## Run with Docker
+## Архитектура
 
-Create a local secrets file first:
+```mermaid
+flowchart LR
+  UI["Next.js UI"] --> API["FastAPI API"]
+  API --> PG["PostgreSQL"]
+  API --> QD["Qdrant"]
+  API --> OAI["OpenAI API"]
+  API --> SRC["HH / Habr / SuperJob Sources"]
+```
+
+Подробности: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+## Быстрый старт
+
+1. Скопируйте env:
 
 ```powershell
 Copy-Item .env.example .env.local
 ```
 
-Then fill `.env.local`. For resume analysis, set:
+2. Заполните минимум в `.env.local`:
 
 ```env
 OPENAI_API_KEY=sk-...
-OPENAI_ANALYSIS_MODEL=gpt-5.4-mini
-OPENAI_MATCHING_MODEL=gpt-5.4
-OPENAI_REASONING_EFFORT=none
-
-# Vacancy sources (API-first)
-SUPERJOB_API_KEY=...
-SUPERJOB_VACANCIES_URL=https://api.superjob.ru/2.0/vacancies/
-HABR_CAREER_API_URL=https://career.habr.com/api/v1/vacancies
+JWT_SECRET_KEY=replace-with-strong-secret
+BETA_TESTER_KEYS=your-beta-key-1,your-beta-key-2
+AUTH_EMAIL_DELIVERY_MODE=console
 ```
 
-By default vacancy discovery now works in tokenless mode from public vacancy pages (HH/Habr/SuperJob parsing).
-If source API keys are configured later, the backend will also use official API endpoints.
-
-Start the stack:
+3. Запустите сервисы:
 
 ```powershell
 docker compose up -d --build
 ```
 
-Frontend: http://localhost:3000
+4. Откройте:
 
-Backend API: http://localhost:8000/docs
+- UI: [http://localhost:3000](http://localhost:3000)
+- API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Health: [http://localhost:8000/health](http://localhost:8000/health)
+- Config check: [http://localhost:8000/api/system/config-check](http://localhost:8000/api/system/config-check)
+- Qdrant: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
 
-Health: http://localhost:8000/health
+## Как работает вход
 
-Config check: http://localhost:8000/api/system/config-check
+1. Регистрация: email + пароль + beta-key.
+2. Подтверждение email одноразовым кодом.
+3. Вход: `login/start` (email+пароль), затем `login/verify` (код+challenge).
+4. Защищенные API доступны только после подтверждения email.
 
-Qdrant dashboard: http://localhost:6333/dashboard
+## Ключевые переменные окружения
 
-## Secrets
+Полный список: [.env.example](.env.example)
 
-Local secrets are stored in `.env.local`. This file is intentionally ignored by Git.
+- `OPENAI_API_KEY` - ключ OpenAI.
+- `OPENAI_ANALYSIS_MODEL` - модель анализа резюме/вакансий.
+- `OPENAI_MATCHING_MODEL` - модель детального matching.
+- `JWT_SECRET_KEY` - секрет подписи JWT.
+- `BETA_TESTER_KEYS` - список разрешенных ключей бета-тестеров.
+- `AUTH_EMAIL_DELIVERY_MODE` - `console` для локалки, `smtp` для прода.
+- `DATABASE_URL` - подключение к PostgreSQL.
+- `QDRANT_URL` - адрес Qdrant.
 
-Public configuration contract lives in `.env.example`.
+## Безопасность
 
-Do not store real API keys, database passwords, JWT secrets, or deploy tokens in the repository.
+- Не коммитьте `.env.local`.
+- Не храните реальные токены/секреты в репозитории.
+- Для production используйте только SMTP-режим отправки кодов.
+- Пожалуйста, сообщайте уязвимости приватно: [SECURITY.md](SECURITY.md)
 
-## Model roles
+## Планы развития
 
-`OPENAI_ANALYSIS_MODEL` is used for resume parsing and structured profile extraction.
+- Улучшить explainability в matching (почему вакансия подходит / не подходит).
+- Расширить покрытие источников вакансий по API-first подходу.
+- Улучшить процесс персонализации по лайкам/дизлайкам.
+- Добавить production-ready observability и CI/CD пайплайн.
 
-`OPENAI_MATCHING_MODEL` is reserved for the next vacancy matching stage, where deeper fit/gap reasoning will be needed.
+## Вклад в проект
 
-## Vector search
-
-Qdrant is the primary vector database for the platform.
-
-The backend creates these local collections on startup:
-
-- `hr_assistant_resume_profiles`
-- `hr_assistant_vacancy_profiles`
-
-PostgreSQL remains the source of truth for users, resumes, vacancies, and matching metadata. Qdrant stores embeddings for semantic search and matching.
+Правила для контрибьюторов: [CONTRIBUTING.md](CONTRIBUTING.md)
