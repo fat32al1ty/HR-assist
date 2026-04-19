@@ -1,0 +1,14 @@
+node_modules
+__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.next
+dist
+build
+storage
+.env
+.env.*
+!.env.example
+.git
+.vscode

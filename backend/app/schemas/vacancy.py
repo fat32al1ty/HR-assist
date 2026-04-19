@@ -1,0 +1,111 @@
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+class VacancyDiscoverRequest(BaseModel):
+    query: str = Field(min_length=3, max_length=300)
+    count: int = Field(default=30, ge=1, le=100)
+    rf_only: bool = True
+    use_brave_fallback: bool = False
+
+
+class VacancyRead(BaseModel):
+    id: int
+    source: str
+    source_url: str
+    title: str
+    company: str | None
+    location: str | None
+    status: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class VacancyDiscoverResponse(BaseModel):
+    indexed: int
+    fetched: int
+    prefiltered: int
+    analyzed: int
+    filtered: int
+    failed: int
+    already_indexed_skipped: int
+    sources: list[str] = Field(default_factory=list)
+    vacancies: list[VacancyRead]
+
+
+class VacancyMatchRead(BaseModel):
+    vacancy_id: int
+    title: str
+    source_url: str
+    company: str | None
+    location: str | None
+    similarity_score: float
+    profile: dict[str, Any] | None = None
+
+
+class VacancyRecommendRequest(BaseModel):
+    discover_count: int = Field(default=40, ge=1, le=100)
+    match_limit: int = Field(default=20, ge=1, le=50)
+    deep_scan: bool = True
+    rf_only: bool = True
+    use_brave_fallback: bool = False
+    use_prefetched_index: bool = True
+    discover_if_few_matches: bool = True
+    min_prefetched_matches: int = Field(default=8, ge=1, le=20)
+
+
+class OpenAIUsageRead(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
+    embedding_tokens: int
+    total_tokens: int
+    api_calls: int
+    estimated_cost_usd: float
+    budget_usd: float
+    budget_exceeded: bool
+    budget_enforced: bool
+
+
+class VacancyRecommendResponse(BaseModel):
+    query: str
+    indexed: int
+    fetched: int
+    prefiltered: int
+    analyzed: int
+    filtered: int
+    failed: int
+    already_indexed_skipped: int
+    sources: list[str] = Field(default_factory=list)
+    openai_usage: OpenAIUsageRead
+    matches: list[VacancyMatchRead]
+
+
+class VacancyFeedbackRequest(BaseModel):
+    vacancy_id: int
+
+
+class VacancyFeedbackResponse(BaseModel):
+    vacancy_id: int
+    disliked: bool
+    liked: bool
+
+
+class RecommendationJobStartResponse(BaseModel):
+    job_id: str
+    status: str
+
+
+class RecommendationJobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    stage: str
+    progress: int
+    query: str | None = None
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    matches: list[VacancyMatchRead] = Field(default_factory=list)
+    openai_usage: OpenAIUsageRead | None = None
+    error_message: str | None = None
+    active: bool = False

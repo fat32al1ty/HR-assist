@@ -1,0 +1,35 @@
+<svg width="220" height="220" viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="220" height="220" rx="42" fill="transparent"/>
+  <g filter="url(#shadow)">
+    <rect x="32" y="44" width="156" height="132" rx="30" fill="url(#bg)"/>
+    <path d="M32 88C54 75 71 72 89 76C105 80 119 92 135 91C151 90 165 77 188 76" stroke="#7CC8FF" stroke-width="7" stroke-linecap="round" opacity="0.62"/>
+    <path d="M32 126C58 116 76 116 94 122C111 128 127 142 145 140C162 138 174 126 188 124" stroke="#54B5FF" stroke-width="7" stroke-linecap="round" opacity="0.56"/>
+    <path d="M46 154C70 148 91 149 112 154C135 159 157 158 178 148" stroke="#49A5F8" stroke-width="7" stroke-linecap="round" opacity="0.48"/>
+    <circle cx="58" cy="83" r="8" fill="#0D7FEF" stroke="#DFF3FF" stroke-width="4"/>
+    <circle cx="76" cy="74" r="8" fill="#0D7FEF" stroke="#DFF3FF" stroke-width="4"/>
+    <circle cx="96" cy="82" r="8" fill="#0D7FEF" stroke="#DFF3FF" stroke-width="4"/>
+    <circle cx="151" cy="88" r="8" fill="#0D7FEF" stroke="#DFF3FF" stroke-width="4"/>
+    <circle cx="171" cy="78" r="8" fill="#0D7FEF" stroke="#DFF3FF" stroke-width="4"/>
+    <path d="M58 83L76 74L96 82" stroke="#BDE8FF" stroke-width="4" stroke-linecap="round"/>
+    <path d="M151 88L171 78" stroke="#BDE8FF" stroke-width="4" stroke-linecap="round"/>
+    <text x="110" y="109" text-anchor="middle" fill="#071626" font-family="Verdana, Arial, sans-serif" font-size="78" font-weight="900" letter-spacing="-6">AI</text>
+    <text x="110" y="150" text-anchor="middle" fill="#071626" font-family="Verdana, Arial, sans-serif" font-size="58" font-weight="900" letter-spacing="-4">HR</text>
+  </g>
+  <defs>
+    <linearGradient id="bg" x1="32" y1="44" x2="188" y2="176" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#55C7FF"/>
+      <stop offset="0.48" stop-color="#1887F5"/>
+      <stop offset="1" stop-color="#0750CF"/>
+    </linearGradient>
+    <filter id="shadow" x="18" y="34" width="184" height="160" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="4"/>
+      <feGaussianBlur stdDeviation="7"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.027 0 0 0 0 0.214 0 0 0 0 0.642 0 0 0 0.2 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+    </filter>
+  </defs>
+</svg>

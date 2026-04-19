@@ -1,0 +1,42 @@
+<svg width="600" height="160" viewBox="0 0 600 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="600" height="160" rx="30" fill="#F7FAFF"/>
+  <g filter="url(#shadow)">
+    <rect x="34" y="28" width="104" height="104" rx="30" fill="url(#markGradient)"/>
+    <path d="M63 78C66 64 75 56 88 56C101 56 111 66 112 80C113 94 103 105 89 105C76 105 67 96 63 82V78Z" fill="white" fill-opacity="0.96"/>
+    <path d="M109 78C112 64 121 56 134 56C147 56 157 66 158 80C159 94 149 105 135 105C122 105 113 96 109 82V78Z" fill="white" fill-opacity="0.96" transform="translate(-28 0)"/>
+    <path d="M88 80C94 74 102 74 108 80" stroke="#D6EAFF" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="82" cy="80" r="7" fill="#0B63D8"/>
+    <circle cx="116" cy="80" r="7" fill="#0B63D8"/>
+    <circle cx="82" cy="80" r="2.5" fill="white"/>
+    <circle cx="116" cy="80" r="2.5" fill="white"/>
+    <path d="M65 66L56 59" stroke="#CFE4FF" stroke-width="5" stroke-linecap="round"/>
+    <path d="M127 66L136 59" stroke="#CFE4FF" stroke-width="5" stroke-linecap="round"/>
+    <path d="M82 80L74 67L88 62L96 70L108 62L122 67L116 80" stroke="#2D8CFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="74" cy="67" r="3" fill="#2D8CFF"/>
+    <circle cx="88" cy="62" r="3" fill="#2D8CFF"/>
+    <circle cx="108" cy="62" r="3" fill="#2D8CFF"/>
+    <circle cx="122" cy="67" r="3" fill="#2D8CFF"/>
+  </g>
+  <text x="166" y="72" fill="#17212F" font-family="Verdana, Arial, sans-serif" font-size="32" font-weight="800" letter-spacing="-0.8">
+    HR Помощник
+  </text>
+  <text x="167" y="102" fill="#667085" font-family="Verdana, Arial, sans-serif" font-size="15" font-weight="600">
+    AI-анализ резюме и умный подбор вакансий
+  </text>
+  <defs>
+    <linearGradient id="markGradient" x1="34" y1="28" x2="138" y2="132" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1A8CFF"/>
+      <stop offset="1" stop-color="#0B4CC8"/>
+    </linearGradient>
+    <filter id="shadow" x="16" y="12" width="140" height="144" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="8"/>
+      <feGaussianBlur stdDeviation="9"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.043 0 0 0 0 0.298 0 0 0 0 0.784 0 0 0 0.22 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_2_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_2_1" result="shape"/>
+    </filter>
+  </defs>
+</svg>
