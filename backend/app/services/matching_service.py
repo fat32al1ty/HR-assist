@@ -1281,7 +1281,9 @@ def _preferred_title_boost_score(vacancy_title: object, preferred_titles: list[s
     if not preferred_titles or not isinstance(vacancy_title, str):
         return 0.0
     title_tokens = {
-        token for token in _tokenize_rich_text(vacancy_title) if token not in TITLE_BOOST_TOKEN_STOPWORDS
+        token
+        for token in _tokenize_rich_text(vacancy_title)
+        if token not in TITLE_BOOST_TOKEN_STOPWORDS
     }
     if not title_tokens:
         return 0.0
@@ -1392,6 +1394,7 @@ def match_vacancies_for_resume(
     drop_geo = 0
     drop_no_skill_overlap = 0
     seniority_penalty_applied = 0
+    archived_at_match_time = 0
     title_boosts = 0
 
     vector_store = get_vector_store()
@@ -1447,6 +1450,18 @@ def match_vacancies_for_resume(
         if _looks_non_vacancy_page(vacancy.source_url):
             continue
         if _looks_archived_vacancy_strict(vacancy.source_url, vacancy.title, vacancy.raw_text):
+            # Persist the detection so future runs skip the re-check.
+            # We also evict the Qdrant point so retrieval K stops spending on
+            # an archived row.
+            try:
+                vacancy.status = "filtered"
+                vacancy.error_message = "archived detected at match time"
+                db.add(vacancy)
+                db.commit()
+                vector_store.delete_vacancy_profile(vacancy_id=vacancy.id)
+            except Exception:
+                db.rollback()
+            archived_at_match_time += 1
             continue
         if _looks_like_listing_page(vacancy.source_url, vacancy.title):
             continue
@@ -1472,9 +1487,7 @@ def match_vacancies_for_resume(
             continue
 
         payload_dict = payload if isinstance(payload, dict) else {}
-        if not _has_sufficient_skill_overlap(
-            resume_skills, resume_hard_skills, payload_dict
-        ):
+        if not _has_sufficient_skill_overlap(resume_skills, resume_hard_skills, payload_dict):
             drop_no_skill_overlap += 1
             continue
 
@@ -1483,9 +1496,7 @@ def match_vacancies_for_resume(
         overlap = _overlap_score(resume_skills, vacancy_skills)
         role_overlap = _overlap_score(resume_roles, vacancy_title_tokens) if resume_roles else 0.0
         hybrid = _hybrid_score(float(score), overlap) + (0.05 * role_overlap)
-        has_leadership_hint = _title_has_leadership_hint(
-            vacancy.title or "", payload_dict
-        )
+        has_leadership_hint = _title_has_leadership_hint(vacancy.title or "", payload_dict)
         if leadership_preferred:
             if has_leadership_hint:
                 hybrid += LEADERSHIP_BONUS
@@ -1565,6 +1576,7 @@ def match_vacancies_for_resume(
             metrics["hard_filter_drop_geo"] = drop_geo
             metrics["hard_filter_drop_no_skill_overlap"] = drop_no_skill_overlap
             metrics["seniority_penalty_applied"] = seniority_penalty_applied
+            metrics["archived_at_match_time"] = archived_at_match_time
             metrics["title_boost_applied"] = title_boosts
         return result
 

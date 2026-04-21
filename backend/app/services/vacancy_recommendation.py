@@ -231,9 +231,8 @@ def recommend_vacancies_for_resume(
         target.hard_filter_drop_no_skill_overlap = int(
             matching_metrics.get("hard_filter_drop_no_skill_overlap", 0)
         )
-        target.seniority_penalty_applied = int(
-            matching_metrics.get("seniority_penalty_applied", 0)
-        )
+        target.seniority_penalty_applied = int(matching_metrics.get("seniority_penalty_applied", 0))
+        target.archived_at_match_time = int(matching_metrics.get("archived_at_match_time", 0))
         target.title_boost_applied = int(matching_metrics.get("title_boost_applied", 0))
         return target
 

@@ -41,6 +41,7 @@ class VacancyDiscoveryMetrics:
     hard_filter_drop_geo: int = 0
     hard_filter_drop_no_skill_overlap: int = 0
     seniority_penalty_applied: int = 0
+    archived_at_match_time: int = 0
     title_boost_applied: int = 0
 
 

@@ -126,15 +126,37 @@ class QdrantVectorStore:
         return None
 
     def search_vacancy_profiles(
-        self, *, query_vector: list[float], limit: int = 20
+        self,
+        *,
+        query_vector: list[float],
+        limit: int = 20,
+        only_vacancies: bool = True,
     ) -> list[tuple[int, float, dict[str, Any]]]:
         collection_name = self.collection_name("vacancy_profiles")
         if not self.client.collection_exists(collection_name):
             return []
 
+        query_filter: models.Filter | None = None
+        if only_vacancies:
+            # Push is_vacancy=true into the Qdrant filter so the top-K budget
+            # is spent on actual vacancies. Older points without the field
+            # default to True, so we match both explicit True and missing.
+            query_filter = models.Filter(
+                should=[
+                    models.FieldCondition(
+                        key="is_vacancy",
+                        match=models.MatchValue(value=True),
+                    ),
+                    models.IsNullCondition(
+                        is_null=models.PayloadField(key="is_vacancy"),
+                    ),
+                ],
+            )
+
         results = self.client.search(
             collection_name=collection_name,
             query_vector=query_vector,
+            query_filter=query_filter,
             with_payload=True,
             limit=limit,
         )
@@ -146,6 +168,15 @@ class QdrantVectorStore:
                 continue
             mapped.append((vacancy_id, float(point.score), point.payload or {}))
         return mapped
+
+    def delete_vacancy_profile(self, *, vacancy_id: int) -> None:
+        collection_name = self.collection_name("vacancy_profiles")
+        if not self.client.collection_exists(collection_name):
+            return
+        self.client.delete(
+            collection_name=collection_name,
+            points_selector=models.PointIdsList(points=[vacancy_id]),
+        )
 
     def get_vacancy_vectors(self, *, vacancy_ids: list[int]) -> list[list[float]]:
         collection_name = self.collection_name("vacancy_profiles")
