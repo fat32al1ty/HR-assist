@@ -9,16 +9,12 @@ from app.db.base import Base
 class UserVacancyFeedback(Base):
     __tablename__ = "user_vacancy_feedback"
     __table_args__ = (
-        UniqueConstraint(
-            "user_id", "resume_id", "vacancy_id", name="uq_user_vacancy_feedback"
-        ),
+        UniqueConstraint("user_id", "resume_id", "vacancy_id", name="uq_user_vacancy_feedback"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    resume_id: Mapped[int] = mapped_column(
-        ForeignKey("resumes.id", ondelete="CASCADE"), index=True
-    )
+    resume_id: Mapped[int] = mapped_column(ForeignKey("resumes.id", ondelete="CASCADE"), index=True)
     vacancy_id: Mapped[int] = mapped_column(
         ForeignKey("vacancies.id", ondelete="CASCADE"), index=True
     )
