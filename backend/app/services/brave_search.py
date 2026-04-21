@@ -107,7 +107,9 @@ def search_vacancies_with_brave(*, query: str, count: int) -> list[dict[str, Any
         )
         response.raise_for_status()
     except Exception as error:
-        raise BraveSearchUnavailable(f"Could not fetch vacancies from Brave Search API: {error}") from error
+        raise BraveSearchUnavailable(
+            f"Could not fetch vacancies from Brave Search API: {error}"
+        ) from error
 
     payload = response.json()
     results = payload.get("web", {}).get("results", [])

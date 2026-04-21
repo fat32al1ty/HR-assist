@@ -26,7 +26,11 @@ def create_resume_record(
 
 
 def list_resumes_for_user(db: Session, *, user_id: int) -> list[Resume]:
-    return list(db.scalars(select(Resume).where(Resume.user_id == user_id).order_by(Resume.created_at.desc())))
+    return list(
+        db.scalars(
+            select(Resume).where(Resume.user_id == user_id).order_by(Resume.created_at.desc())
+        )
+    )
 
 
 def get_resume_for_user(db: Session, *, resume_id: int, user_id: int) -> Resume | None:

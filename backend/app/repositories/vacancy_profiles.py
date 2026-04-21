@@ -12,7 +12,9 @@ def create_or_update_vacancy_profile(
     qdrant_collection: str,
     qdrant_point_id: str,
 ) -> VacancyProfile:
-    vacancy_profile = db.query(VacancyProfile).filter(VacancyProfile.vacancy_id == vacancy_id).one_or_none()
+    vacancy_profile = (
+        db.query(VacancyProfile).filter(VacancyProfile.vacancy_id == vacancy_id).one_or_none()
+    )
     if vacancy_profile is None:
         vacancy_profile = VacancyProfile(
             vacancy_id=vacancy_id,

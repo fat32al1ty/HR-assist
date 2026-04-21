@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from app.core.config import settings
 
-_TRACKER: ContextVar["OpenAIUsageTracker | None"] = ContextVar("openai_usage_tracker", default=None)
+_TRACKER: ContextVar[OpenAIUsageTracker | None] = ContextVar("openai_usage_tracker", default=None)
 
 
 @dataclass

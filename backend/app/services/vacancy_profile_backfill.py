@@ -11,7 +11,9 @@ from app.services.vacancy_analyzer import analyze_vacancy_text
 from app.services.vacancy_profile_pipeline import persist_vacancy_profile
 
 
-def _build_vacancy_analysis_input(*, title: str, source_url: str, raw_text: str | None, company: str | None) -> str:
+def _build_vacancy_analysis_input(
+    *, title: str, source_url: str, raw_text: str | None, company: str | None
+) -> str:
     parts = [
         f"Vacancy title: {title}",
         f"Company: {company or 'unknown'}",
@@ -70,7 +72,9 @@ def backfill_missing_vacancy_profiles(db: Session, *, limit: int) -> dict[str, i
             confidence = float(profile.get("vacancy_confidence") or 0.0)
             if not is_vacancy or confidence < 0.55:
                 vacancy.status = "filtered"
-                vacancy.error_message = str(profile.get("rejection_reason") or "Filtered during profile backfill")
+                vacancy.error_message = str(
+                    profile.get("rejection_reason") or "Filtered during profile backfill"
+                )
                 db.add(vacancy)
                 db.commit()
                 db.refresh(vacancy)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from app.core.config import settings
@@ -41,4 +41,4 @@ def issue_challenge_id() -> str:
 
 def otp_expiry(minutes: int) -> datetime:
     safe_minutes = max(1, int(minutes))
-    return datetime.now(timezone.utc) + timedelta(minutes=safe_minutes)
+    return datetime.now(UTC) + timedelta(minutes=safe_minutes)

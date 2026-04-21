@@ -37,7 +37,9 @@ def create_embedding(text: str) -> list[float]:
         raise
     except APIConnectionError as error:
         cause = repr(error.__cause__) if error.__cause__ else str(error)
-        raise EmbeddingUnavailable(f"Could not connect to OpenAI embeddings API: {cause}") from error
+        raise EmbeddingUnavailable(
+            f"Could not connect to OpenAI embeddings API: {cause}"
+        ) from error
 
     usage = getattr(response, "usage", None)
     prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)

@@ -76,7 +76,10 @@ def analyze_resume_text(text: str) -> dict[str, Any]:
                                         "company": {"type": ["string", "null"]},
                                         "role": {"type": ["string", "null"]},
                                         "period": {"type": ["string", "null"]},
-                                        "highlights": {"type": "array", "items": {"type": "string"}},
+                                        "highlights": {
+                                            "type": "array",
+                                            "items": {"type": "string"},
+                                        },
                                     },
                                     "required": ["company", "role", "period", "highlights"],
                                 },

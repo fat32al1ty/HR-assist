@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_db
 from app.repositories.auth_otp_codes import (
@@ -15,13 +16,13 @@ from app.repositories.auth_otp_codes import (
 from app.repositories.users import create_user, get_user_by_email, mark_email_verified
 from app.schemas.auth import (
     AuthMessageResponse,
+    LoginRequest,
     LoginStartRequest,
     LoginStartResponse,
-    LoginRequest,
     LoginVerifyRequest,
     PasswordResetRequest,
-    RegisterResponse,
     RegisterRequest,
+    RegisterResponse,
     TokenResponse,
     VerifyEmailRequest,
 )
@@ -30,12 +31,10 @@ from app.services.auth_security import (
     generate_otp_code,
     hash_otp_code,
     is_valid_beta_key,
-    issue_challenge_id,
     otp_expiry,
     verify_otp_code,
 )
-from app.services.email_delivery import EmailDeliveryError, send_email
-from app.core.config import settings
+from app.services.email_delivery import send_email
 
 router = APIRouter()
 
@@ -69,7 +68,9 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> Registe
 
     existing = get_user_by_email(db, email=payload.email)
     if existing is not None and existing.email_verified:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already registered")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Email is already registered"
+        )
 
     if existing is None:
         user = create_user(
@@ -101,12 +102,19 @@ def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)) -> 
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User is not found")
 
-    code_row = get_active_otp_code(db, email=user.email, purpose=PURPOSE_EMAIL_VERIFY, challenge_id=None)
+    code_row = get_active_otp_code(
+        db, email=user.email, purpose=PURPOSE_EMAIL_VERIFY, challenge_id=None
+    )
     if code_row is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification code is invalid or expired")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verification code is invalid or expired",
+        )
     if not verify_otp_code(payload.code, code_row.code_hash):
         register_failed_attempt(db, code_row=code_row)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification code is invalid")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Verification code is invalid"
+        )
 
     consume_code(db, code_row=code_row)
     return mark_email_verified(db, user)
@@ -116,7 +124,9 @@ def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)) -> 
 def login_start(payload: LoginStartRequest, db: Session = Depends(get_db)) -> LoginStartResponse:
     user = get_user_by_email(db, email=payload.email)
     if user is None or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
+        )
 
     return LoginStartResponse(
         challenge_id="",
@@ -131,14 +141,18 @@ def login_start(payload: LoginStartRequest, db: Session = Depends(get_db)) -> Lo
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = get_user_by_email(db, email=payload.email)
     if user is None or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
+        )
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is not active")
     return TokenResponse(access_token=create_access_token(user.email))
 
 
 @router.post("/password/reset", response_model=AuthMessageResponse)
-def reset_password(payload: PasswordResetRequest, db: Session = Depends(get_db)) -> AuthMessageResponse:
+def reset_password(
+    payload: PasswordResetRequest, db: Session = Depends(get_db)
+) -> AuthMessageResponse:
     if not is_valid_beta_key(payload.beta_key):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid beta tester key")
     user = get_user_by_email(db, email=payload.email)
@@ -163,7 +177,9 @@ def login_verify(payload: LoginVerifyRequest, db: Session = Depends(get_db)) -> 
         challenge_id=payload.challenge_id,
     )
     if code_row is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Login code is invalid or expired")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Login code is invalid or expired"
+        )
     if not verify_otp_code(payload.code, code_row.code_hash):
         register_failed_attempt(db, code_row=code_row)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Login code is invalid")

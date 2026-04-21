@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import Event, Lock, Thread
 
 from sqlalchemy import select
@@ -10,8 +10,8 @@ from app.db.session import SessionLocal
 from app.models.resume import Resume
 from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
-from app.services.vacancy_profile_backfill import backfill_missing_vacancy_profiles
 from app.services.vacancy_pipeline import discover_and_index_vacancies
+from app.services.vacancy_profile_backfill import backfill_missing_vacancy_profiles
 
 _worker_thread: Thread | None = None
 _stop_event = Event()
@@ -81,7 +81,10 @@ def _collect_warmup_queries() -> list[str]:
     try:
         queries: list[str] = []
         recent_resumes = db.scalars(
-            select(Resume).where(Resume.status == "completed").order_by(Resume.updated_at.desc()).limit(24)
+            select(Resume)
+            .where(Resume.status == "completed")
+            .order_by(Resume.updated_at.desc())
+            .limit(24)
         ).all()
         for resume in recent_resumes:
             query = _query_from_resume_analysis(resume.analysis)
@@ -115,7 +118,7 @@ def _run_warmup_cycle() -> tuple[list[str], dict[str, int]]:
     db = SessionLocal()
     try:
         queries = _collect_warmup_queries()
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
         aggregate = {
             "fetched": 0,
             "prefiltered": 0,
@@ -130,7 +133,7 @@ def _run_warmup_cycle() -> tuple[list[str], dict[str, int]]:
             "backfill_failed": 0,
         }
         for query in queries:
-            elapsed_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
+            elapsed_seconds = (datetime.now(UTC) - started_at).total_seconds()
             if elapsed_seconds > max(30, settings.vacancy_warmup_cycle_timeout_seconds):
                 break
             result = discover_and_index_vacancies(
@@ -151,7 +154,7 @@ def _run_warmup_cycle() -> tuple[list[str], dict[str, int]]:
             aggregate["already_indexed_skipped"] += int(result.metrics.already_indexed_skipped or 0)
 
         if settings.vacancy_profile_backfill_enabled:
-            elapsed_seconds = (datetime.now(timezone.utc) - started_at).total_seconds()
+            elapsed_seconds = (datetime.now(UTC) - started_at).total_seconds()
             if elapsed_seconds <= max(30, settings.vacancy_warmup_cycle_timeout_seconds):
                 backfill = backfill_missing_vacancy_profiles(
                     db,
@@ -173,11 +176,11 @@ def _set_state(**kwargs: object) -> None:
 
 def _worker_loop() -> None:
     while not _stop_event.is_set():
-        started = datetime.now(timezone.utc)
+        started = datetime.now(UTC)
         _set_state(running=True, last_started_at=started.isoformat(), last_error=None)
         try:
             queries, metrics = _run_warmup_cycle()
-            finished = datetime.now(timezone.utc)
+            finished = datetime.now(UTC)
             _set_state(
                 running=False,
                 cycle=int(_state.get("cycle", 0)) + 1,
@@ -187,7 +190,7 @@ def _worker_loop() -> None:
                 last_metrics=metrics,
             )
         except Exception as error:
-            finished = datetime.now(timezone.utc)
+            finished = datetime.now(UTC)
             _set_state(
                 running=False,
                 cycle=int(_state.get("cycle", 0)) + 1,
@@ -230,5 +233,7 @@ def get_vacancy_warmup_status() -> dict[str, object]:
     snapshot["max_analyzed_per_query"] = int(settings.vacancy_warmup_max_analyzed_per_query)
     snapshot["cycle_timeout_seconds"] = int(settings.vacancy_warmup_cycle_timeout_seconds)
     snapshot["profile_backfill_enabled"] = bool(settings.vacancy_profile_backfill_enabled)
-    snapshot["profile_backfill_limit_per_cycle"] = int(settings.vacancy_profile_backfill_limit_per_cycle)
+    snapshot["profile_backfill_limit_per_cycle"] = int(
+        settings.vacancy_profile_backfill_limit_per_cycle
+    )
     return snapshot

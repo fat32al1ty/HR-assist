@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Final
 
 from sqlalchemy import and_, select
@@ -13,7 +13,7 @@ PURPOSE_LOGIN_2FA: Final[str] = "login_2fa"
 
 
 def invalidate_active_codes(db: Session, *, email: str, purpose: str) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     active_codes = db.scalars(
         select(AuthOtpCode).where(
             and_(
@@ -66,7 +66,7 @@ def get_active_otp_code(
     purpose: str,
     challenge_id: str | None,
 ) -> AuthOtpCode | None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     query = select(AuthOtpCode).where(
         and_(
             AuthOtpCode.email == email.lower(),
@@ -83,12 +83,12 @@ def get_active_otp_code(
 def register_failed_attempt(db: Session, *, code_row: AuthOtpCode) -> None:
     code_row.attempts = int(code_row.attempts) + 1
     if code_row.attempts >= int(code_row.max_attempts):
-        code_row.consumed_at = datetime.now(timezone.utc)
+        code_row.consumed_at = datetime.now(UTC)
     db.add(code_row)
     db.commit()
 
 
 def consume_code(db: Session, *, code_row: AuthOtpCode) -> None:
-    code_row.consumed_at = datetime.now(timezone.utc)
+    code_row.consumed_at = datetime.now(UTC)
     db.add(code_row)
     db.commit()

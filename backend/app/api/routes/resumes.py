@@ -7,8 +7,8 @@ from app.db.session import get_db
 from app.models.user import User
 from app.repositories.resumes import delete_resume, get_resume_for_user, list_resumes_for_user
 from app.schemas.resume import ResumeRead
-from app.services.resume_profile_pipeline import delete_resume_profile_vector
 from app.services.resume_pipeline import process_resume_upload
+from app.services.resume_profile_pipeline import delete_resume_profile_vector
 
 router = APIRouter()
 
@@ -32,12 +32,16 @@ async def upload_resume(
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }
     if file.content_type not in allowed_types:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF and DOCX files are supported")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF and DOCX files are supported"
+        )
 
     content = await file.read()
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
     if len(content) > max_bytes:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File is too large")
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File is too large"
+        )
 
     return process_resume_upload(db, user_id=current_user.id, upload=file, content=content)
 

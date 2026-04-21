@@ -6,15 +6,15 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
 from app.repositories.resumes import get_resume_for_user
-from app.repositories.vacancies import list_vacancies
 from app.repositories.user_vacancy_feedback import (
-    list_disliked_vacancy_ids,
     list_disliked_vacancies,
-    list_liked_vacancy_ids,
+    list_disliked_vacancy_ids,
     list_liked_vacancies,
+    list_liked_vacancy_ids,
     set_vacancy_disliked,
     set_vacancy_liked,
 )
+from app.repositories.vacancies import list_vacancies
 from app.schemas.vacancy import (
     RecommendationJobStartResponse,
     RecommendationJobStatusResponse,
@@ -188,7 +188,9 @@ def recommendation_status(
     excluded_ids = list_disliked_vacancy_ids(db, user_id=current_user.id).union(
         list_liked_vacancy_ids(db, user_id=current_user.id)
     )
-    matches = _filter_matches_by_feedback(matches=snapshot.get("matches") or [], excluded_ids=excluded_ids)
+    matches = _filter_matches_by_feedback(
+        matches=snapshot.get("matches") or [], excluded_ids=excluded_ids
+    )
     return RecommendationJobStatusResponse(
         job_id=snapshot["id"],
         status=snapshot["status"],
@@ -215,7 +217,9 @@ def latest_recommendation_status(
     excluded_ids = list_disliked_vacancy_ids(db, user_id=current_user.id).union(
         list_liked_vacancy_ids(db, user_id=current_user.id)
     )
-    matches = _filter_matches_by_feedback(matches=snapshot.get("matches") or [], excluded_ids=excluded_ids)
+    matches = _filter_matches_by_feedback(
+        matches=snapshot.get("matches") or [], excluded_ids=excluded_ids
+    )
     return RecommendationJobStatusResponse(
         job_id=snapshot["id"],
         status=snapshot["status"],
@@ -243,7 +247,9 @@ def dislike_vacancy(
         disliked=True,
     )
     recompute_user_preference_profile(db, user_id=current_user.id)
-    return VacancyFeedbackResponse(vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked)
+    return VacancyFeedbackResponse(
+        vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked
+    )
 
 
 @router.post("/feedback/like", response_model=VacancyFeedbackResponse)
@@ -259,7 +265,9 @@ def like_vacancy(
         liked=True,
     )
     recompute_user_preference_profile(db, user_id=current_user.id)
-    return VacancyFeedbackResponse(vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked)
+    return VacancyFeedbackResponse(
+        vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked
+    )
 
 
 @router.post("/feedback/unlike", response_model=VacancyFeedbackResponse)
@@ -275,7 +283,9 @@ def unlike_vacancy(
         liked=False,
     )
     recompute_user_preference_profile(db, user_id=current_user.id)
-    return VacancyFeedbackResponse(vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked)
+    return VacancyFeedbackResponse(
+        vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked
+    )
 
 
 @router.get("/feedback/selected", response_model=list[VacancyMatchRead])
@@ -318,7 +328,9 @@ def undislike_vacancy(
         liked=True,
     )
     recompute_user_preference_profile(db, user_id=current_user.id)
-    return VacancyFeedbackResponse(vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked)
+    return VacancyFeedbackResponse(
+        vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked
+    )
 
 
 @router.get("/feedback/disliked", response_model=list[VacancyMatchRead])

@@ -91,7 +91,9 @@ def _build_discovery_query(analysis: dict | None) -> str:
 def _build_deep_scan_queries(base_query: str, rf_only: bool, analysis: dict | None) -> list[str]:
     region_suffix = " Russia" if rf_only else ""
     role = _normalize_phrase(analysis.get("target_role")) if isinstance(analysis, dict) else ""
-    specialization = _normalize_phrase(analysis.get("specialization")) if isinstance(analysis, dict) else ""
+    specialization = (
+        _normalize_phrase(analysis.get("specialization")) if isinstance(analysis, dict) else ""
+    )
     keywords = _as_strings(analysis.get("matching_keywords")) if isinstance(analysis, dict) else []
     hard_skills = _as_strings(analysis.get("hard_skills")) if isinstance(analysis, dict) else []
     skill_focus = _short_query_from_tokens(keywords + hard_skills, max_words=6)
@@ -108,23 +110,23 @@ def _build_deep_scan_queries(base_query: str, rf_only: bool, analysis: dict | No
     ]
     queries: list[str] = []
     for template in templates:
-        candidate = (
-            template.format(
-                q=base_query,
-                role=role or base_query,
-                spec=specialization or base_query,
-                skills=skill_focus or base_query,
-            )
-            .strip()
-        )
+        candidate = template.format(
+            q=base_query,
+            role=role or base_query,
+            spec=specialization or base_query,
+            skills=skill_focus or base_query,
+        ).strip()
         if not candidate:
             continue
         queries.append((candidate + region_suffix).strip())
 
     role_tokens = _normalize_phrase(role).lower()
-    prefers_leadership = any(token in role_tokens for token in ("руководитель", "head", "lead", "manager", "директор"))
+    prefers_leadership = any(
+        token in role_tokens for token in ("руководитель", "head", "lead", "manager", "директор")
+    )
     has_observability_intent = any(
-        token in f"{role_tokens} {_normalize_phrase(specialization).lower()} {' '.join(x.lower() for x in keywords)}"
+        token
+        in f"{role_tokens} {_normalize_phrase(specialization).lower()} {' '.join(x.lower() for x in keywords)}"
         for token in ("observability", "monitoring", "мониторинг", "монитор")
     )
     priority_queries: list[str] = []
@@ -149,7 +151,9 @@ def _build_deep_scan_queries(base_query: str, rf_only: bool, analysis: dict | No
     return _dedupe([query.strip() for query in ordered if query.strip()])
 
 
-def _count_high_quality_matches(matches: list[dict], *, threshold: float = HIGH_QUALITY_MATCH_THRESHOLD) -> int:
+def _count_high_quality_matches(
+    matches: list[dict], *, threshold: float = HIGH_QUALITY_MATCH_THRESHOLD
+) -> int:
     count = 0
     for item in matches:
         score = item.get("similarity_score")
@@ -175,7 +179,9 @@ def _empty_metrics() -> VacancyDiscoveryMetrics:
     )
 
 
-def _merge_metrics(target: VacancyDiscoveryMetrics, current: VacancyDiscoveryMetrics) -> VacancyDiscoveryMetrics:
+def _merge_metrics(
+    target: VacancyDiscoveryMetrics, current: VacancyDiscoveryMetrics
+) -> VacancyDiscoveryMetrics:
     target.fetched += current.fetched
     target.prefiltered += current.prefiltered
     target.analyzed += current.analyzed
@@ -227,7 +233,9 @@ def recommend_vacancies_for_resume(
 
     if use_prefetched_index:
         report("matching", 45, aggregate_metrics)
-        prefetched_matches = match_vacancies_for_resume(db, resume_id=resume_id, user_id=user_id, limit=match_limit)
+        prefetched_matches = match_vacancies_for_resume(
+            db, resume_id=resume_id, user_id=user_id, limit=match_limit
+        )
         target_match_count = max(1, min(match_limit, min_prefetched_matches))
         enough_prefetched = (
             len(prefetched_matches) >= target_match_count
@@ -244,8 +252,12 @@ def recommend_vacancies_for_resume(
         if use_prefetched_index:
             # Interactive UI flow: keep deep scan bounded and return faster.
             max_queries = min(max_queries, INTERACTIVE_MAX_DEEP_QUERIES)
-        queries = _build_deep_scan_queries(query, rf_only=rf_only, analysis=resume.analysis)[:max_queries]
-        total_budget = min(max(discover_count * len(queries), discover_count), MAX_TOTAL_DISCOVERY_BUDGET)
+        queries = _build_deep_scan_queries(query, rf_only=rf_only, analysis=resume.analysis)[
+            :max_queries
+        ]
+        total_budget = min(
+            max(discover_count * len(queries), discover_count), MAX_TOTAL_DISCOVERY_BUDGET
+        )
         per_query_count = max(10, min(40, total_budget // max(1, len(queries))))
         collect_start = 55 if use_prefetched_index else 10
         collect_span = 25 if use_prefetched_index else 60
@@ -259,7 +271,9 @@ def recommend_vacancies_for_resume(
                 min(80, collect_start + int((index / max(1, len(queries))) * collect_span)),
                 aggregate_metrics,
             )
-            remaining_analyzed_budget = max(0, MAX_TOTAL_ANALYZED_BUDGET - aggregate_metrics.analyzed)
+            remaining_analyzed_budget = max(
+                0, MAX_TOTAL_ANALYZED_BUDGET - aggregate_metrics.analyzed
+            )
             if remaining_analyzed_budget <= 0:
                 break
             result = discover_and_index_vacancies(
@@ -278,7 +292,9 @@ def recommend_vacancies_for_resume(
                 aggregate_metrics,
             )
             if use_prefetched_index:
-                interim_matches = match_vacancies_for_resume(db, resume_id=resume_id, user_id=user_id, limit=match_limit)
+                interim_matches = match_vacancies_for_resume(
+                    db, resume_id=resume_id, user_id=user_id, limit=match_limit
+                )
                 if (
                     len(interim_matches) >= target_match_count
                     and _count_high_quality_matches(interim_matches) >= target_match_count
@@ -299,7 +315,9 @@ def recommend_vacancies_for_resume(
             elapsed = time.monotonic() - started_at
             if elapsed >= max_runtime_seconds:
                 report("matching", 85, aggregate_metrics)
-                matches = match_vacancies_for_resume(db, resume_id=resume_id, user_id=user_id, limit=match_limit)
+                matches = match_vacancies_for_resume(
+                    db, resume_id=resume_id, user_id=user_id, limit=match_limit
+                )
                 report("finalizing", 95, aggregate_metrics)
                 return query, aggregate_metrics, matches
         result = discover_and_index_vacancies(
@@ -315,6 +333,8 @@ def recommend_vacancies_for_resume(
         report("collecting", 70, aggregate_metrics)
 
     report("matching", 85, aggregate_metrics)
-    matches = match_vacancies_for_resume(db, resume_id=resume_id, user_id=user_id, limit=match_limit)
+    matches = match_vacancies_for_resume(
+        db, resume_id=resume_id, user_id=user_id, limit=match_limit
+    )
     report("finalizing", 95, aggregate_metrics)
     return query, aggregate_metrics, matches

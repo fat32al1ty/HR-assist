@@ -11,7 +11,9 @@ def _sanitize_text(value: str | None) -> str | None:
 
 
 def get_vacancy_by_source_url(db: Session, *, source_url: str) -> Vacancy | None:
-    return db.scalar(select(Vacancy).where(Vacancy.source_url == (_sanitize_text(source_url) or "")))
+    return db.scalar(
+        select(Vacancy).where(Vacancy.source_url == (_sanitize_text(source_url) or ""))
+    )
 
 
 def create_vacancy(
@@ -67,7 +69,12 @@ def update_vacancy(
 
 
 def list_vacancies(db: Session, *, limit: int = 50) -> list[Vacancy]:
-    stmt = select(Vacancy).where(Vacancy.status == "indexed").order_by(Vacancy.created_at.desc()).limit(limit)
+    stmt = (
+        select(Vacancy)
+        .where(Vacancy.status == "indexed")
+        .order_by(Vacancy.created_at.desc())
+        .limit(limit)
+    )
     return list(db.scalars(stmt))
 
 

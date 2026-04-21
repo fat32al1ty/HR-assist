@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,8 +29,14 @@ def create_recommendation_job(
     return job
 
 
-def get_recommendation_job_for_user(db: Session, *, job_id: str, user_id: int) -> RecommendationJob | None:
-    return db.scalar(select(RecommendationJob).where(RecommendationJob.id == job_id, RecommendationJob.user_id == user_id))
+def get_recommendation_job_for_user(
+    db: Session, *, job_id: str, user_id: int
+) -> RecommendationJob | None:
+    return db.scalar(
+        select(RecommendationJob).where(
+            RecommendationJob.id == job_id, RecommendationJob.user_id == user_id
+        )
+    )
 
 
 def mark_job_running(db: Session, job: RecommendationJob) -> RecommendationJob:
@@ -39,7 +45,7 @@ def mark_job_running(db: Session, job: RecommendationJob) -> RecommendationJob:
     job.status = "running"
     job.stage = "collecting"
     job.progress = max(1, min(99, int(job.progress or 0)))
-    job.started_at = datetime.now(timezone.utc)
+    job.started_at = datetime.now(UTC)
     job.error_message = None
     db.add(job)
     db.commit()
@@ -89,7 +95,7 @@ def complete_job(
     job.metrics = metrics
     job.matches = matches
     job.openai_usage = openai_usage
-    job.finished_at = datetime.now(timezone.utc)
+    job.finished_at = datetime.now(UTC)
     job.error_message = None
     db.add(job)
     db.commit()
@@ -97,7 +103,9 @@ def complete_job(
     return job
 
 
-def fail_job(db: Session, job: RecommendationJob, *, error_message: str, openai_usage: dict | None = None) -> RecommendationJob:
+def fail_job(
+    db: Session, job: RecommendationJob, *, error_message: str, openai_usage: dict | None = None
+) -> RecommendationJob:
     if job.status == "completed":
         return job
     job.status = "failed"
@@ -105,7 +113,7 @@ def fail_job(db: Session, job: RecommendationJob, *, error_message: str, openai_
     job.progress = 100
     job.error_message = error_message
     job.openai_usage = openai_usage
-    job.finished_at = datetime.now(timezone.utc)
+    job.finished_at = datetime.now(UTC)
     db.add(job)
     db.commit()
     db.refresh(job)

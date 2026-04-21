@@ -101,7 +101,13 @@ def _query_matches_item(query: str, item: dict[str, Any]) -> bool:
         return True
 
     compact_item_text = " ".join(
-        part for part in [_to_str(item.get("title")), _to_str(item.get("company")), _to_str(item.get("raw_text"))] if part
+        part
+        for part in [
+            _to_str(item.get("title")),
+            _to_str(item.get("company")),
+            _to_str(item.get("raw_text")),
+        ]
+        if part
     ).lower()
     return any(token in compact_item_text for token in query_tokens if len(token) >= 5)
 
@@ -179,7 +185,9 @@ def _host_allowed(source_url: str) -> bool:
     return any(host == allowed or host.endswith(f".{allowed}") for allowed in ALLOWED_JOB_HOSTS)
 
 
-def _collect_public_hh_vacancies(*, query: str, count: int, start_page: int = 0) -> list[dict[str, Any]]:
+def _collect_public_hh_vacancies(
+    *, query: str, count: int, start_page: int = 0
+) -> list[dict[str, Any]]:
     vacancies: list[dict[str, Any]] = []
     seen: set[str] = set()
     first_page = max(0, start_page)
@@ -217,7 +225,9 @@ def _collect_public_hh_vacancies(*, query: str, count: int, start_page: int = 0)
     return vacancies
 
 
-def _collect_public_habr_vacancies(*, query: str, count: int, start_page: int = 0) -> list[dict[str, Any]]:
+def _collect_public_habr_vacancies(
+    *, query: str, count: int, start_page: int = 0
+) -> list[dict[str, Any]]:
     vacancies: list[dict[str, Any]] = []
     seen: set[str] = set()
     first_page = max(1, start_page + 1)
@@ -251,7 +261,9 @@ def _collect_public_habr_vacancies(*, query: str, count: int, start_page: int = 
     return vacancies
 
 
-def _collect_public_superjob_vacancies(*, query: str, count: int, start_page: int = 0) -> list[dict[str, Any]]:
+def _collect_public_superjob_vacancies(
+    *, query: str, count: int, start_page: int = 0
+) -> list[dict[str, Any]]:
     vacancies: list[dict[str, Any]] = []
     seen: set[str] = set()
     first_page = max(1, start_page + 1)
@@ -294,7 +306,9 @@ def _search_public_sources(*, query: str, count: int, start_page: int = 0) -> li
     source_buckets: list[list[dict[str, Any]]] = []
     for provider in providers:
         try:
-            source_buckets.append(provider(query=query, count=max(count, 30), start_page=start_page))
+            source_buckets.append(
+                provider(query=query, count=max(count, 30), start_page=start_page)
+            )
         except Exception:
             continue
 
@@ -323,7 +337,9 @@ def _search_public_sources(*, query: str, count: int, start_page: int = 0) -> li
     return deduplicated
 
 
-def _search_superjob_api_vacancies(*, query: str, count: int, start_page: int = 0) -> list[dict[str, Any]]:
+def _search_superjob_api_vacancies(
+    *, query: str, count: int, start_page: int = 0
+) -> list[dict[str, Any]]:
     if not settings.superjob_api_key:
         return []
 
@@ -368,7 +384,9 @@ def _search_superjob_api_vacancies(*, query: str, count: int, start_page: int = 
     return vacancies
 
 
-def _search_hh_public_api_vacancies(*, query: str, count: int, start_page: int = 0) -> list[dict[str, Any]]:
+def _search_hh_public_api_vacancies(
+    *, query: str, count: int, start_page: int = 0
+) -> list[dict[str, Any]]:
     vacancies: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     per_page = min(max(count, 30), 100)
@@ -411,7 +429,9 @@ def _search_hh_public_api_vacancies(*, query: str, count: int, start_page: int =
                 requirement = _to_str(snippet.get("requirement"))
                 responsibility = _to_str(snippet.get("responsibility"))
 
-            raw_text = "\n".join(part for part in [title, company, location, requirement, responsibility] if part)
+            raw_text = "\n".join(
+                part for part in [title, company, location, requirement, responsibility] if part
+            )
 
             vacancies.append(
                 {
@@ -429,12 +449,17 @@ def _search_hh_public_api_vacancies(*, query: str, count: int, start_page: int =
     return vacancies
 
 
-def _search_habr_api_vacancies(*, query: str, count: int, start_page: int = 0) -> list[dict[str, Any]]:
+def _search_habr_api_vacancies(
+    *, query: str, count: int, start_page: int = 0
+) -> list[dict[str, Any]]:
     if not settings.habr_career_api_token:
         return []
 
     vacancies: list[dict[str, Any]] = []
-    headers = {"Accept": "application/json", "Authorization": f"Bearer {settings.habr_career_api_token}"}
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {settings.habr_career_api_token}",
+    }
     first_page = max(1, start_page + 1)
     for page in range(first_page, first_page + MAX_API_SOURCE_PAGES):
         params = {"q": query, "per_page": min(max(count, 20), 50), "page": page}
@@ -511,7 +536,9 @@ def search_vacancies(
     # Other sources (Habr/SuperJob/public pages/Brave) are intentionally disabled here.
     _ = use_brave_fallback
     try:
-        aggregated = _search_hh_public_api_vacancies(query=query, count=count, start_page=page_offset)
+        aggregated = _search_hh_public_api_vacancies(
+            query=query, count=count, start_page=page_offset
+        )
     except Exception:
         aggregated = []
 
