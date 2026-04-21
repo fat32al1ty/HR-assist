@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -92,6 +94,34 @@ def list_liked_vacancy_ids(
         )
     ).all()
     return {int(row) for row in rows}
+
+
+def list_liked_vacancy_feedback_ages(
+    db: Session,
+    *,
+    user_id: int,
+) -> list[tuple[int, datetime]]:
+    rows = db.execute(
+        select(UserVacancyFeedback.vacancy_id, UserVacancyFeedback.updated_at).where(
+            UserVacancyFeedback.user_id == user_id,
+            UserVacancyFeedback.liked.is_(True),
+        )
+    ).all()
+    return [(int(row[0]), row[1]) for row in rows]
+
+
+def list_disliked_vacancy_feedback_ages(
+    db: Session,
+    *,
+    user_id: int,
+) -> list[tuple[int, datetime]]:
+    rows = db.execute(
+        select(UserVacancyFeedback.vacancy_id, UserVacancyFeedback.updated_at).where(
+            UserVacancyFeedback.user_id == user_id,
+            UserVacancyFeedback.disliked.is_(True),
+        )
+    ).all()
+    return [(int(row[0]), row[1]) for row in rows]
 
 
 def list_liked_vacancies(

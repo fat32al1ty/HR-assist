@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     vacancy_warmup_rf_only: bool = True
     vacancy_profile_backfill_enabled: bool = True
     vacancy_profile_backfill_limit_per_cycle: int = 3
+    preference_decay_enabled: bool = False
+    preference_decay_half_life_days: float = 30.0
     openai_responses_input_usd_per_1m: float = 2.0
     openai_responses_output_usd_per_1m: float = 8.0
     openai_embeddings_input_usd_per_1m: float = 0.13
