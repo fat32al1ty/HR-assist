@@ -412,6 +412,7 @@ export default function DashboardPage() {
   const [applicationBusyIds, setApplicationBusyIds] = useState<Record<number, boolean>>({});
   const [expandedCoverLetterIds, setExpandedCoverLetterIds] = useState<Record<number, boolean>>({});
   const [coverLetterDrafts, setCoverLetterDrafts] = useState<Record<number, string>>({});
+  const [applyingVacancyIds, setApplyingVacancyIds] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const storedToken = window.localStorage.getItem('access_token');
@@ -592,6 +593,7 @@ export default function DashboardPage() {
     setApplicationBusyIds({});
     setExpandedCoverLetterIds({});
     setCoverLetterDrafts({});
+    setApplyingVacancyIds({});
     setApplicationFilter('active');
     if (nextMessage) {
       setMessage(nextMessage);
@@ -1383,6 +1385,69 @@ export default function DashboardPage() {
     }
   }
 
+  async function applyToVacancy(vacancy: VacancyMatch) {
+    if (!token) {
+      return;
+    }
+    const vacancyId = normalizeVacancyId(vacancy.vacancy_id);
+    if (applyingVacancyIds[vacancyId]) {
+      return;
+    }
+    setApplyingVacancyIds((current) => ({ ...current, [vacancyId]: true }));
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/applications`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ vacancy_id: vacancy.vacancy_id, status: 'applied' }),
+      });
+      if (response.status === 401) {
+        clearSession('Сессия истекла. Войдите снова.');
+        return;
+      }
+      const payload = await response.json().catch(() => ({} as Record<string, unknown>));
+      if (response.status === 201) {
+        setMatchingMessage(
+          `Создан отклик на «${vacancy.title || 'вакансию'}». Найдите её в разделе «Мои отклики».`
+        );
+        setApplicationFilter('active');
+        await loadApplications();
+      } else if (response.status === 409) {
+        const detail = (payload as { detail?: { application_id?: number; message?: string } }).detail;
+        const applicationId =
+          detail && typeof detail === 'object' && typeof detail.application_id === 'number'
+            ? detail.application_id
+            : null;
+        setMatchingMessage(
+          applicationId
+            ? `По этой вакансии уже есть отклик (#${applicationId}). Откройте его в «Моих откликах».`
+            : 'По этой вакансии уже есть отклик.'
+        );
+        setApplicationFilter('all');
+        await loadApplications();
+        if (applicationId) {
+          setExpandedCoverLetterIds((current) => ({ ...current, [applicationId]: current[applicationId] ?? false }));
+        }
+      } else {
+        const message =
+          (payload as { detail?: unknown }).detail && typeof (payload as { detail?: unknown }).detail === 'string'
+            ? String((payload as { detail?: unknown }).detail)
+            : 'Не удалось создать отклик.';
+        setMatchingMessage(message);
+      }
+    } catch (error) {
+      setMatchingMessage(error instanceof Error ? error.message : 'Не удалось создать отклик.');
+    } finally {
+      setApplyingVacancyIds((current) => {
+        const next = { ...current };
+        delete next[vacancyId];
+        return next;
+      });
+    }
+  }
+
   async function likeVacancy(vacancy: VacancyMatch) {
     setMatchingBusy(true);
     const vacancyId = normalizeVacancyId(vacancy.vacancy_id);
@@ -2001,6 +2066,18 @@ export default function DashboardPage() {
                         <a href={match.source_url} target="_blank" rel="noreferrer">
                           Открыть источник
                         </a>
+                        <button
+                          className="primary"
+                          disabled={
+                            matchingBusy ||
+                            Boolean(applyingVacancyIds[normalizeVacancyId(match.vacancy_id)])
+                          }
+                          onClick={() => void applyToVacancy(match)}
+                        >
+                          {applyingVacancyIds[normalizeVacancyId(match.vacancy_id)]
+                            ? 'Создаём…'
+                            : 'Откликнуться'}
+                        </button>
                         <button className="secondary" disabled={matchingBusy} onClick={() => void likeVacancy(match)}>
                           Плюс
                         </button>
