@@ -141,6 +141,11 @@ def recommend_vacancies(
                 use_prefetched_index=payload.use_prefetched_index,
                 discover_if_few_matches=payload.discover_if_few_matches,
                 min_prefetched_matches=payload.min_prefetched_matches,
+                preference_overrides=(
+                    payload.preference_overrides.model_dump(exclude_unset=True)
+                    if payload.preference_overrides is not None
+                    else None
+                ),
             )
         except DailyBudgetExceeded as error:
             raise HTTPException(status_code=429, detail=DAILY_BUDGET_USER_MESSAGE) from error

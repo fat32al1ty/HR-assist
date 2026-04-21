@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
+from app.models.user import User
 from app.models.vacancy import Vacancy
 from app.repositories.resumes import get_resume_for_user
 from app.repositories.user_vacancy_feedback import list_disliked_vacancy_ids, list_liked_vacancy_ids
@@ -12,6 +13,9 @@ from app.services.embeddings import create_embedding
 from app.services.resume_profile_pipeline import persist_resume_profile
 from app.services.user_preference_profile_pipeline import recompute_user_preference_profile
 from app.services.vector_store import get_vector_store
+
+TITLE_BOOST = 0.10
+TITLE_BOOST_SCORE_CAP = 1.0
 
 ALLOWED_JOB_HOSTS = (
     "hh.ru",
@@ -851,9 +855,13 @@ def _lexical_fallback_matches(
     resume_roles: set[str],
     excluded_vacancy_ids: set[int],
     limit: int,
+    prefs: dict[str, object] | None = None,
+    drop_counters: dict[str, int] | None = None,
 ) -> list[dict]:
     if not resume_skills:
         return []
+    active_prefs = prefs or {}
+    preferred_titles = active_prefs.get("preferred_titles") or []
 
     candidates = (
         db.query(Vacancy)
@@ -886,6 +894,20 @@ def _lexical_fallback_matches(
         if _looks_hard_non_it_role(vacancy.title or "", None, vacancy.raw_text):
             continue
 
+        if active_prefs:
+            lexical_drop = _hard_filter_drop_reason(
+                vacancy_profile=None,
+                vacancy_location=vacancy.location,
+                prefs=active_prefs,
+            )
+            if lexical_drop == "geo":
+                if drop_counters is not None:
+                    drop_counters["geo"] = drop_counters.get("geo", 0) + 1
+                continue
+            # Work-format filter skipped here: lexical fallback has no
+            # parsed remote_policy to compare against. Main-path filter
+            # already culled format mismatches.
+
         text = " ".join(
             part
             for part in [
@@ -912,6 +934,10 @@ def _lexical_fallback_matches(
                 score += LEADERSHIP_BONUS
             else:
                 score -= LEADERSHIP_MISSING_PENALTY
+        if _preferred_title_match(vacancy.title, preferred_titles):
+            score = min(TITLE_BOOST_SCORE_CAP, score + TITLE_BOOST)
+            if drop_counters is not None:
+                drop_counters["title_boost"] = drop_counters.get("title_boost", 0) + 1
         if score < RELAXED_MIN_RELEVANCE_SCORE:
             continue
         dedupe_key = (
@@ -945,16 +971,172 @@ def _lexical_fallback_matches(
     return [item[1] for item in ranked[:limit]]
 
 
+def _normalize_remote_policy(value: object) -> str:
+    """Map a free-form LLM remote_policy string to {remote, hybrid, office, unclear}.
+
+    Unrecognized / missing values return "unclear" — we prefer to keep vacancies
+    visible rather than hard-drop them when the LLM was ambiguous.
+    """
+    if not isinstance(value, str):
+        return "unclear"
+    text = value.strip().lower()
+    if not text:
+        return "unclear"
+    remote_markers = ("remote", "удален", "удалён", "дистанц", "distributed", "anywhere")
+    hybrid_markers = ("hybrid", "гибрид", "частично", "mixed")
+    office_markers = ("office", "офис", "onsite", "on-site", "on site", "очно", "in-office")
+    # Hybrid markers checked first because "частично удалённо" (partial remote)
+    # literally contains "удалён" and would otherwise be misclassified as remote.
+    if any(marker in text for marker in hybrid_markers):
+        return "hybrid"
+    if any(marker in text for marker in remote_markers):
+        return "remote"
+    if any(marker in text for marker in office_markers):
+        return "office"
+    return "unclear"
+
+
+def _normalize_city_text(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    text = value.lower().strip()
+    text = re.sub(r"^(г\.|город|city of|city)\s+", "", text)
+    text = re.sub(r"[^0-9a-zа-яё\s-]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _location_matches_home(location: object, home_city: str) -> bool:
+    home_norm = _normalize_city_text(home_city)
+    if not home_norm:
+        return False
+    loc_norm = _normalize_city_text(location)
+    if not loc_norm:
+        return False
+    return home_norm in loc_norm
+
+
+def _resolve_user_preferences(
+    user: User | None,
+    overrides: dict | None,
+) -> dict[str, object]:
+    """Merge persistent user prefs with optional per-request overrides.
+
+    Overrides do not persist — they let a user say "just this one search, any city".
+    Empty/None override values fall through to the user's stored preference.
+    """
+    base = {
+        "preferred_work_format": getattr(user, "preferred_work_format", "any") or "any",
+        "relocation_mode": getattr(user, "relocation_mode", "home_only") or "home_only",
+        "home_city": getattr(user, "home_city", None),
+        "preferred_titles": list(getattr(user, "preferred_titles", None) or []),
+    }
+    if not isinstance(overrides, dict):
+        return base
+    for key in ("preferred_work_format", "relocation_mode"):
+        value = overrides.get(key)
+        if isinstance(value, str) and value.strip():
+            base[key] = value.strip()
+    if "home_city" in overrides:
+        value = overrides["home_city"]
+        base["home_city"] = value.strip() if isinstance(value, str) and value.strip() else None
+    titles = overrides.get("preferred_titles")
+    if isinstance(titles, list):
+        cleaned = [item.strip() for item in titles if isinstance(item, str) and item.strip()]
+        base["preferred_titles"] = cleaned
+    return base
+
+
+def _hard_filter_drop_reason(
+    *,
+    vacancy_profile: dict | None,
+    vacancy_location: str | None,
+    prefs: dict[str, object],
+) -> str | None:
+    """Return the reason this vacancy should be dropped, or None to keep.
+
+    Reasons: 'work_format', 'geo'. Keep semantics:
+    - Work format: drop only when user picked a *definite* preference
+      (remote/hybrid/office) AND the vacancy's normalized remote_policy is a
+      *different* definite value. 'unclear' passes (conservative).
+    - Geo: drop when relocation_mode=home_only AND home_city set AND vacancy
+      location does not contain the home city AND vacancy isn't remote.
+    """
+    profile = vacancy_profile if isinstance(vacancy_profile, dict) else {}
+    remote_policy = _normalize_remote_policy(profile.get("remote_policy"))
+
+    pref_format = str(prefs.get("preferred_work_format") or "any").lower()
+    if (
+        pref_format in {"remote", "hybrid", "office"}
+        and remote_policy
+        in {
+            "remote",
+            "hybrid",
+            "office",
+        }
+        and remote_policy != pref_format
+    ):
+        return "work_format"
+
+    relocation = str(prefs.get("relocation_mode") or "home_only").lower()
+    home_city = prefs.get("home_city") if isinstance(prefs.get("home_city"), str) else None
+    if (
+        relocation == "home_only"
+        and home_city
+        and remote_policy != "remote"
+        and not _location_matches_home(vacancy_location, home_city)
+    ):
+        # Fall back to profile location if the vacancy row has no location set.
+        profile_location = profile.get("location") if isinstance(profile, dict) else None
+        if not _location_matches_home(profile_location, home_city):
+            return "geo"
+
+    return None
+
+
+def _preferred_title_match(vacancy_title: object, preferred_titles: list[str]) -> bool:
+    if not preferred_titles or not isinstance(vacancy_title, str):
+        return False
+    normalized_title = _normalize_phrase(vacancy_title)
+    if not normalized_title:
+        return False
+    # Also compare a space-compressed form so "senior backend" matches
+    # "senior back-end" (normalizer turns "back-end" into "back end").
+    compact_title = normalized_title.replace(" ", "")
+    for raw in preferred_titles:
+        needle = _normalize_phrase(raw)
+        if not needle:
+            continue
+        if needle in normalized_title:
+            return True
+        compact_needle = needle.replace(" ", "")
+        if compact_needle and compact_needle in compact_title:
+            return True
+    return False
+
+
 def match_vacancies_for_resume(
     db: Session,
     *,
     resume_id: int,
     user_id: int,
     limit: int = 20,
+    preference_overrides: dict | None = None,
+    metrics: dict | None = None,
 ) -> list[dict]:
     resume = get_resume_for_user(db, resume_id=resume_id, user_id=user_id)
     if resume is None:
         return []
+
+    try:
+        user = db.get(User, user_id)
+    except (AttributeError, TypeError):
+        user = None
+    prefs = _resolve_user_preferences(user, preference_overrides)
+    preferred_titles = prefs.get("preferred_titles") or []
+    drop_work_format = 0
+    drop_geo = 0
+    title_boosts = 0
 
     vector_store = get_vector_store()
     query_vector = vector_store.get_resume_vector(resume_id=resume_id)
@@ -1020,6 +1202,18 @@ def match_vacancies_for_resume(
         ):
             continue
 
+        drop_reason = _hard_filter_drop_reason(
+            vacancy_profile=payload if isinstance(payload, dict) else None,
+            vacancy_location=vacancy.location,
+            prefs=prefs,
+        )
+        if drop_reason == "work_format":
+            drop_work_format += 1
+            continue
+        if drop_reason == "geo":
+            drop_geo += 1
+            continue
+
         vacancy_skills = _build_vacancy_skill_set(payload)
         vacancy_title_tokens = _tokenize_rich_text(vacancy.title or "")
         overlap = _overlap_score(resume_skills, vacancy_skills)
@@ -1033,6 +1227,10 @@ def match_vacancies_for_resume(
                 hybrid += LEADERSHIP_BONUS
             else:
                 hybrid -= LEADERSHIP_MISSING_PENALTY
+
+        if _preferred_title_match(vacancy.title, preferred_titles):
+            hybrid = min(TITLE_BOOST_SCORE_CAP, hybrid + TITLE_BOOST)
+            title_boosts += 1
 
         dedupe_key = (
             f"{(vacancy.title or '').strip().lower()}::{(vacancy.company or '').strip().lower()}"
@@ -1088,22 +1286,36 @@ def match_vacancies_for_resume(
                     "profile": profile,
                 }
             )
-    if len(top_matches) >= limit:
-        return top_matches
-    if leadership_preferred and top_matches:
-        return top_matches[:limit]
 
+    def _record_metrics(result: list[dict]) -> list[dict]:
+        if metrics is not None:
+            metrics["hard_filter_drop_work_format"] = drop_work_format
+            metrics["hard_filter_drop_geo"] = drop_geo
+            metrics["title_boost_applied"] = title_boosts
+        return result
+
+    if len(top_matches) >= limit:
+        return _record_metrics(top_matches)
+    if leadership_preferred and top_matches:
+        return _record_metrics(top_matches[:limit])
+
+    lexical_counters: dict[str, int] = {}
     lexical_candidates = _lexical_fallback_matches(
         db,
         resume_skills=resume_skills,
         resume_roles=resume_roles,
         excluded_vacancy_ids=excluded_set,
         limit=limit * 2,
+        prefs=prefs,
+        drop_counters=lexical_counters,
     )
+    drop_geo += int(lexical_counters.get("geo", 0))
+    title_boosts += int(lexical_counters.get("title_boost", 0))
+
     if not top_matches:
         if leadership_preferred:
-            return []
-        return lexical_candidates[:limit]
+            return _record_metrics([])
+        return _record_metrics(lexical_candidates[:limit])
 
     present_ids = {int(item.get("vacancy_id", 0)) for item in top_matches}
     merged = list(top_matches)
@@ -1115,4 +1327,4 @@ def match_vacancies_for_resume(
         present_ids.add(vacancy_id)
         if len(merged) >= limit:
             break
-    return merged[:limit]
+    return _record_metrics(merged[:limit])

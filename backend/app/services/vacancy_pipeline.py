@@ -37,6 +37,9 @@ class VacancyDiscoveryMetrics:
     already_indexed_skipped: int = 0
     skipped_parse_errors: int = 0
     sources: list[str] | None = None
+    hard_filter_drop_work_format: int = 0
+    hard_filter_drop_geo: int = 0
+    title_boost_applied: int = 0
 
 
 @dataclass

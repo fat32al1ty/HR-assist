@@ -1,7 +1,9 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.schemas.user import HOME_CITY_MAX, JOB_TITLE_MAX, PREFERRED_TITLES_MAX
 
 
 class VacancyDiscoverRequest(BaseModel):
@@ -47,6 +49,42 @@ class VacancyMatchRead(BaseModel):
     profile: dict[str, Any] | None = None
 
 
+class PreferenceOverrides(BaseModel):
+    """Per-request overrides for job preferences — do not persist to the user row.
+
+    Lets a jobseeker say "just this one search, any city" without having to
+    edit their profile preferences.
+    """
+
+    preferred_work_format: Literal["remote", "hybrid", "office", "any"] | None = None
+    relocation_mode: Literal["home_only", "any_city"] | None = None
+    home_city: str | None = Field(default=None, max_length=HOME_CITY_MAX)
+    preferred_titles: list[str] | None = Field(default=None, max_length=PREFERRED_TITLES_MAX)
+
+    @field_validator("preferred_titles")
+    @classmethod
+    def _validate_titles(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        cleaned: list[str] = []
+        for raw in value:
+            title = raw.strip()
+            if not title:
+                continue
+            if len(title) > JOB_TITLE_MAX:
+                raise ValueError(f"title longer than {JOB_TITLE_MAX} characters")
+            cleaned.append(title)
+        return cleaned
+
+    @field_validator("home_city")
+    @classmethod
+    def _normalize_city(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+
 class VacancyRecommendRequest(BaseModel):
     discover_count: int = Field(default=40, ge=1, le=100)
     match_limit: int = Field(default=20, ge=1, le=50)
@@ -56,6 +94,7 @@ class VacancyRecommendRequest(BaseModel):
     use_prefetched_index: bool = True
     discover_if_few_matches: bool = True
     min_prefetched_matches: int = Field(default=8, ge=1, le=20)
+    preference_overrides: PreferenceOverrides | None = None
 
 
 class OpenAIUsageRead(BaseModel):

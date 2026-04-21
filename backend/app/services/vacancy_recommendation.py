@@ -214,9 +214,22 @@ def recommend_vacancies_for_resume(
     min_prefetched_matches: int = 8,
     progress_callback: Callable[[str, int, dict | None], None] | None = None,
     max_runtime_seconds: int | None = None,
+    preference_overrides: dict | None = None,
 ) -> tuple[str, VacancyDiscoveryMetrics, list[dict]]:
     last_progress = 0
     started_at = time.monotonic()
+    matching_metrics: dict[str, int] = {}
+
+    def _absorb_matching_metrics(target: VacancyDiscoveryMetrics) -> VacancyDiscoveryMetrics:
+        # Matcher populates counters for the final run only; copy into the
+        # dataclass so the job's stored metrics reflect what the user will
+        # actually see in the returned matches.
+        target.hard_filter_drop_work_format = int(
+            matching_metrics.get("hard_filter_drop_work_format", 0)
+        )
+        target.hard_filter_drop_geo = int(matching_metrics.get("hard_filter_drop_geo", 0))
+        target.title_boost_applied = int(matching_metrics.get("title_boost_applied", 0))
+        return target
 
     def report(stage: str, progress: int, metrics: VacancyDiscoveryMetrics | None = None) -> None:
         nonlocal last_progress
@@ -236,7 +249,12 @@ def recommend_vacancies_for_resume(
     if use_prefetched_index:
         report("matching", 45, aggregate_metrics)
         prefetched_matches = match_vacancies_for_resume(
-            db, resume_id=resume_id, user_id=user_id, limit=match_limit
+            db,
+            resume_id=resume_id,
+            user_id=user_id,
+            limit=match_limit,
+            preference_overrides=preference_overrides,
+            metrics=matching_metrics,
         )
         target_match_count = max(1, min(match_limit, min_prefetched_matches))
         enough_prefetched = (
@@ -245,7 +263,7 @@ def recommend_vacancies_for_resume(
         )
         if enough_prefetched or not discover_if_few_matches:
             report("finalizing", 95, aggregate_metrics)
-            return query, aggregate_metrics, prefetched_matches
+            return query, _absorb_matching_metrics(aggregate_metrics), prefetched_matches
         report("collecting", 50, aggregate_metrics)
     else:
         target_match_count = max(1, min(match_limit, min_prefetched_matches))
@@ -295,7 +313,12 @@ def recommend_vacancies_for_resume(
             )
             if use_prefetched_index:
                 interim_matches = match_vacancies_for_resume(
-                    db, resume_id=resume_id, user_id=user_id, limit=match_limit
+                    db,
+                    resume_id=resume_id,
+                    user_id=user_id,
+                    limit=match_limit,
+                    preference_overrides=preference_overrides,
+                    metrics=matching_metrics,
                 )
                 if (
                     len(interim_matches) >= target_match_count
@@ -303,7 +326,7 @@ def recommend_vacancies_for_resume(
                 ):
                     report("matching", 85, aggregate_metrics)
                     report("finalizing", 95, aggregate_metrics)
-                    return query, aggregate_metrics, interim_matches
+                    return query, _absorb_matching_metrics(aggregate_metrics), interim_matches
             # Stop wasting time if repeated scans only revisit already-indexed links.
             if (
                 index >= 1
@@ -318,10 +341,15 @@ def recommend_vacancies_for_resume(
             if elapsed >= max_runtime_seconds:
                 report("matching", 85, aggregate_metrics)
                 matches = match_vacancies_for_resume(
-                    db, resume_id=resume_id, user_id=user_id, limit=match_limit
+                    db,
+                    resume_id=resume_id,
+                    user_id=user_id,
+                    limit=match_limit,
+                    preference_overrides=preference_overrides,
+                    metrics=matching_metrics,
                 )
                 report("finalizing", 95, aggregate_metrics)
-                return query, aggregate_metrics, matches
+                return query, _absorb_matching_metrics(aggregate_metrics), matches
         result = discover_and_index_vacancies(
             db,
             query=query,
@@ -336,7 +364,12 @@ def recommend_vacancies_for_resume(
 
     report("matching", 85, aggregate_metrics)
     matches = match_vacancies_for_resume(
-        db, resume_id=resume_id, user_id=user_id, limit=match_limit
+        db,
+        resume_id=resume_id,
+        user_id=user_id,
+        limit=match_limit,
+        preference_overrides=preference_overrides,
+        metrics=matching_metrics,
     )
     report("finalizing", 95, aggregate_metrics)
-    return query, aggregate_metrics, matches
+    return query, _absorb_matching_metrics(aggregate_metrics), matches

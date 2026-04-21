@@ -174,6 +174,8 @@ def _run_recommendation_job(job_id: str) -> None:
             daily_budget_enforced=settings.openai_enforce_user_daily_budget,
         ) as usage_tracker:
             try:
+                overrides_raw = payload.get("preference_overrides")
+                preference_overrides = overrides_raw if isinstance(overrides_raw, dict) else None
                 query, metrics, matches = recommend_vacancies_for_resume(
                     db,
                     resume_id=resume_id,
@@ -190,6 +192,7 @@ def _run_recommendation_job(job_id: str) -> None:
                     max_runtime_seconds=max(
                         30, int(settings.recommendation_job_timeout_seconds) - 30
                     ),
+                    preference_overrides=preference_overrides,
                 )
                 assert_not_timed_out()
             except OpenAIBudgetExceeded as error:
