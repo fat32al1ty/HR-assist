@@ -24,8 +24,17 @@ type Resume = {
   extracted_text: string | null;
   analysis: Record<string, unknown> | null;
   error_message: string | null;
+  is_active: boolean;
+  label: string | null;
   created_at: string;
 };
+
+const RESUME_LIMIT = 2;
+const RESUME_LABEL_MAX = 32;
+
+function resumeDisplayName(resume: Resume): string {
+  return (resume.label && resume.label.trim()) || resume.original_filename;
+}
 type AuthFormMode = 'login' | 'register' | 'reset';
 
 type WorkFormat = 'remote' | 'hybrid' | 'office' | 'any';
@@ -130,6 +139,8 @@ type ApplicationStatus =
 type Application = {
   id: number;
   vacancy_id: number | null;
+  resume_id: number | null;
+  resume_label: string | null;
   status: ApplicationStatus;
   source_url: string;
   vacancy_title: string;
@@ -620,7 +631,16 @@ export default function DashboardPage() {
 
     if (!response.ok) {
       const payload = await response.json().catch(() => ({ detail: 'Запрос не выполнен' }));
-      throw new Error(payload.detail || 'Запрос не выполнен');
+      const detail = payload.detail;
+      if (detail && typeof detail === 'object' && 'error' in detail) {
+        if (detail.error === 'resume_limit_exceeded') {
+          throw new Error(
+            `Достигнут лимит ${detail.limit ?? RESUME_LIMIT} профилей. Удалите один, чтобы загрузить новый.`
+          );
+        }
+        throw new Error(detail.message || detail.error || 'Запрос не выполнен');
+      }
+      throw new Error(typeof detail === 'string' ? detail : 'Запрос не выполнен');
     }
 
     if (response.status === 204) {
@@ -723,6 +743,57 @@ export default function DashboardPage() {
     if (response.ok) {
       const data = (await response.json()) as Resume[];
       setResumes(data);
+    }
+  }
+
+  async function activateResumeProfile(resumeId: number) {
+    const target = resumes.find((row) => row.id === resumeId);
+    if (!target || target.is_active) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await request<Resume>(`/api/resumes/${resumeId}/activate`, {
+        method: 'POST'
+      });
+      setResumes((current) =>
+        current.map((row) =>
+          row.id === updated.id
+            ? { ...updated }
+            : { ...row, is_active: false }
+        )
+      );
+      setSelectedResumeId(updated.id);
+      setMatches([]);
+      setLastMatchingQuery('');
+      setHiddenMatchIds([]);
+      await Promise.all([loadSelectedVacancies(), loadDislikedVacancies()]);
+      setMessage(`Активный профиль: ${resumeDisplayName(updated)}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Не удалось переключить профиль');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveResumeLabel(resumeId: number, nextLabel: string) {
+    const trimmed = nextLabel.trim().slice(0, RESUME_LABEL_MAX);
+    const existing = resumes.find((row) => row.id === resumeId);
+    if (!existing) {
+      return;
+    }
+    if ((existing.label ?? '') === trimmed) {
+      return;
+    }
+    try {
+      const updated = await request<Resume>(`/api/resumes/${resumeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: trimmed })
+      });
+      setResumes((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Не удалось сохранить метку профиля');
     }
   }
 
@@ -1556,9 +1627,32 @@ export default function DashboardPage() {
             </a>
           </div>
           {token ? (
-            <button className="secondary" onClick={logout}>
-              Выйти
-            </button>
+            <div className="topbar-actions">
+              {resumes.length > 1 ? (
+                <label className="profile-switch">
+                  <span className="profile-switch-label">Активный профиль</span>
+                  <select
+                    value={resumes.find((row) => row.is_active)?.id ?? ''}
+                    disabled={busy}
+                    onChange={(event) => {
+                      const nextId = Number(event.target.value);
+                      if (Number.isFinite(nextId)) {
+                        void activateResumeProfile(nextId);
+                      }
+                    }}
+                  >
+                    {resumes.map((resume) => (
+                      <option key={resume.id} value={resume.id}>
+                        {resumeDisplayName(resume)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              <button className="secondary" onClick={logout}>
+                Выйти
+              </button>
+            </div>
           ) : null}
         </div>
       </header>
@@ -1671,16 +1765,28 @@ export default function DashboardPage() {
           <section className="workspace">
             <aside className="panel">
               <h2>Загрузка резюме</h2>
-              <p className="panel-note">Поддерживаются PDF и DOCX. После загрузки создается структурированный профиль для matching.</p>
+              <p className="panel-note">
+                Поддерживаются PDF и DOCX. Можно хранить до {RESUME_LIMIT} профилей —
+                например, IC и менеджерский — и переключаться между ними.
+              </p>
               <form className="form" onSubmit={uploadResume}>
                 <input
                   type="file"
                   accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  disabled={busy || resumes.length >= RESUME_LIMIT}
                   onChange={(event) => setFile(event.target.files?.[0] || null)}
                 />
-                <button className="primary" disabled={busy}>
+                <button
+                  className="primary"
+                  disabled={busy || resumes.length >= RESUME_LIMIT}
+                >
                   Проанализировать
                 </button>
+                {resumes.length >= RESUME_LIMIT ? (
+                  <p className="panel-note">
+                    Достигнут лимит {RESUME_LIMIT} профилей. Удалите один, чтобы загрузить новый.
+                  </p>
+                ) : null}
               </form>
               {message ? <p className="message">{message}</p> : null}
 
@@ -1751,13 +1857,28 @@ export default function DashboardPage() {
                 <div className="resume-list">
                   {resumes.length === 0 ? <p className="empty-state">Пока нет загруженных резюме.</p> : null}
                   {resumes.map((resume) => (
-                    <article className="resume-item" key={resume.id}>
+                    <article
+                      className={`resume-item${resume.is_active ? ' resume-item-active' : ''}`}
+                      key={resume.id}
+                    >
                       <div className="resume-item-head">
                         <div>
-                          <h3>{resume.original_filename}</h3>
+                          <h3>
+                            {resume.original_filename}
+                            {resume.is_active ? <span className="resume-active-tag">активный</span> : null}
+                          </h3>
                           <span className={`status ${resume.status}`}>{statusLabels[resume.status] || resume.status}</span>
                         </div>
                         <div className="resume-actions">
+                          {!resume.is_active ? (
+                            <button
+                              className="secondary"
+                              disabled={busy}
+                              onClick={() => void activateResumeProfile(resume.id)}
+                            >
+                              Сделать активным
+                            </button>
+                          ) : null}
                           <button className="secondary resume-toggle" disabled={busy} onClick={() => toggleResumeDetails(resume.id)}>
                             {expandedResumeIds[resume.id] ? 'Свернуть' : 'Показать детали'}
                           </button>
@@ -1766,6 +1887,17 @@ export default function DashboardPage() {
                           </button>
                         </div>
                       </div>
+                      <label className="field resume-label-field">
+                        <span>Короткое имя профиля</span>
+                        <input
+                          type="text"
+                          maxLength={RESUME_LABEL_MAX}
+                          defaultValue={resume.label ?? ''}
+                          placeholder='Например: "IC Staff" или "Mgmt"'
+                          disabled={busy}
+                          onBlur={(event) => void saveResumeLabel(resume.id, event.target.value)}
+                        />
+                      </label>
                       {resume.error_message ? <p className="message">{resume.error_message}</p> : null}
                       {resume.analysis && expandedResumeIds[resume.id] ? <Analysis data={resume.analysis} /> : null}
                     </article>
@@ -2189,9 +2321,16 @@ export default function DashboardPage() {
                               {row.applied_at ? ` • отклик от ${formatApplicationDate(row.applied_at)}` : ''}
                             </p>
                           </div>
-                          <span className={`status-pill status-${row.status}`}>
-                            {APPLICATION_STATUS_LABELS[row.status]}
-                          </span>
+                          <div className="application-card-tags">
+                            {row.resume_id ? (
+                              <span className="resume-badge" title="Профиль, из которого создан отклик">
+                                {row.resume_label ?? 'Профиль'}
+                              </span>
+                            ) : null}
+                            <span className={`status-pill status-${row.status}`}>
+                              {APPLICATION_STATUS_LABELS[row.status]}
+                            </span>
+                          </div>
                         </header>
                         <div className="application-card-controls">
                           <label className="field">

@@ -19,11 +19,13 @@ def create_application(
     status: str = "draft",
     notes: str | None = None,
     cover_letter_text: str | None = None,
+    resume_id: int | None = None,
 ) -> Application:
     now = datetime.now(UTC)
     application = Application(
         user_id=user_id,
         vacancy_id=vacancy_id,
+        resume_id=resume_id,
         status=status,
         source_url=source_url or "",
         vacancy_title=vacancy_title or "",

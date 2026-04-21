@@ -991,3 +991,83 @@ select:focus {
     flex-wrap: wrap;
   }
 }
+
+.topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profile-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.profile-switch select {
+  padding: 6px 10px;
+  border: 1px solid rgba(100, 124, 158, 0.4);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  max-width: 200px;
+}
+
+.profile-switch-label {
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.resume-item-active {
+  border-color: rgba(46, 112, 215, 0.55);
+  box-shadow: 0 0 0 2px rgba(46, 112, 215, 0.12);
+}
+
+.resume-active-tag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent, #2e70d7);
+  border-radius: 999px;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.resume-label-field {
+  margin-top: 12px;
+}
+
+.application-card-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.resume-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: rgba(46, 112, 215, 0.12);
+  color: #1f4b96;
+  border: 1px solid rgba(46, 112, 215, 0.25);
+  border-radius: 999px;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

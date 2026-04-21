@@ -16,7 +16,7 @@ from app.repositories.applications import (
     save_cover_letter,
     update_application,
 )
-from app.repositories.resumes import list_resumes_for_user
+from app.repositories.resumes import get_active_resume_for_user, list_resumes_for_user
 from app.repositories.vacancies import get_vacancy_by_id
 from app.schemas.application import (
     ApplicationCreateRequest,
@@ -92,6 +92,7 @@ def create_application_endpoint(
             detail="vacancy_title is required when vacancy_id is not supplied",
         )
 
+    active_resume = get_active_resume_for_user(db, user_id=current_user.id)
     application = create_application(
         db,
         user_id=current_user.id,
@@ -101,6 +102,7 @@ def create_application_endpoint(
         vacancy_company=company,
         status=payload.status,
         notes=payload.notes,
+        resume_id=active_resume.id if active_resume is not None else None,
     )
     return ApplicationRead.model_validate(application)
 

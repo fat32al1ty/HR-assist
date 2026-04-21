@@ -24,6 +24,8 @@ COMPANY_MAX = 255
 class ApplicationRead(BaseModel):
     id: int
     vacancy_id: int | None
+    resume_id: int | None
+    resume_label: str | None
     status: ApplicationStatus
     source_url: str
     vacancy_title: str

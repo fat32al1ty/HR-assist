@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -15,6 +15,9 @@ class Application(Base):
     )
     vacancy_id: Mapped[int | None] = mapped_column(
         ForeignKey("vacancies.id", ondelete="SET NULL"), nullable=True
+    )
+    resume_id: Mapped[int | None] = mapped_column(
+        ForeignKey("resumes.id", ondelete="SET NULL"), nullable=True, index=True
     )
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="draft", server_default="draft", index=True
@@ -39,3 +42,11 @@ class Application(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    resume = relationship("Resume", foreign_keys=[resume_id])
+
+    @property
+    def resume_label(self) -> str | None:
+        """Label shown on the Kanban badge; None when the resume was deleted
+        after the application was created, so the UI can fall back to 'Профиль'."""
+        return self.resume.label if self.resume is not None else None
