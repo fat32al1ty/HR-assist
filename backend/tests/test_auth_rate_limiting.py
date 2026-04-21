@@ -3,6 +3,7 @@
 These tests spin up FastAPI's TestClient to exercise the slowapi middleware,
 which is skipped by the function-level tests in test_auth_hardening_flow.py.
 """
+
 from __future__ import annotations
 
 import unittest
@@ -65,9 +66,34 @@ class AuthRateLimitTest(unittest.TestCase):
 
         statuses = [self.client.post("/api/auth/register", json=p).status_code for p in payloads]
         # Any rejection code is fine for the first `cap` calls (403 here because
-        # beta_key is wrong). The (cap + 1)-th must be 429.
+        # beta_key is wrong). The (cap + 1)-th must be 429. Critically: nothing
+        # before the cap should be 500 — that would mean slowapi's header
+        # injection blew up (see https://github.com/laurentS/slowapi issue #177).
+        self.assertTrue(all(status < 500 for status in statuses[:cap]), statuses[:cap])
         self.assertTrue(all(status != 429 for status in statuses[:cap]))
         self.assertEqual(statuses[-1], 429)
+
+    def test_rate_limited_endpoint_does_not_500_on_success_path(self) -> None:
+        """Regression: slowapi requires a `response: Response` parameter in the
+        handler signature, otherwise its header-injection path raises at 500.
+        This test exercises the happy path (valid beta_key + unique email) and
+        asserts we get 201, not 500.
+        """
+        email = f"rl-ok-{uuid.uuid4().hex[:10]}@example.com"
+        self.emails.append(email)
+        resp = self.client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "SuperStrong123",
+                "full_name": "Rate Limit Success",
+                "beta_key": "BETA-TEST-KEY",
+            },
+        )
+        self.assertEqual(resp.status_code, 201, resp.text)
+        # slowapi should have attached rate-limit metadata — this confirms the
+        # header-injection path actually ran without exploding.
+        self.assertIn("x-ratelimit-limit", {k.lower() for k in resp.headers.keys()})
 
 
 if __name__ == "__main__":

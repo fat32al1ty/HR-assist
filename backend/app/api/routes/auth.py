@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -74,7 +74,10 @@ def issue_email_verification_code(*, db: Session, user) -> tuple[str, str]:
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(AUTH_REGISTER_LIMIT)
 def register(
-    request: Request, payload: RegisterRequest, db: Session = Depends(get_db)
+    request: Request,
+    response: Response,
+    payload: RegisterRequest,
+    db: Session = Depends(get_db),
 ) -> RegisterResponse:
     if not is_valid_beta_key(payload.beta_key):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=GENERIC_AUTH_REJECTION)
@@ -134,7 +137,10 @@ def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)) -> 
 @router.post("/login/start", response_model=LoginStartResponse)
 @limiter.limit(AUTH_LOGIN_LIMIT)
 def login_start(
-    request: Request, payload: LoginStartRequest, db: Session = Depends(get_db)
+    request: Request,
+    response: Response,
+    payload: LoginStartRequest,
+    db: Session = Depends(get_db),
 ) -> LoginStartResponse:
     user = get_user_by_email(db, email=payload.email)
     if user is None or not verify_password(payload.password, user.hashed_password):
@@ -153,7 +159,12 @@ def login_start(
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(AUTH_LOGIN_LIMIT)
-def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+def login(
+    request: Request,
+    response: Response,
+    payload: LoginRequest,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
     user = get_user_by_email(db, email=payload.email)
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
@@ -167,7 +178,10 @@ def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)
 @router.post("/password/reset", response_model=AuthMessageResponse)
 @limiter.limit(AUTH_PASSWORD_RESET_LIMIT)
 def reset_password(
-    request: Request, payload: PasswordResetRequest, db: Session = Depends(get_db)
+    request: Request,
+    response: Response,
+    payload: PasswordResetRequest,
+    db: Session = Depends(get_db),
 ) -> AuthMessageResponse:
     if not is_valid_beta_key(payload.beta_key):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=GENERIC_AUTH_REJECTION)
@@ -185,7 +199,10 @@ def reset_password(
 @router.post("/login/verify", response_model=TokenResponse)
 @limiter.limit(AUTH_LOGIN_LIMIT)
 def login_verify(
-    request: Request, payload: LoginVerifyRequest, db: Session = Depends(get_db)
+    request: Request,
+    response: Response,
+    payload: LoginVerifyRequest,
+    db: Session = Depends(get_db),
 ) -> TokenResponse:
     user = get_user_by_email(db, email=payload.email)
     if user is None or not user.is_active:
