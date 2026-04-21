@@ -11,7 +11,9 @@ class AuthOtpCode(Base):
     __table_args__ = (UniqueConstraint("challenge_id", name="uq_auth_otp_codes_challenge_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     email: Mapped[str] = mapped_column(String(320), index=True)
     purpose: Mapped[str] = mapped_column(String(48), index=True)
     challenge_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)

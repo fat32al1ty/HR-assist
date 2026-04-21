@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import Lock
 from uuid import uuid4
 
@@ -59,7 +59,7 @@ def start_recommendation_job(
 def _timed_out(job: RecommendationJob) -> bool:
     if job.status != "running" or job.started_at is None:
         return False
-    elapsed_seconds = (datetime.now(timezone.utc) - job.started_at).total_seconds()
+    elapsed_seconds = (datetime.now(UTC) - job.started_at).total_seconds()
     return elapsed_seconds > settings.recommendation_job_timeout_seconds
 
 
@@ -161,7 +161,9 @@ def _run_recommendation_job(job_id: str) -> None:
                     discover_if_few_matches=bool(payload.get("discover_if_few_matches", True)),
                     min_prefetched_matches=int(payload.get("min_prefetched_matches", 8)),
                     progress_callback=on_progress,
-                    max_runtime_seconds=max(30, int(settings.recommendation_job_timeout_seconds) - 30),
+                    max_runtime_seconds=max(
+                        30, int(settings.recommendation_job_timeout_seconds) - 30
+                    ),
                 )
                 assert_not_timed_out()
             except OpenAIBudgetExceeded as error:
@@ -190,7 +192,9 @@ def _run_recommendation_job(job_id: str) -> None:
             )
     except Exception as error:
         try:
-            fallback_job = db.scalar(select(RecommendationJob).where(RecommendationJob.id == job_id))
+            fallback_job = db.scalar(
+                select(RecommendationJob).where(RecommendationJob.id == job_id)
+            )
             if fallback_job is not None:
                 fail_job(db, fallback_job, error_message=str(error))
         except Exception:

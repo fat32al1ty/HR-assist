@@ -1,7 +1,6 @@
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +9,9 @@ class Settings(BaseSettings):
 
     app_name: str = "Resume Intelligence Platform"
     app_env: str = "local"
-    database_url: str = "postgresql+psycopg://resume_user:resume_pass@localhost:5432/resume_platform"
+    database_url: str = (
+        "postgresql+psycopg://resume_user:resume_pass@localhost:5432/resume_platform"
+    )
     jwt_secret_key: str = Field(default="change-me-before-production")
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
@@ -53,7 +54,9 @@ class Settings(BaseSettings):
     qdrant_api_key: str | None = None
     qdrant_collection_prefix: str = "hr_assistant"
     vector_size: int = 3072
-    brave_api_key: str | None = Field(default=None, validation_alias=AliasChoices("BRAVE_API_KEY", "BRAVE_API"))
+    brave_api_key: str | None = Field(
+        default=None, validation_alias=AliasChoices("BRAVE_API_KEY", "BRAVE_API")
+    )
     brave_web_search_url: str = "https://api.search.brave.com/res/v1/web/search"
     hh_api_token: str | None = Field(
         default=None,
@@ -66,7 +69,9 @@ class Settings(BaseSettings):
     )
     superjob_vacancies_url: str = "https://api.superjob.ru/2.0/vacancies/"
     habr_career_api_url: str = "https://career.habr.com/api/v1/vacancies"
-    habr_career_api_token: str | None = Field(default=None, validation_alias=AliasChoices("HABR_CAREER_API_TOKEN"))
+    habr_career_api_token: str | None = Field(
+        default=None, validation_alias=AliasChoices("HABR_CAREER_API_TOKEN")
+    )
     storage_dir: str = "storage"
     max_upload_size_mb: int = 10
     cors_origins: list[str] = ["http://localhost:3000"]
@@ -109,8 +114,12 @@ settings = get_settings()
 
 def validate_runtime_settings() -> None:
     is_production = settings.app_env.lower() == "production"
-    weak_jwt_secret = not settings.jwt_secret_key or settings.jwt_secret_key == "change-me-before-production"
-    beta_keys = {item.strip() for item in (settings.beta_tester_keys or "").split(",") if item.strip()}
+    weak_jwt_secret = (
+        not settings.jwt_secret_key or settings.jwt_secret_key == "change-me-before-production"
+    )
+    beta_keys = {
+        item.strip() for item in (settings.beta_tester_keys or "").split(",") if item.strip()
+    }
 
     if is_production and weak_jwt_secret:
         raise RuntimeError("JWT_SECRET_KEY must be configured with a strong secret in production")
@@ -119,5 +128,9 @@ def validate_runtime_settings() -> None:
     if is_production and settings.auth_email_delivery_mode.lower() != "smtp":
         raise RuntimeError("AUTH_EMAIL_DELIVERY_MODE must be smtp in production")
     if is_production and settings.auth_email_delivery_mode.lower() == "smtp":
-        if not settings.auth_email_smtp_host or not settings.auth_email_smtp_username or not settings.auth_email_smtp_password:
+        if (
+            not settings.auth_email_smtp_host
+            or not settings.auth_email_smtp_username
+            or not settings.auth_email_smtp_password
+        ):
             raise RuntimeError("SMTP settings must be configured in production")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -38,7 +38,7 @@ def recompute_user_preference_profile(db: Session, *, user_id: int) -> None:
 
     positive = _centroid(liked_vectors)
     negative = _centroid(disliked_vectors)
-    updated_at = datetime.now(timezone.utc).isoformat()
+    updated_at = datetime.now(UTC).isoformat()
 
     if positive is None:
         store.delete_user_preference_vector(user_id=user_id, kind="positive")

@@ -134,8 +134,24 @@ NON_IT_ALLOWLIST_MARKERS = {
 }
 SKILL_ALIAS_GROUPS = (
     {"sre", "site reliability engineering", "site-reliability-engineering"},
-    {"team lead", "tech lead", "тимлид", "техлид", "руководитель", "руководитель команды", "лид", "teamlead"},
-    {"team leadership", "people management", "управление командой", "руководитель отдела", "head of", "line manager"},
+    {
+        "team lead",
+        "tech lead",
+        "тимлид",
+        "техлид",
+        "руководитель",
+        "руководитель команды",
+        "лид",
+        "teamlead",
+    },
+    {
+        "team leadership",
+        "people management",
+        "управление командой",
+        "руководитель отдела",
+        "head of",
+        "line manager",
+    },
     {"incident response", "incident management", "инцидент менеджмент", "инцидент-менеджмент"},
     {"k8s", "kubernetes", "kuber"},
     {"observability", "monitoring", "мониторинг"},
@@ -149,10 +165,26 @@ SKILL_ALIAS_GROUPS = (
         "планирование ресурсов",
         "планирование работ",
     },
-    {"task management", "task prioritization", "backlog management", "постановка задач", "управление очередью задач"},
+    {
+        "task management",
+        "task prioritization",
+        "backlog management",
+        "постановка задач",
+        "управление очередью задач",
+    },
 )
 STRICT_REQUIREMENT_TOKENS = {"devops"}
-LEADERSHIP_REQUIREMENT_TOKENS = {"teamlead", "team", "lead", "tech", "тимлид", "техлид", "руководитель", "manager", "head"}
+LEADERSHIP_REQUIREMENT_TOKENS = {
+    "teamlead",
+    "team",
+    "lead",
+    "tech",
+    "тимлид",
+    "техлид",
+    "руководитель",
+    "manager",
+    "head",
+}
 CAPACITY_REQUIREMENT_TOKENS = {"capacity", "workload", "загрузк", "ресурс"}
 CAPACITY_SIGNAL_TOKENS = {
     "planning",
@@ -254,8 +286,14 @@ def _looks_like_listing_page(source_url: str, title: str) -> bool:
         return True
 
     has_digit = bool(re.search(r"\d", path))
-    has_uuid = bool(re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", path))
-    if ("/jobs/" in path or "/vacancies/" in path or "/vakansii/" in path) and not has_digit and not has_uuid:
+    has_uuid = bool(
+        re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", path)
+    )
+    if (
+        ("/jobs/" in path or "/vacancies/" in path or "/vakansii/" in path)
+        and not has_digit
+        and not has_uuid
+    ):
         return True
 
     return False
@@ -326,7 +364,18 @@ def _title_has_leadership_hint(title: str, payload: dict | None = None) -> bool:
         seniority = payload.get("seniority")
         if isinstance(seniority, str):
             sen = seniority.strip().lower()
-            if any(hint in sen for hint in ("lead", "head", "manager", "director", "c-level", "руковод", "директор")):
+            if any(
+                hint in sen
+                for hint in (
+                    "lead",
+                    "head",
+                    "manager",
+                    "director",
+                    "c-level",
+                    "руковод",
+                    "директор",
+                )
+            ):
                 return True
     return False
 
@@ -338,7 +387,9 @@ def _extract_priority_anchors(analysis: dict | None) -> set[str]:
         [
             str(analysis.get("target_role") or ""),
             str(analysis.get("specialization") or ""),
-            " ".join([str(x) for x in (analysis.get("matching_keywords") or []) if isinstance(x, str)]),
+            " ".join(
+                [str(x) for x in (analysis.get("matching_keywords") or []) if isinstance(x, str)]
+            ),
             " ".join([str(x) for x in (analysis.get("hard_skills") or []) if isinstance(x, str)]),
         ]
     ).lower()
@@ -397,7 +448,9 @@ def _looks_hard_non_it_role(title: str, payload: dict | None, raw_text: str | No
     if isinstance(payload, dict):
         domains = payload.get("domains")
         if isinstance(domains, list):
-            domains_text = " ".join(str(item).strip().lower() for item in domains if isinstance(item, str))
+            domains_text = " ".join(
+                str(item).strip().lower() for item in domains if isinstance(item, str)
+            )
             if domains_text and any(marker in domains_text for marker in HARD_NON_IT_ROLE_MARKERS):
                 return True
 
@@ -441,7 +494,15 @@ def _build_resume_skill_phrases(analysis: dict | None) -> list[str]:
     if not isinstance(analysis, dict):
         return []
     phrases: list[str] = []
-    for key in ("hard_skills", "skills", "tools", "matching_keywords", "soft_skills", "strengths", "recommendations"):
+    for key in (
+        "hard_skills",
+        "skills",
+        "tools",
+        "matching_keywords",
+        "soft_skills",
+        "strengths",
+        "recommendations",
+    ):
         phrases.extend(_as_string_list(analysis.get(key)))
     for key in ("target_role", "specialization", "summary"):
         value = analysis.get(key)
@@ -520,7 +581,22 @@ def _stem_token(token: str) -> str:
     text = token.strip().lower()
     if len(text) <= 4:
         return text
-    for suffix in ("ing", "ment", "tion", "sion", "able", "ibility", "ость", "ение", "ция", "ии", "ый", "ий", "ая", "ые"):
+    for suffix in (
+        "ing",
+        "ment",
+        "tion",
+        "sion",
+        "able",
+        "ibility",
+        "ость",
+        "ение",
+        "ция",
+        "ии",
+        "ый",
+        "ий",
+        "ая",
+        "ые",
+    ):
         if text.endswith(suffix) and len(text) - len(suffix) >= 3:
             return text[: -len(suffix)]
     return text
@@ -614,7 +690,9 @@ def _requirement_matches_resume(
 
     for group in SKILL_ALIAS_GROUPS:
         normalized_group = {_normalize_phrase(item) for item in group}
-        if req_tokens.intersection(normalized_group) and normalized_group.intersection(resume_phrase_aliases):
+        if req_tokens.intersection(normalized_group) and normalized_group.intersection(
+            resume_phrase_aliases
+        ):
             return True
     if _tokens_semantically_overlap(req_tokens, resume_skill_tokens):
         return True
@@ -836,7 +914,9 @@ def _lexical_fallback_matches(
                 score -= LEADERSHIP_MISSING_PENALTY
         if score < RELAXED_MIN_RELEVANCE_SCORE:
             continue
-        dedupe_key = f"{(vacancy.title or '').strip().lower()}::{(vacancy.company or '').strip().lower()}"
+        dedupe_key = (
+            f"{(vacancy.title or '').strip().lower()}::{(vacancy.company or '').strip().lower()}"
+        )
         if dedupe_key in seen_keys:
             continue
         seen_keys.add(dedupe_key)
@@ -881,7 +961,9 @@ def match_vacancies_for_resume(
     if query_vector is None:
         if isinstance(resume.analysis, dict) and resume.analysis:
             try:
-                persist_resume_profile(db, resume_id=resume_id, user_id=user_id, profile=resume.analysis)
+                persist_resume_profile(
+                    db, resume_id=resume_id, user_id=user_id, profile=resume.analysis
+                )
                 query_vector = vector_store.get_resume_vector(resume_id=resume_id)
             except Exception:
                 query_vector = None
@@ -933,7 +1015,9 @@ def match_vacancies_for_resume(
             continue
         if _looks_business_monitoring_role(vacancy.title or "", resume_skills):
             continue
-        if _looks_hard_non_it_role(vacancy.title or "", payload if isinstance(payload, dict) else None, vacancy.raw_text):
+        if _looks_hard_non_it_role(
+            vacancy.title or "", payload if isinstance(payload, dict) else None, vacancy.raw_text
+        ):
             continue
 
         vacancy_skills = _build_vacancy_skill_set(payload)
@@ -941,14 +1025,18 @@ def match_vacancies_for_resume(
         overlap = _overlap_score(resume_skills, vacancy_skills)
         role_overlap = _overlap_score(resume_roles, vacancy_title_tokens) if resume_roles else 0.0
         hybrid = _hybrid_score(float(score), overlap) + (0.05 * role_overlap)
-        has_leadership_hint = _title_has_leadership_hint(vacancy.title or "", payload if isinstance(payload, dict) else None)
+        has_leadership_hint = _title_has_leadership_hint(
+            vacancy.title or "", payload if isinstance(payload, dict) else None
+        )
         if leadership_preferred:
             if has_leadership_hint:
                 hybrid += LEADERSHIP_BONUS
             else:
                 hybrid -= LEADERSHIP_MISSING_PENALTY
 
-        dedupe_key = f"{(vacancy.title or '').strip().lower()}::{(vacancy.company or '').strip().lower()}"
+        dedupe_key = (
+            f"{(vacancy.title or '').strip().lower()}::{(vacancy.company or '').strip().lower()}"
+        )
         if dedupe_key in seen_keys:
             continue
         seen_keys.add(dedupe_key)

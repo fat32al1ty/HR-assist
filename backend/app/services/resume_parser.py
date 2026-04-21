@@ -22,5 +22,7 @@ def _extract_pdf_text(content: bytes) -> str:
 
 def _extract_docx_text(content: bytes) -> str:
     document = Document(BytesIO(content))
-    paragraphs = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
+    paragraphs = [
+        paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()
+    ]
     return "\n".join(paragraphs)

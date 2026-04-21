@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, JSON, String, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -24,4 +24,6 @@ class Resume(Base):
     )
 
     user = relationship("User", back_populates="resumes")
-    profile = relationship("ResumeProfile", back_populates="resume", cascade="all, delete-orphan", uselist=False)
+    profile = relationship(
+        "ResumeProfile", back_populates="resume", cascade="all, delete-orphan", uselist=False
+    )

@@ -13,7 +13,9 @@ def create_or_update_resume_profile(
     qdrant_collection: str,
     qdrant_point_id: str,
 ) -> ResumeProfile:
-    resume_profile = db.query(ResumeProfile).filter(ResumeProfile.resume_id == resume_id).one_or_none()
+    resume_profile = (
+        db.query(ResumeProfile).filter(ResumeProfile.resume_id == resume_id).one_or_none()
+    )
     if resume_profile is None:
         resume_profile = ResumeProfile(
             resume_id=resume_id,

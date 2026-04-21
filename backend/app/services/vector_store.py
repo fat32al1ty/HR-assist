@@ -213,7 +213,9 @@ class QdrantVectorStore:
             points_selector=models.PointIdsList(points=[point_id]),
         )
 
-    def get_user_preference_vectors(self, *, user_id: int) -> tuple[list[float] | None, list[float] | None]:
+    def get_user_preference_vectors(
+        self, *, user_id: int
+    ) -> tuple[list[float] | None, list[float] | None]:
         collection_name = self.collection_name("user_preference_profiles")
         if not self.client.collection_exists(collection_name):
             return None, None

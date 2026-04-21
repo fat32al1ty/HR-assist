@@ -68,8 +68,14 @@ def _looks_like_listing_page(source_url: str, title: str) -> bool:
         return True
 
     has_digit = bool(re.search(r"\d", path))
-    has_uuid = bool(re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", path))
-    if ("/jobs/" in path or "/vacancies/" in path or "/vakansii/" in path) and not has_digit and not has_uuid:
+    has_uuid = bool(
+        re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", path)
+    )
+    if (
+        ("/jobs/" in path or "/vacancies/" in path or "/vakansii/" in path)
+        and not has_digit
+        and not has_uuid
+    ):
         return True
 
     return False
@@ -142,7 +148,9 @@ def _looks_non_vacancy_page(source_url: str) -> bool:
     return True
 
 
-def _looks_like_rf_vacancy(source_url: str, title: str, raw_text: str | None, location: str | None) -> bool:
+def _looks_like_rf_vacancy(
+    source_url: str, title: str, raw_text: str | None, location: str | None
+) -> bool:
     hostname = (urlparse(source_url).hostname or "").lower()
     text = f"{title}\n{raw_text or ''}\n{location or ''}".lower()
     rf_markers = (
@@ -164,7 +172,9 @@ def _looks_like_rf_vacancy(source_url: str, title: str, raw_text: str | None, lo
     return any(marker in text for marker in rf_markers)
 
 
-def _build_vacancy_analysis_input(*, title: str, source_url: str, raw_text: str | None, company: str | None) -> str:
+def _build_vacancy_analysis_input(
+    *, title: str, source_url: str, raw_text: str | None, company: str | None
+) -> str:
     parts = [
         f"Vacancy title: {title}",
         f"Company: {company or 'unknown'}",
@@ -243,7 +253,12 @@ def discover_and_index_vacancies(
                     )
 
                 has_profile = vacancy.profile is not None
-                if was_existing and not force_reindex and vacancy.status == "indexed" and has_profile:
+                if (
+                    was_existing
+                    and not force_reindex
+                    and vacancy.status == "indexed"
+                    and has_profile
+                ):
                     metrics.already_indexed_skipped += 1
                     continue
 
@@ -257,7 +272,9 @@ def discover_and_index_vacancies(
                     metrics.filtered += 1
                     continue
 
-                if rf_only and not _looks_like_rf_vacancy(vacancy.source_url, vacancy.title, vacancy.raw_text, vacancy.location):
+                if rf_only and not _looks_like_rf_vacancy(
+                    vacancy.source_url, vacancy.title, vacancy.raw_text, vacancy.location
+                ):
                     vacancy.status = "filtered"
                     vacancy.error_message = "Filtered as non-RF vacancy"
                     db.add(vacancy)
@@ -277,7 +294,9 @@ def discover_and_index_vacancies(
                     metrics.filtered += 1
                     continue
 
-                if _looks_archived_vacancy_strict(vacancy.source_url, vacancy.title, vacancy.raw_text):
+                if _looks_archived_vacancy_strict(
+                    vacancy.source_url, vacancy.title, vacancy.raw_text
+                ):
                     vacancy.status = "filtered"
                     vacancy.error_message = "Filtered as archived vacancy"
                     db.add(vacancy)
@@ -312,7 +331,9 @@ def discover_and_index_vacancies(
                 is_vacancy = bool(profile.get("is_vacancy"))
                 confidence = float(profile.get("vacancy_confidence") or 0.0)
                 if not is_vacancy or confidence < 0.55:
-                    rejection_reason = profile.get("rejection_reason") or "Filtered as non-vacancy content"
+                    rejection_reason = (
+                        profile.get("rejection_reason") or "Filtered as non-vacancy content"
+                    )
                     vacancy.status = "filtered"
                     vacancy.error_message = str(rejection_reason)
                     db.add(vacancy)
@@ -367,7 +388,9 @@ def discover_and_index_vacancies(
                 query=query,
                 count=expanded_count,
                 use_brave_fallback=use_brave_fallback,
-                page_offset=_build_rotation_offset(query=query, count=expanded_count, attempt=attempt),
+                page_offset=_build_rotation_offset(
+                    query=query, count=expanded_count, attempt=attempt
+                ),
             )
             process_items(second_pass_items)
             if metrics.indexed > 0 or metrics.analyzed > 0:

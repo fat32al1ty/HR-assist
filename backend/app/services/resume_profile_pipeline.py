@@ -46,7 +46,9 @@ def build_resume_vector_payload(profile: dict[str, Any], *, canonical_text: str)
     }
 
 
-def persist_resume_profile(db: Session, *, resume_id: int, user_id: int, profile: dict[str, Any]) -> None:
+def persist_resume_profile(
+    db: Session, *, resume_id: int, user_id: int, profile: dict[str, Any]
+) -> None:
     canonical_text = build_resume_profile_text(profile)
     vector = create_embedding(canonical_text)
     payload = build_resume_vector_payload(profile, canonical_text=canonical_text)

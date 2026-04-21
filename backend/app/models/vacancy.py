@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -25,4 +25,6 @@ class Vacancy(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    profile = relationship("VacancyProfile", back_populates="vacancy", cascade="all, delete-orphan", uselist=False)
+    profile = relationship(
+        "VacancyProfile", back_populates="vacancy", cascade="all, delete-orphan", uselist=False
+    )

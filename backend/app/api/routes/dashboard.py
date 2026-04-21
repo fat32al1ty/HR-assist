@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
@@ -53,7 +53,7 @@ def dashboard_stats(
 
     if resume_id is None:
         return DashboardStatsRead(
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
             qdrant=qdrant_stats,
             resume=None,
         )
@@ -99,10 +99,16 @@ def dashboard_stats(
     )
 
     analysis = resume.analysis or {}
-    target_role = analysis.get("target_role") if isinstance(analysis.get("target_role"), str) else None
-    specialization = analysis.get("specialization") if isinstance(analysis.get("specialization"), str) else None
+    target_role = (
+        analysis.get("target_role") if isinstance(analysis.get("target_role"), str) else None
+    )
+    specialization = (
+        analysis.get("specialization") if isinstance(analysis.get("specialization"), str) else None
+    )
     last_metrics = latest_job.metrics if latest_job and isinstance(latest_job.metrics, dict) else {}
-    last_matches = len(latest_job.matches) if latest_job and isinstance(latest_job.matches, list) else None
+    last_matches = (
+        len(latest_job.matches) if latest_job and isinstance(latest_job.matches, list) else None
+    )
     last_query = latest_job.query if latest_job else None
 
     resume_stats = ResumeStatsRead(
@@ -125,7 +131,7 @@ def dashboard_stats(
     )
 
     return DashboardStatsRead(
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
         qdrant=qdrant_stats,
         resume=resume_stats,
     )
