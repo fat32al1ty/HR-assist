@@ -20,6 +20,9 @@ class Application(Base):
         String(16), nullable=False, default="draft", server_default="draft", index=True
     )
     cover_letter_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cover_letter_generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     source_url: Mapped[str] = mapped_column(
         String(2048), nullable=False, default="", server_default=""
     )

@@ -104,3 +104,18 @@ def update_application(
 def delete_application(db: Session, application: Application) -> None:
     db.delete(application)
     db.commit()
+
+
+def save_cover_letter(
+    db: Session,
+    application: Application,
+    *,
+    text: str,
+    generated_at: datetime,
+) -> Application:
+    application.cover_letter_text = text
+    application.cover_letter_generated_at = generated_at
+    db.add(application)
+    db.commit()
+    db.refresh(application)
+    return application

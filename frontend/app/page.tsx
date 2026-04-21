@@ -136,10 +136,18 @@ type Application = {
   vacancy_company: string | null;
   notes: string | null;
   cover_letter_text: string | null;
+  cover_letter_generated_at: string | null;
   applied_at: string | null;
   last_status_change_at: string;
   created_at: string;
   updated_at: string;
+};
+
+type CoverLetterResponse = {
+  id: number;
+  cover_letter_text: string;
+  cover_letter_generated_at: string;
+  cached: boolean;
 };
 
 type ApplicationFilter = 'all' | 'active' | 'archived' | ApplicationStatus;
@@ -402,6 +410,8 @@ export default function DashboardPage() {
   const [applicationFilter, setApplicationFilter] = useState<ApplicationFilter>('active');
   const [applicationNotesDraft, setApplicationNotesDraft] = useState<Record<number, string>>({});
   const [applicationBusyIds, setApplicationBusyIds] = useState<Record<number, boolean>>({});
+  const [expandedCoverLetterIds, setExpandedCoverLetterIds] = useState<Record<number, boolean>>({});
+  const [coverLetterDrafts, setCoverLetterDrafts] = useState<Record<number, string>>({});
 
   useEffect(() => {
     const storedToken = window.localStorage.getItem('access_token');
@@ -580,6 +590,8 @@ export default function DashboardPage() {
     setApplicationsMessage('');
     setApplicationNotesDraft({});
     setApplicationBusyIds({});
+    setExpandedCoverLetterIds({});
+    setCoverLetterDrafts({});
     setApplicationFilter('active');
     if (nextMessage) {
       setMessage(nextMessage);
@@ -916,6 +928,106 @@ export default function DashboardPage() {
       );
     } finally {
       setApplicationBusy(applicationId, false);
+    }
+  }
+
+  function toggleCoverLetter(applicationId: number) {
+    setExpandedCoverLetterIds((current) => {
+      const next = { ...current };
+      if (next[applicationId]) {
+        delete next[applicationId];
+      } else {
+        next[applicationId] = true;
+      }
+      return next;
+    });
+    const row = applications.find((app) => app.id === applicationId);
+    if (row && coverLetterDrafts[applicationId] === undefined) {
+      setCoverLetterDrafts((current) => ({ ...current, [applicationId]: row.cover_letter_text ?? '' }));
+    }
+  }
+
+  async function generateCoverLetter(applicationId: number, force: boolean) {
+    setApplicationBusy(applicationId, true);
+    try {
+      const response = await request<CoverLetterResponse>(
+        `/api/applications/${applicationId}/cover-letter${force ? '?force=true' : ''}`,
+        { method: 'POST' }
+      );
+      setApplications((current) =>
+        current.map((row) =>
+          row.id === applicationId
+            ? {
+                ...row,
+                cover_letter_text: response.cover_letter_text,
+                cover_letter_generated_at: response.cover_letter_generated_at,
+              }
+            : row
+        )
+      );
+      setCoverLetterDrafts((current) => ({ ...current, [applicationId]: response.cover_letter_text }));
+      setExpandedCoverLetterIds((current) => ({ ...current, [applicationId]: true }));
+      setApplicationsMessage(
+        response.cached
+          ? 'Показываем сохранённое письмо (свежая генерация была менее суток назад).'
+          : 'Сопроводительное сгенерировано. Проверьте и при необходимости отредактируйте.'
+      );
+    } catch (error) {
+      setApplicationsMessage(
+        error instanceof Error
+          ? `Не удалось сгенерировать письмо: ${error.message}`
+          : 'Не удалось сгенерировать письмо.'
+      );
+    } finally {
+      setApplicationBusy(applicationId, false);
+    }
+  }
+
+  async function saveCoverLetterEdits(applicationId: number) {
+    const draft = coverLetterDrafts[applicationId] ?? '';
+    const existing = applications.find((row) => row.id === applicationId);
+    if (!existing) {
+      return;
+    }
+    const trimmed = draft.trim();
+    const currentValue = (existing.cover_letter_text ?? '').trim();
+    if (trimmed === currentValue) {
+      return;
+    }
+    setApplicationBusy(applicationId, true);
+    try {
+      const payload: Record<string, unknown> = trimmed
+        ? { cover_letter_text: trimmed }
+        : { clear_cover_letter: true };
+      const updated = await request<Application>(`/api/applications/${applicationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      setApplications((current) => current.map((row) => (row.id === applicationId ? updated : row)));
+      setCoverLetterDrafts((current) => ({ ...current, [applicationId]: updated.cover_letter_text ?? '' }));
+      setApplicationsMessage('Правки сопроводительного сохранены.');
+    } catch (error) {
+      setApplicationsMessage(
+        error instanceof Error
+          ? `Не удалось сохранить письмо: ${error.message}`
+          : 'Не удалось сохранить письмо.'
+      );
+    } finally {
+      setApplicationBusy(applicationId, false);
+    }
+  }
+
+  async function copyCoverLetterToClipboard(applicationId: number) {
+    const text = coverLetterDrafts[applicationId];
+    if (!text) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setApplicationsMessage('Текст сопроводительного скопирован в буфер.');
+    } catch {
+      setApplicationsMessage('Не удалось скопировать. Выделите текст вручную.');
     }
   }
 
@@ -1985,6 +2097,11 @@ export default function DashboardPage() {
                     const isBusy = Boolean(applicationBusyIds[row.id]);
                     const draft = applicationNotesDraft[row.id] ?? row.notes ?? '';
                     const notesChanged = draft.trim() !== (row.notes ?? '').trim();
+                    const coverLetterOpen = Boolean(expandedCoverLetterIds[row.id]);
+                    const coverLetterDraft = coverLetterDrafts[row.id] ?? row.cover_letter_text ?? '';
+                    const coverLetterChanged =
+                      coverLetterDraft.trim() !== (row.cover_letter_text ?? '').trim();
+                    const hasLetter = Boolean(row.cover_letter_text);
                     return (
                       <article className="application-card" key={`application-${row.id}`}>
                         <header className="application-card-head">
@@ -2035,6 +2152,80 @@ export default function DashboardPage() {
                             placeholder="Напомните себе контекст: когда писать рекрутеру, что ответить на тест, к какому дню готовиться."
                           />
                         </label>
+                        <div className="cover-letter-block">
+                          <div className="cover-letter-head">
+                            <button
+                              className="secondary cover-letter-toggle"
+                              disabled={isBusy}
+                              onClick={() => toggleCoverLetter(row.id)}
+                            >
+                              {coverLetterOpen
+                                ? 'Скрыть сопроводительное'
+                                : hasLetter
+                                ? 'Открыть сопроводительное'
+                                : 'Сгенерировать сопроводительное'}
+                            </button>
+                            {!coverLetterOpen && !hasLetter ? (
+                              <button
+                                className="primary cover-letter-generate"
+                                disabled={isBusy}
+                                onClick={() => void generateCoverLetter(row.id, false)}
+                              >
+                                Сгенерировать
+                              </button>
+                            ) : null}
+                            {row.cover_letter_generated_at ? (
+                              <span className="cover-letter-stamp">
+                                Последняя генерация: {formatApplicationDate(row.cover_letter_generated_at)}
+                              </span>
+                            ) : null}
+                          </div>
+                          {coverLetterOpen ? (
+                            <>
+                              <textarea
+                                className="cover-letter-textarea"
+                                rows={8}
+                                maxLength={6000}
+                                value={coverLetterDraft}
+                                disabled={isBusy}
+                                onChange={(event) =>
+                                  setCoverLetterDrafts((current) => ({
+                                    ...current,
+                                    [row.id]: event.target.value,
+                                  }))
+                                }
+                                placeholder={
+                                  hasLetter
+                                    ? ''
+                                    : 'Нажмите «Сгенерировать», чтобы получить черновик от GPT, или введите свой текст.'
+                                }
+                              />
+                              <div className="cover-letter-actions">
+                                <button
+                                  className="primary"
+                                  disabled={isBusy}
+                                  onClick={() => void generateCoverLetter(row.id, hasLetter)}
+                                >
+                                  {hasLetter ? 'Сгенерировать заново' : 'Сгенерировать'}
+                                </button>
+                                <button
+                                  className="secondary"
+                                  disabled={isBusy || !coverLetterChanged}
+                                  onClick={() => void saveCoverLetterEdits(row.id)}
+                                >
+                                  Сохранить правки
+                                </button>
+                                <button
+                                  className="secondary"
+                                  disabled={isBusy || !coverLetterDraft.trim()}
+                                  onClick={() => void copyCoverLetterToClipboard(row.id)}
+                                >
+                                  Копировать
+                                </button>
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
                         <div className="application-card-footer">
                           <button
                             className="secondary"

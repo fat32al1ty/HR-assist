@@ -500,6 +500,59 @@ select:focus {
   font-size: 13px;
 }
 
+.cover-letter-block {
+  display: grid;
+  gap: 10px;
+  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+}
+
+.cover-letter-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.cover-letter-toggle,
+.cover-letter-generate {
+  min-height: 34px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.cover-letter-stamp {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.cover-letter-textarea {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--surface-soft);
+  color: var(--text);
+  resize: vertical;
+  min-height: 160px;
+}
+
+.cover-letter-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.cover-letter-actions button {
+  min-height: 34px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
 @media (max-width: 720px) {
   .application-card-head {
     flex-direction: column;

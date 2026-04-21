@@ -30,12 +30,27 @@ class ApplicationRead(BaseModel):
     vacancy_company: str | None
     notes: str | None
     cover_letter_text: str | None
+    cover_letter_generated_at: datetime | None
     applied_at: datetime | None
     last_status_change_at: datetime
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class CoverLetterResponse(BaseModel):
+    """Response from POST /applications/{id}/cover-letter.
+
+    `cached=True` means the stored draft was returned without another LLM
+    call — used when a fresh draft exists within the 24h cooldown and the
+    caller didn't pass `force=true`.
+    """
+
+    id: int
+    cover_letter_text: str
+    cover_letter_generated_at: datetime
+    cached: bool
 
 
 class ApplicationCreateRequest(BaseModel):
