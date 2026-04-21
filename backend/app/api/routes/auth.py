@@ -1,7 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.rate_limit import (
+    AUTH_LOGIN_LIMIT,
+    AUTH_PASSWORD_RESET_LIMIT,
+    AUTH_REGISTER_LIMIT,
+    limiter,
+)
 from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_db
 from app.repositories.auth_otp_codes import (
@@ -38,6 +44,10 @@ from app.services.email_delivery import send_email
 
 router = APIRouter()
 
+# Shared error detail to avoid revealing whether the beta key, the email, or
+# the password was the reason for rejection.
+GENERIC_AUTH_REJECTION = "Invalid credentials or beta key"
+
 
 def issue_email_verification_code(*, db: Session, user) -> tuple[str, str]:
     code = generate_otp_code()
@@ -62,15 +72,16 @@ def issue_email_verification_code(*, db: Session, user) -> tuple[str, str]:
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> RegisterResponse:
+@limiter.limit(AUTH_REGISTER_LIMIT)
+def register(
+    request: Request, payload: RegisterRequest, db: Session = Depends(get_db)
+) -> RegisterResponse:
     if not is_valid_beta_key(payload.beta_key):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid beta tester key")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=GENERIC_AUTH_REJECTION)
 
     existing = get_user_by_email(db, email=payload.email)
     if existing is not None and existing.email_verified:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email is already registered"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=GENERIC_AUTH_REJECTION)
 
     if existing is None:
         user = create_user(
@@ -121,7 +132,10 @@ def verify_email(payload: VerifyEmailRequest, db: Session = Depends(get_db)) -> 
 
 
 @router.post("/login/start", response_model=LoginStartResponse)
-def login_start(payload: LoginStartRequest, db: Session = Depends(get_db)) -> LoginStartResponse:
+@limiter.limit(AUTH_LOGIN_LIMIT)
+def login_start(
+    request: Request, payload: LoginStartRequest, db: Session = Depends(get_db)
+) -> LoginStartResponse:
     user = get_user_by_email(db, email=payload.email)
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
@@ -138,7 +152,8 @@ def login_start(payload: LoginStartRequest, db: Session = Depends(get_db)) -> Lo
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+@limiter.limit(AUTH_LOGIN_LIMIT)
+def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = get_user_by_email(db, email=payload.email)
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
@@ -150,14 +165,17 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
 
 
 @router.post("/password/reset", response_model=AuthMessageResponse)
+@limiter.limit(AUTH_PASSWORD_RESET_LIMIT)
 def reset_password(
-    payload: PasswordResetRequest, db: Session = Depends(get_db)
+    request: Request, payload: PasswordResetRequest, db: Session = Depends(get_db)
 ) -> AuthMessageResponse:
     if not is_valid_beta_key(payload.beta_key):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid beta tester key")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=GENERIC_AUTH_REJECTION)
     user = get_user_by_email(db, email=payload.email)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User is not found")
+        # Swallow the "unknown email" signal — return the same success shape so
+        # an attacker can't enumerate accounts via this endpoint.
+        return AuthMessageResponse(message="Password updated. You can now sign in.")
     user.hashed_password = hash_password(payload.new_password)
     db.add(user)
     db.commit()
@@ -165,7 +183,10 @@ def reset_password(
 
 
 @router.post("/login/verify", response_model=TokenResponse)
-def login_verify(payload: LoginVerifyRequest, db: Session = Depends(get_db)) -> TokenResponse:
+@limiter.limit(AUTH_LOGIN_LIMIT)
+def login_verify(
+    request: Request, payload: LoginVerifyRequest, db: Session = Depends(get_db)
+) -> TokenResponse:
     user = get_user_by_email(db, email=payload.email)
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")

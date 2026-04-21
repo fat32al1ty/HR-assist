@@ -19,7 +19,13 @@ from app.repositories.recommendation_jobs import (
     mark_job_running,
     update_job_progress,
 )
-from app.services.openai_usage import OpenAIBudgetExceeded, openai_budget_scope
+from app.repositories.user_daily_spend import get_daily_spend_usd
+from app.services.openai_usage import (
+    DAILY_BUDGET_USER_MESSAGE,
+    DailyBudgetExceeded,
+    OpenAIBudgetExceeded,
+    openai_budget_scope,
+)
 from app.services.vacancy_recommendation import recommend_vacancies_for_resume
 
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="recommendation-job")
@@ -31,12 +37,29 @@ JOB_TIMEOUT_MESSAGE = (
 )
 
 
+class DailyBudgetReachedBeforeStart(RuntimeError):
+    """User already spent their daily budget before this job could start.
+
+    Raised by start_recommendation_job so the API layer can translate it
+    into a 429 with the Russian user-facing message.
+    """
+
+
 def start_recommendation_job(
     *,
     user_id: int,
     resume_id: int,
     request_payload: dict,
 ) -> str:
+    if settings.openai_enforce_user_daily_budget:
+        db_check = SessionLocal()
+        try:
+            current_spend = get_daily_spend_usd(db_check, user_id=user_id)
+        finally:
+            db_check.close()
+        if current_spend >= settings.openai_user_daily_budget_usd:
+            raise DailyBudgetReachedBeforeStart(DAILY_BUDGET_USER_MESSAGE)
+
     job_id = str(uuid4())
     db = SessionLocal()
     try:
@@ -146,6 +169,9 @@ def _run_recommendation_job(job_id: str) -> None:
         with openai_budget_scope(
             budget_usd=settings.openai_request_budget_usd,
             budget_enforced=settings.openai_enforce_request_budget,
+            user_id=user_id,
+            daily_budget_usd=settings.openai_user_daily_budget_usd,
+            daily_budget_enforced=settings.openai_enforce_user_daily_budget,
         ) as usage_tracker:
             try:
                 query, metrics, matches = recommend_vacancies_for_resume(
@@ -176,6 +202,14 @@ def _run_recommendation_job(job_id: str) -> None:
                         "Reduce deep scan or raise budget."
                     ),
                     openai_usage=error.snapshot.to_dict(),
+                )
+                return
+            except DailyBudgetExceeded:
+                fail_job(
+                    db,
+                    job,
+                    error_message=DAILY_BUDGET_USER_MESSAGE,
+                    openai_usage=usage_tracker.snapshot().to_dict(),
                 )
                 return
             except TimeoutError as error:
