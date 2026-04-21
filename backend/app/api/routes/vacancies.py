@@ -28,8 +28,14 @@ from app.schemas.vacancy import (
     VacancyRecommendResponse,
 )
 from app.services.matching_service import match_vacancies_for_resume
-from app.services.openai_usage import OpenAIBudgetExceeded, openai_budget_scope
+from app.services.openai_usage import (
+    DAILY_BUDGET_USER_MESSAGE,
+    DailyBudgetExceeded,
+    OpenAIBudgetExceeded,
+    openai_budget_scope,
+)
 from app.services.recommendation_jobs import (
+    DailyBudgetReachedBeforeStart,
     get_job_snapshot_for_user,
     get_latest_job_snapshot_for_user,
     start_recommendation_job,
@@ -82,6 +88,7 @@ def discover_vacancies(
         filtered=result.metrics.filtered,
         failed=result.metrics.failed,
         already_indexed_skipped=result.metrics.already_indexed_skipped,
+        skipped_parse_errors=result.metrics.skipped_parse_errors,
         sources=result.metrics.sources or [],
         vacancies=result.indexed_vacancies,
     )
@@ -117,6 +124,9 @@ def recommend_vacancies(
     with openai_budget_scope(
         budget_usd=settings.openai_request_budget_usd,
         budget_enforced=settings.openai_enforce_request_budget,
+        user_id=current_user.id,
+        daily_budget_usd=settings.openai_user_daily_budget_usd,
+        daily_budget_enforced=settings.openai_enforce_user_daily_budget,
     ) as usage_tracker:
         try:
             query, metrics, matches = recommend_vacancies_for_resume(
@@ -132,6 +142,8 @@ def recommend_vacancies(
                 discover_if_few_matches=payload.discover_if_few_matches,
                 min_prefetched_matches=payload.min_prefetched_matches,
             )
+        except DailyBudgetExceeded as error:
+            raise HTTPException(status_code=429, detail=DAILY_BUDGET_USER_MESSAGE) from error
         except OpenAIBudgetExceeded as error:
             snapshot = error.snapshot
             raise HTTPException(
@@ -153,6 +165,7 @@ def recommend_vacancies(
         filtered=metrics.filtered,
         failed=metrics.failed,
         already_indexed_skipped=metrics.already_indexed_skipped,
+        skipped_parse_errors=metrics.skipped_parse_errors,
         sources=metrics.sources or [],
         openai_usage=usage,
         matches=matches,
@@ -168,11 +181,14 @@ def start_recommendation(
 ) -> RecommendationJobStartResponse:
     if get_resume_for_user(db, resume_id=resume_id, user_id=current_user.id) is None:
         raise HTTPException(status_code=404, detail="Resume not found")
-    job_id = start_recommendation_job(
-        user_id=current_user.id,
-        resume_id=resume_id,
-        request_payload=payload.model_dump(),
-    )
+    try:
+        job_id = start_recommendation_job(
+            user_id=current_user.id,
+            resume_id=resume_id,
+            request_payload=payload.model_dump(),
+        )
+    except DailyBudgetReachedBeforeStart as error:
+        raise HTTPException(status_code=429, detail=DAILY_BUDGET_USER_MESSAGE) from error
     return RecommendationJobStartResponse(job_id=job_id, status="queued")
 
 

@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-large"
     openai_request_budget_usd: float = 0.10
     openai_enforce_request_budget: bool = True
+    openai_user_daily_budget_usd: float = 1.00
+    openai_enforce_user_daily_budget: bool = True
     recommendation_job_timeout_seconds: int = 420
     vacancy_warmup_enabled: bool = True
     vacancy_warmup_interval_seconds: int = 600

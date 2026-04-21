@@ -36,6 +36,12 @@ async def upload_resume(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF and DOCX files are supported"
         )
 
+    if file.filename and len(file.filename) > 255:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="File name is too long (max 255 characters)",
+        )
+
     content = await file.read()
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
     if len(content) > max_bytes:

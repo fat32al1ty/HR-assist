@@ -32,6 +32,7 @@ class VacancyDiscoverResponse(BaseModel):
     filtered: int
     failed: int
     already_indexed_skipped: int
+    skipped_parse_errors: int = 0
     sources: list[str] = Field(default_factory=list)
     vacancies: list[VacancyRead]
 
@@ -78,6 +79,7 @@ class VacancyRecommendResponse(BaseModel):
     filtered: int
     failed: int
     already_indexed_skipped: int
+    skipped_parse_errors: int = 0
     sources: list[str] = Field(default_factory=list)
     openai_usage: OpenAIUsageRead
     matches: list[VacancyMatchRead]

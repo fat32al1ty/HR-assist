@@ -1,14 +1,71 @@
 from __future__ import annotations
 
 import html
+import logging
 import re
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote_plus, urljoin, urlparse
 
 import httpx
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class VacancyFetchError(RuntimeError):
+    """Raised when a vacancy source URL can't be decoded into clean UTF-8 text.
+
+    Previously the code silently fell back to httpx's charset auto-detection,
+    which dumped mojibake into embeddings. Now we fail loudly so callers can
+    log+skip the polluted record and increment a visible counter.
+    """
+
+    def __init__(self, *, url: str, source: str, reason: str) -> None:
+        self.url = url
+        self.source = source
+        self.reason = reason
+        super().__init__(f"Vacancy fetch failed for {source} {url}: {reason}")
+
+
+@dataclass
+class VacancyParseStats:
+    skipped_parse_errors: int = 0
+    samples: list[dict[str, str]] = field(default_factory=list)
+
+    def record_skip(self, *, source: str, url: str, reason: str) -> None:
+        self.skipped_parse_errors += 1
+        # Keep a small, bounded sample so operators can spot which sources
+        # actually fail without blowing up the job record.
+        if len(self.samples) < 10:
+            self.samples.append({"source": source, "url": url, "reason": reason})
+
+
+_PARSE_STATS: ContextVar[VacancyParseStats | None] = ContextVar(
+    "vacancy_parse_stats", default=None
+)
+
+
+@contextmanager
+def vacancy_parse_stats_scope(stats: VacancyParseStats | None = None):
+    """Make a VacancyParseStats instance available to source fetchers in scope."""
+    target = stats if stats is not None else VacancyParseStats()
+    token = _PARSE_STATS.set(target)
+    try:
+        yield target
+    finally:
+        _PARSE_STATS.reset(token)
+
+
+def _record_parse_skip(*, source: str, url: str, reason: str) -> None:
+    stats = _PARSE_STATS.get()
+    if stats is None:
+        return
+    stats.record_skip(source=source, url=url, reason=reason)
 
 REQUEST_HEADERS = {
     "User-Agent": "HR-Assistant-Bot/1.0 (+https://localhost)",
@@ -112,7 +169,7 @@ def _query_matches_item(query: str, item: dict[str, Any]) -> bool:
     return any(token in compact_item_text for token in query_tokens if len(token) >= 5)
 
 
-def _fetch_text(url: str) -> str:
+def _fetch_text(url: str, *, source: str = "unknown") -> str:
     response = httpx.get(
         url,
         headers=REQUEST_HEADERS,
@@ -122,8 +179,24 @@ def _fetch_text(url: str) -> str:
     response.raise_for_status()
     try:
         return response.content.decode("utf-8")
-    except Exception:
-        return response.text
+    except UnicodeDecodeError:
+        pass
+
+    declared = (response.charset_encoding or "").strip()
+    if declared and declared.lower().replace("_", "-") != "utf-8":
+        try:
+            return response.content.decode(declared)
+        except (UnicodeDecodeError, LookupError):
+            pass
+
+    reason = f"could not decode bytes as utf-8 (declared charset={declared or 'none'})"
+    logger.warning(
+        "vacancy_source_decode_failed source=%s url=%s declared_charset=%s",
+        source,
+        url,
+        declared or "none",
+    )
+    raise VacancyFetchError(url=url, source=source, reason=reason)
 
 
 def _build_hh_headers() -> dict[str, str]:
@@ -197,7 +270,11 @@ def _collect_public_hh_vacancies(
             f"?text={quote_plus(query)}&area=113&search_field=name&search_field=company_name"
             f"&search_field=description&items_on_page=50&page={page}"
         )
-        page_html = _fetch_text(search_url)
+        try:
+            page_html = _fetch_text(search_url, source="hh_public")
+        except VacancyFetchError as error:
+            _record_parse_skip(source=error.source, url=error.url, reason=error.reason)
+            continue
         links = _extract_links(
             page_html,
             r'<a[^>]+href="(?P<href>(?:https?://[^"]*hh\.ru)?/vacancy/\d+[^"]*)"[^>]*>(?P<title>.*?)</a>',
@@ -233,7 +310,11 @@ def _collect_public_habr_vacancies(
     first_page = max(1, start_page + 1)
     for page in range(first_page, first_page + MAX_PUBLIC_SOURCE_PAGES):
         search_url = f"https://career.habr.com/vacancies?q={quote_plus(query)}&page={page}"
-        page_html = _fetch_text(search_url)
+        try:
+            page_html = _fetch_text(search_url, source="habr_public")
+        except VacancyFetchError as error:
+            _record_parse_skip(source=error.source, url=error.url, reason=error.reason)
+            continue
         links = _extract_links(
             page_html,
             r'<a[^>]+href="(?P<href>/vacancies/\d+[^"]*)"[^>]*>(?P<title>.*?)</a>',
@@ -269,7 +350,11 @@ def _collect_public_superjob_vacancies(
     first_page = max(1, start_page + 1)
     for page in range(first_page, first_page + MAX_PUBLIC_SOURCE_PAGES):
         search_url = f"https://www.superjob.ru/vakansii/?keywords={quote_plus(query)}&page={page}"
-        page_html = _fetch_text(search_url)
+        try:
+            page_html = _fetch_text(search_url, source="superjob_public")
+        except VacancyFetchError as error:
+            _record_parse_skip(source=error.source, url=error.url, reason=error.reason)
+            continue
         links = _extract_links(
             page_html,
             r'<a[^>]+href="(?P<href>/vakansii/[^"]+?\.html[^"]*)"[^>]*>(?P<title>.*?)</a>',
@@ -514,11 +599,14 @@ def _enrich_preview(vacancies: list[dict[str, Any]]) -> list[dict[str, Any]]:
         can_attempt = attempted < MAX_PREVIEW_ENRICH and within_budget and not has_raw_text
         if can_attempt:
             attempted += 1
+            item_source = _to_str(item.get("source")) or "preview_enrich"
             try:
-                detail_html = _fetch_text(source_url)
+                detail_html = _fetch_text(source_url, source=item_source)
                 description = _extract_meta_description(detail_html)
                 if description and not item.get("raw_text"):
                     item["raw_text"] = description
+            except VacancyFetchError as error:
+                _record_parse_skip(source=error.source, url=error.url, reason=error.reason)
             except Exception:
                 pass
         enriched.append(item)
