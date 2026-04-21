@@ -390,6 +390,64 @@ select:focus {
   color: #92400e;
 }
 
+.fit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+@media (max-width: 640px) {
+  .fit-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fit-box {
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+}
+
+.fit-box ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.fit-title {
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+
+.fit-empty {
+  margin: 0;
+  font-size: 13px;
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.fit-matched {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.fit-matched .fit-title,
+.fit-matched ul,
+.fit-matched .fit-empty {
+  color: #166534;
+}
+
+.fit-missing {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.fit-missing .fit-title,
+.fit-missing ul,
+.fit-missing .fit-empty {
+  color: #92400e;
+}
+
 .sources-box {
   margin-bottom: 14px;
   border: 1px solid var(--line);

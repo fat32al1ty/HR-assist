@@ -746,6 +746,47 @@ def _extract_required_requirements(payload: dict) -> list[str]:
     return ordered
 
 
+def _classify_requirements(
+    payload: dict,
+    resume_skills: set[str],
+    *,
+    resume_skill_phrases: list[str],
+    resume_phrase_aliases: set[str],
+    resume_phrase_vectors: dict[str, list[float]],
+    embedding_cache: dict[str, list[float]],
+    embedding_budget: dict[str, int],
+    max_missing: int = SEMANTIC_GAP_MAX_REQUIREMENTS_PER_VACANCY,
+    max_matched: int = 10,
+) -> tuple[list[str], list[str]]:
+    """Split a vacancy's required requirements into (matched, missing).
+
+    Preserves original casing from the vacancy payload. The matched list is
+    what the resume already satisfies; missing is the inverse.
+    """
+    required = _extract_required_requirements(payload)
+    if not required:
+        return [], []
+    matched: list[str] = []
+    missing: list[str] = []
+    for requirement in required:
+        is_match = _requirement_matches_resume(
+            requirement,
+            resume_skill_tokens=resume_skills,
+            resume_skill_phrases=resume_skill_phrases,
+            resume_phrase_aliases=resume_phrase_aliases,
+            resume_phrase_vectors=resume_phrase_vectors,
+            embedding_cache=embedding_cache,
+            embedding_budget=embedding_budget,
+        )
+        if is_match:
+            if len(matched) < max_matched:
+                matched.append(requirement)
+        else:
+            if len(missing) < max_missing:
+                missing.append(requirement)
+    return matched, missing
+
+
 def _missing_requirements(
     payload: dict,
     resume_skills: set[str],
@@ -757,31 +798,87 @@ def _missing_requirements(
     embedding_budget: dict[str, int],
     max_items: int = SEMANTIC_GAP_MAX_REQUIREMENTS_PER_VACANCY,
 ) -> list[str]:
-    required = _extract_required_requirements(payload)
-    if not required:
-        return []
-    missing: list[str] = []
-    for requirement in required:
-        if _requirement_matches_resume(
-            requirement,
-            resume_skill_tokens=resume_skills,
-            resume_skill_phrases=resume_skill_phrases,
-            resume_phrase_aliases=resume_phrase_aliases,
-            resume_phrase_vectors=resume_phrase_vectors,
-            embedding_cache=embedding_cache,
-            embedding_budget=embedding_budget,
-        ):
-            continue
-        missing.append(requirement)
-        if len(missing) >= max_items:
-            break
+    _, missing = _classify_requirements(
+        payload,
+        resume_skills,
+        resume_skill_phrases=resume_skill_phrases,
+        resume_phrase_aliases=resume_phrase_aliases,
+        resume_phrase_vectors=resume_phrase_vectors,
+        embedding_cache=embedding_cache,
+        embedding_budget=embedding_budget,
+        max_missing=max_items,
+    )
     return missing
+
+
+def _matched_resume_skills_for_vacancy(
+    resume_hard_skills: list[str],
+    vacancy_skill_tokens: set[str],
+    *,
+    max_items: int = 10,
+) -> list[str]:
+    """Return which of the user's resume hard skills appear in this vacancy.
+
+    Preserves original casing from the resume. Dedupes case-insensitively and
+    uses alias groups so e.g. "k8s" in resume hits a vacancy asking for
+    "kubernetes".
+    """
+    if not resume_hard_skills or not vacancy_skill_tokens:
+        return []
+    matched: list[str] = []
+    seen_normalized: set[str] = set()
+    for skill in resume_hard_skills:
+        if not isinstance(skill, str):
+            continue
+        cleaned = skill.strip()
+        if not cleaned:
+            continue
+        normalized = _normalize_phrase(cleaned)
+        if not normalized or normalized in seen_normalized:
+            continue
+
+        skill_tokens = _tokenize_rich_text(cleaned)
+        hit = False
+        if skill_tokens and skill_tokens.intersection(vacancy_skill_tokens):
+            hit = True
+        if not hit:
+            # Alias-group lookup so "k8s" on resume still counts when vacancy says "kubernetes".
+            for alias in _phrase_aliases(cleaned):
+                alias_tokens = _tokenize_rich_text(alias)
+                if alias_tokens and alias_tokens.intersection(vacancy_skill_tokens):
+                    hit = True
+                    break
+        if not hit:
+            continue
+
+        seen_normalized.add(normalized)
+        matched.append(cleaned)
+        if len(matched) >= max_items:
+            break
+    return matched
+
+
+def _extract_resume_hard_skills(analysis: dict | None) -> list[str]:
+    """Pick the user-facing hard-skills list (original casing, deduped)."""
+    if not isinstance(analysis, dict):
+        return []
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for key in ("hard_skills", "tools", "matching_keywords"):
+        for item in _as_string_list(analysis.get(key)):
+            normalized = _normalize_phrase(item)
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            ordered.append(item.strip())
+    return ordered
 
 
 def _augment_profile_with_gap_insights(
     payload: dict | None,
     resume_skills: set[str],
     *,
+    resume_hard_skills: list[str] | None = None,
     resume_skill_phrases: list[str],
     resume_phrase_aliases: set[str],
     resume_phrase_vectors: dict[str, list[float]],
@@ -790,7 +887,7 @@ def _augment_profile_with_gap_insights(
 ) -> dict:
     source_profile: dict = payload if isinstance(payload, dict) else {}
     profile = dict(source_profile)
-    missing = _missing_requirements(
+    matched_requirements, missing = _classify_requirements(
         source_profile,
         resume_skills,
         resume_skill_phrases=resume_skill_phrases,
@@ -802,6 +899,11 @@ def _augment_profile_with_gap_insights(
     profile["missing_requirements"] = missing
     profile["missing_requirements_count"] = len(missing)
     profile["required_requirements_count"] = len(_extract_required_requirements(source_profile))
+    profile["matched_requirements"] = matched_requirements
+    vacancy_skill_tokens = _build_vacancy_skill_set(source_profile)
+    profile["matched_skills"] = _matched_resume_skills_for_vacancy(
+        resume_hard_skills or [], vacancy_skill_tokens
+    )
     return profile
 
 
@@ -962,6 +1064,8 @@ def _lexical_fallback_matches(
                         "missing_requirements": [],
                         "missing_requirements_count": 0,
                         "required_requirements_count": 0,
+                        "matched_requirements": [],
+                        "matched_skills": [],
                     },
                 },
             )
@@ -1159,6 +1263,7 @@ def match_vacancies_for_resume(
     resume_skills = _build_resume_skill_set(resume.analysis)
     resume_roles = _build_resume_role_set(resume.analysis)
     resume_skill_phrases = _build_resume_skill_phrases(resume.analysis)
+    resume_hard_skills = _extract_resume_hard_skills(resume.analysis)
     resume_phrase_aliases: set[str] = set()
     for phrase in resume_skill_phrases:
         resume_phrase_aliases.update(_phrase_aliases(phrase))
@@ -1252,6 +1357,7 @@ def match_vacancies_for_resume(
                     "profile": _augment_profile_with_gap_insights(
                         payload,
                         resume_skills,
+                        resume_hard_skills=resume_hard_skills,
                         resume_skill_phrases=resume_skill_phrases,
                         resume_phrase_aliases=resume_phrase_aliases,
                         resume_phrase_vectors=resume_phrase_vectors,

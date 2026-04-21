@@ -6,11 +6,13 @@ from app.services.matching_service import (
     MIN_RELEVANCE_SCORE,
     _augment_profile_with_gap_insights,
     _extract_priority_anchors,
+    _extract_resume_hard_skills,
     _extract_strict_technical_anchors,
     _extract_technical_anchors,
     _hybrid_score,
     _looks_business_monitoring_role,
     _looks_hard_non_it_role,
+    _matched_resume_skills_for_vacancy,
     _phrase_aliases,
     _resume_prefers_leadership,
     _title_has_leadership_hint,
@@ -146,6 +148,63 @@ class MatchingServiceScoringTests(unittest.TestCase):
             embedding_budget={"calls_left": 0},
         )
         self.assertEqual(profile["missing_requirements_count"], 0)
+
+    def test_gap_insights_surfaces_matched_requirements_and_skills(self) -> None:
+        payload = {
+            "must_have_skills": ["Kubernetes", "Prometheus", "Grafana"],
+            "tools": ["VictoriaMetrics"],
+        }
+        profile = _augment_profile_with_gap_insights(
+            payload,
+            {"prometheus", "linux", "kubernetes"},
+            resume_hard_skills=["Prometheus", "K8s", "Linux"],
+            resume_skill_phrases=["SRE", "Linux", "Kubernetes"],
+            resume_phrase_aliases=_phrase_aliases("SRE")
+            .union(_phrase_aliases("Linux"))
+            .union(_phrase_aliases("Kubernetes")),
+            resume_phrase_vectors={},
+            embedding_cache={},
+            embedding_budget={"calls_left": 0},
+        )
+        # Kubernetes + Prometheus are in the resume; Grafana + VictoriaMetrics are not.
+        self.assertIn("Prometheus", profile["matched_requirements"])
+        self.assertIn("Kubernetes", profile["matched_requirements"])
+        self.assertIn("Grafana", profile["missing_requirements"])
+        self.assertIn("VictoriaMetrics", profile["missing_requirements"])
+        # Resume-side: original casing preserved, k8s alias hits vacancy's kubernetes.
+        self.assertIn("Prometheus", profile["matched_skills"])
+        self.assertIn("K8s", profile["matched_skills"])
+        # "Linux" was in resume but vacancy didn't ask for it — must NOT appear.
+        self.assertNotIn("Linux", profile["matched_skills"])
+
+    def test_matched_resume_skills_caps_and_dedupes(self) -> None:
+        # Vacancy uses "kubernetes"; resume has both spellings — only one wins.
+        tokens = {"kubernetes", "prometheus"}
+        matched = _matched_resume_skills_for_vacancy(
+            ["Kubernetes", "kubernetes", "Prometheus", "Grafana"],
+            tokens,
+            max_items=10,
+        )
+        self.assertEqual(matched.count("Kubernetes") + matched.count("kubernetes"), 1)
+        self.assertIn("Prometheus", matched)
+        self.assertNotIn("Grafana", matched)
+
+    def test_extract_resume_hard_skills_preserves_casing_and_dedupes(self) -> None:
+        skills = _extract_resume_hard_skills(
+            {
+                "hard_skills": ["Kubernetes", "Prometheus"],
+                "tools": ["kubernetes", "Grafana"],
+                "matching_keywords": ["SRE"],
+            }
+        )
+        self.assertEqual(skills[0], "Kubernetes")
+        self.assertIn("Prometheus", skills)
+        self.assertIn("Grafana", skills)
+        self.assertIn("SRE", skills)
+        # "kubernetes" in tools duplicates "Kubernetes" — must be deduped.
+        self.assertEqual(skills.count("Kubernetes"), 1)
+        lowercased = [s.lower() for s in skills]
+        self.assertEqual(lowercased.count("kubernetes"), 1)
 
     def test_capacity_requirement_matches_planning_signals(self) -> None:
         payload = {

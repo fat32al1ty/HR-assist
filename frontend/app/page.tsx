@@ -172,6 +172,20 @@ function missingRequirementsFromMatch(match: VacancyMatch): string[] {
   return asStringArray(match.profile.missing_requirements).slice(0, 8);
 }
 
+function matchedSkillsFromMatch(match: VacancyMatch): string[] {
+  if (!match.profile || typeof match.profile !== 'object') {
+    return [];
+  }
+  return asStringArray(match.profile.matched_skills).slice(0, 10);
+}
+
+function matchedRequirementsFromMatch(match: VacancyMatch): string[] {
+  if (!match.profile || typeof match.profile !== 'object') {
+    return [];
+  }
+  return asStringArray(match.profile.matched_requirements).slice(0, 10);
+}
+
 function scoreToPercent(score: number): string {
   return `${Math.round(score * 100)}%`;
 }
@@ -1216,7 +1230,12 @@ export default function DashboardPage() {
                 ) : null}
                 <div className="vacancy-list">
                   {visibleMatches.length === 0 ? <p className="empty-state">После запуска здесь появятся подходящие вакансии.</p> : null}
-                  {visibleMatches.map((match) => (
+                  {visibleMatches.map((match) => {
+                    const matchedSkills = matchedSkillsFromMatch(match);
+                    const matchedRequirements = matchedRequirementsFromMatch(match);
+                    const missingRequirements = missingRequirementsFromMatch(match);
+                    const matchedEntries = matchedRequirements.length > 0 ? matchedRequirements : matchedSkills;
+                    return (
                     <article className="vacancy-item" key={match.vacancy_id}>
                       <h3>{match.title}</h3>
                       <p className="meta">
@@ -1225,16 +1244,32 @@ export default function DashboardPage() {
                         {match.location || 'Локация не указана'}
                       </p>
                       <p className="match-score">Релевантность: {scoreToPercent(match.similarity_score)}</p>
-                      {missingRequirementsFromMatch(match).length > 0 ? (
-                        <div className="missing-box">
-                          <p className="missing-title">Не хватает по требованиям:</p>
-                          <ul>
-                            {missingRequirementsFromMatch(match).map((item) => (
-                              <li key={`${match.vacancy_id}-${item}`}>{item}</li>
-                            ))}
-                          </ul>
+                      <div className="fit-grid">
+                        <div className="fit-box fit-matched">
+                          <p className="fit-title">Ты подходишь</p>
+                          {matchedEntries.length > 0 ? (
+                            <ul>
+                              {matchedEntries.map((item) => (
+                                <li key={`${match.vacancy_id}-match-${item}`}>{item}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="fit-empty">совпадение по ключевым словам в описании</p>
+                          )}
                         </div>
-                      ) : null}
+                        <div className="fit-box fit-missing">
+                          <p className="fit-title">Чего не хватает</p>
+                          {missingRequirements.length > 0 ? (
+                            <ul>
+                              {missingRequirements.map((item) => (
+                                <li key={`${match.vacancy_id}-miss-${item}`}>{item}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="fit-empty">совпадение по всем указанным требованиям</p>
+                          )}
+                        </div>
+                      </div>
                       <div className="vacancy-actions">
                         <a href={match.source_url} target="_blank" rel="noreferrer">
                           Открыть источник
@@ -1247,7 +1282,8 @@ export default function DashboardPage() {
                         </button>
                       </div>
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
 
