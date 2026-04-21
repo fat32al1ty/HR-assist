@@ -114,6 +114,7 @@ type RecommendationJobStatusResponse = {
   openai_usage: VacancyRecommendResponse['openai_usage'] | null;
   error_message: string | null;
   active: boolean;
+  cancel_requested?: boolean;
 };
 
 type DashboardStatsResponse = {
@@ -317,6 +318,7 @@ export default function DashboardPage() {
   const [matchingProgress, setMatchingProgress] = useState(0);
   const [matchingStage, setMatchingStage] = useState('');
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [cancelRequested, setCancelRequested] = useState(false);
   const [hiddenMatchIds, setHiddenMatchIds] = useState<number[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStatsResponse | null>(null);
   const [warmupStatus, setWarmupStatus] = useState<WarmupStatusResponse | null>(null);
@@ -445,6 +447,7 @@ export default function DashboardPage() {
     setOpenaiUsageMessage(formatOpenAiUsage(status.openai_usage));
     setLastMatchingQuery(status.query || '');
     setLastSources(sources);
+    setCancelRequested(Boolean(status.cancel_requested));
 
     if (status.status === 'completed') {
       const visibleMatches = excludeFeedbackVacancies(
@@ -487,6 +490,7 @@ export default function DashboardPage() {
     setSelectedResumeId(null);
     setMatchingProgress(0);
     setMatchingStage('');
+    setCancelRequested(false);
     setDashboardStats(null);
     setWarmupStatus(null);
     setOpenaiUsageMessage('');
@@ -828,6 +832,28 @@ export default function DashboardPage() {
     }
   }
 
+  async function cancelRecommendationJob() {
+    if (!currentJobId || cancelRequested) {
+      return;
+    }
+    setCancelRequested(true);
+    try {
+      const snapshot = await request<RecommendationJobStatusResponse>(
+        `/api/vacancies/recommend/${currentJobId}`,
+        { method: 'DELETE' }
+      );
+      applyJobSnapshot(snapshot);
+      setMatchingMessage('Останавливаем подбор...');
+    } catch (error) {
+      // Leave the flag set locally — the poll loop will eventually reflect
+      // the cancelled state or surface an error. Any network hiccup here
+      // shouldn't undo the user's intent.
+      setMatchingMessage(
+        error instanceof Error ? `Не удалось отправить отмену: ${error.message}` : 'Не удалось отправить отмену.'
+      );
+    }
+  }
+
   async function refreshVacancyIndex() {
     if (!selectedResumeId) {
       setMatchingMessage('Выберите резюме для подбора.');
@@ -843,6 +869,7 @@ export default function DashboardPage() {
     setOpenaiUsageMessage('');
     setLastMatchingQuery('');
     setLastSources([]);
+    setCancelRequested(false);
 
     try {
       const started = await request<{ job_id: string; status: string }>(`/api/vacancies/recommend/start/${selectedResumeId}`, {
@@ -1563,6 +1590,17 @@ export default function DashboardPage() {
                     <div className="progress-track">
                       <div className="progress-fill" style={{ width: `${matchingProgress}%` }} />
                     </div>
+                    {matchingBusy && currentJobId ? (
+                      <div className="progress-actions">
+                        <button
+                          className="danger progress-cancel"
+                          disabled={cancelRequested}
+                          onClick={() => void cancelRecommendationJob()}
+                        >
+                          {cancelRequested ? 'Останавливаем...' : 'Отменить'}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 {matchingMessage ? <p className="message">{matchingMessage}</p> : null}

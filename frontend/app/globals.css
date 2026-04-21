@@ -311,6 +311,18 @@ select:focus {
   transition: width 0.35s ease;
 }
 
+.progress-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.progress-cancel {
+  min-height: 34px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
 .resume-list {
   display: grid;
   gap: 16px;

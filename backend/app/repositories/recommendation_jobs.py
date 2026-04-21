@@ -118,3 +118,18 @@ def fail_job(
     db.commit()
     db.refresh(job)
     return job
+
+
+def request_job_cancel(db: Session, job: RecommendationJob) -> RecommendationJob:
+    """Flip the cancel flag on a running/queued job.
+
+    No-op on terminal jobs (completed/failed). The worker checks this flag
+    between stages and bails out at the next safe boundary.
+    """
+    if job.status in {"completed", "failed"} or job.cancel_requested:
+        return job
+    job.cancel_requested = True
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job

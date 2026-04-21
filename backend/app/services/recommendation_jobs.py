@@ -17,6 +17,7 @@ from app.repositories.recommendation_jobs import (
     fail_job,
     get_recommendation_job_for_user,
     mark_job_running,
+    request_job_cancel,
     update_job_progress,
 )
 from app.repositories.user_daily_spend import get_daily_spend_usd
@@ -35,6 +36,7 @@ JOB_TIMEOUT_MESSAGE = (
     "Recommendation job timed out. Current search configuration is too heavy. "
     "Retry with narrower query or lower scan depth."
 )
+JOB_CANCELLED_MESSAGE = "Подбор остановлен по запросу пользователя."
 
 
 class DailyBudgetReachedBeforeStart(RuntimeError):
@@ -42,6 +44,14 @@ class DailyBudgetReachedBeforeStart(RuntimeError):
 
     Raised by start_recommendation_job so the API layer can translate it
     into a 429 with the Russian user-facing message.
+    """
+
+
+class RecommendationJobCancelled(RuntimeError):
+    """Raised inside the worker when the user has asked to stop the job.
+
+    The worker catches this and transitions the job to failed with the
+    Russian user-facing message so the frontend can show a friendly label.
     """
 
 
@@ -94,6 +104,21 @@ def _force_fail_if_timed_out(db, job: RecommendationJob) -> RecommendationJob:
     return job
 
 
+def check_job_alive(db, job: RecommendationJob) -> None:
+    """Raise if the user has requested cancel or the job has timed out.
+
+    Refreshes the row from the DB first so a cancel flip by another process
+    (the API handler) is picked up by the worker at the next poll. Called
+    from the worker's progress callback; the exception bubbles up to the
+    outer try/except in `_run_recommendation_job`.
+    """
+    db.refresh(job)
+    if job.cancel_requested:
+        raise RecommendationJobCancelled(JOB_CANCELLED_MESSAGE)
+    if _timed_out(job):
+        raise TimeoutError(JOB_TIMEOUT_MESSAGE)
+
+
 def _snapshot_from_job(job: RecommendationJob) -> dict:
     return {
         "id": job.id,
@@ -105,6 +130,7 @@ def _snapshot_from_job(job: RecommendationJob) -> dict:
         "matches": job.matches or [],
         "openai_usage": job.openai_usage or {},
         "error_message": job.error_message,
+        "cancel_requested": bool(job.cancel_requested),
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "started_at": job.started_at.isoformat() if job.started_at else None,
         "finished_at": job.finished_at.isoformat() if job.finished_at else None,
@@ -119,6 +145,25 @@ def get_job_snapshot_for_user(*, job_id: str, user_id: int) -> dict | None:
         if job is None:
             return None
         job = _force_fail_if_timed_out(db, job)
+        return _snapshot_from_job(job)
+    finally:
+        db.close()
+
+
+def cancel_job_for_user(*, job_id: str, user_id: int) -> dict | None:
+    """Request cancellation of the given job for the given user.
+
+    Returns the updated snapshot so the caller can return it to the frontend
+    without a second round-trip. Returns None if the job does not exist or
+    doesn't belong to this user. Idempotent on terminal jobs — the snapshot
+    just reflects the existing terminal state.
+    """
+    db = SessionLocal()
+    try:
+        job = get_recommendation_job_for_user(db, job_id=job_id, user_id=user_id)
+        if job is None:
+            return None
+        job = request_job_cancel(db, job)
         return _snapshot_from_job(job)
     finally:
         db.close()
@@ -157,13 +202,8 @@ def _run_recommendation_job(job_id: str) -> None:
         resume_id = int(job.resume_id)
         user_id = int(job.user_id)
 
-        def assert_not_timed_out() -> None:
-            db.refresh(job)
-            if _timed_out(job):
-                raise TimeoutError(JOB_TIMEOUT_MESSAGE)
-
         def on_progress(stage: str, progress: int, metrics: dict | None = None) -> None:
-            assert_not_timed_out()
+            check_job_alive(db, job)
             update_job_progress(db, job, stage=stage, progress=progress, metrics=metrics)
 
         with openai_budget_scope(
@@ -194,7 +234,10 @@ def _run_recommendation_job(job_id: str) -> None:
                     ),
                     preference_overrides=preference_overrides,
                 )
-                assert_not_timed_out()
+                check_job_alive(db, job)
+            except RecommendationJobCancelled as error:
+                fail_job(db, job, error_message=str(error))
+                return
             except OpenAIBudgetExceeded as error:
                 fail_job(
                     db,

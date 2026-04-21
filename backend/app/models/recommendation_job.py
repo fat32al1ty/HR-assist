@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text, false, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -15,6 +15,9 @@ class RecommendationJob(Base):
     status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
     stage: Mapped[str] = mapped_column(String(64), default="queued")
     progress: Mapped[int] = mapped_column(default=0)
+    cancel_requested: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     request_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     query: Mapped[str | None] = mapped_column(Text, nullable=True)
     metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)

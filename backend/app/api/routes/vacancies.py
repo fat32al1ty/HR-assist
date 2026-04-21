@@ -36,6 +36,7 @@ from app.services.openai_usage import (
 )
 from app.services.recommendation_jobs import (
     DailyBudgetReachedBeforeStart,
+    cancel_job_for_user,
     get_job_snapshot_for_user,
     get_latest_job_snapshot_for_user,
     start_recommendation_job,
@@ -223,6 +224,7 @@ def recommendation_status(
         openai_usage=snapshot.get("openai_usage") or None,
         error_message=snapshot.get("error_message"),
         active=bool(snapshot.get("active")),
+        cancel_requested=bool(snapshot.get("cancel_requested")),
     )
 
 
@@ -252,6 +254,43 @@ def latest_recommendation_status(
         openai_usage=snapshot.get("openai_usage") or None,
         error_message=snapshot.get("error_message"),
         active=bool(snapshot.get("active")),
+        cancel_requested=bool(snapshot.get("cancel_requested")),
+    )
+
+
+@router.delete("/recommend/{job_id}", response_model=RecommendationJobStatusResponse)
+def cancel_recommendation(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RecommendationJobStatusResponse:
+    """Mark a running or queued job for cancellation.
+
+    The worker polls the cancel flag between stages and exits at the next
+    safe boundary, so the response is immediate but the actual transition
+    to `failed`/`cancelled` lands on the next status poll.
+    """
+    snapshot = cancel_job_for_user(job_id=job_id, user_id=current_user.id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Recommendation job not found")
+    excluded_ids = list_disliked_vacancy_ids(db, user_id=current_user.id).union(
+        list_liked_vacancy_ids(db, user_id=current_user.id)
+    )
+    matches = _filter_matches_by_feedback(
+        matches=snapshot.get("matches") or [], excluded_ids=excluded_ids
+    )
+    return RecommendationJobStatusResponse(
+        job_id=snapshot["id"],
+        status=snapshot["status"],
+        stage=snapshot["stage"],
+        progress=int(snapshot["progress"]),
+        query=snapshot.get("query"),
+        metrics=snapshot.get("metrics") or {},
+        matches=matches,
+        openai_usage=snapshot.get("openai_usage") or None,
+        error_message=snapshot.get("error_message"),
+        active=bool(snapshot.get("active")),
+        cancel_requested=bool(snapshot.get("cancel_requested")),
     )
 
 

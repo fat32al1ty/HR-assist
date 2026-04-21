@@ -150,3 +150,4 @@ class RecommendationJobStatusResponse(BaseModel):
     openai_usage: OpenAIUsageRead | None = None
     error_message: str | None = None
     active: bool = False
+    cancel_requested: bool = False
