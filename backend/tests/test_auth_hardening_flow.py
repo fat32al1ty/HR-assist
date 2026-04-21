@@ -2,7 +2,7 @@ import unittest
 import uuid
 from types import SimpleNamespace
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from sqlalchemy import delete
 
 from app.api.routes.auth import GENERIC_AUTH_REJECTION, register
@@ -57,6 +57,7 @@ class AuthRegistrationTest(unittest.TestCase):
         with self.assertRaises(HTTPException) as raised:
             register(
                 request=_fake_request(),
+                response=Response(),
                 payload=RegisterRequest(
                     email=self.email,
                     password="SuperStrong123",
@@ -71,6 +72,7 @@ class AuthRegistrationTest(unittest.TestCase):
     def test_register_marks_email_verified(self) -> None:
         response = register(
             request=_fake_request(),
+            response=Response(),
             payload=RegisterRequest(
                 email=self.email,
                 password="SuperStrong123",
@@ -100,6 +102,7 @@ class AuthRegistrationTest(unittest.TestCase):
         with self.assertRaises(HTTPException) as wrong_key:
             register(
                 request=_fake_request(),
+                response=Response(),
                 payload=RegisterRequest(
                     email=f"nobody-{self.suffix}@example.com",
                     password="SuperStrong123",
@@ -112,6 +115,7 @@ class AuthRegistrationTest(unittest.TestCase):
         with self.assertRaises(HTTPException) as taken_email:
             register(
                 request=_fake_request(),
+                response=Response(),
                 payload=RegisterRequest(
                     email=self.email,
                     password="SuperStrong123",
