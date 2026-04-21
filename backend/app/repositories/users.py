@@ -39,3 +39,35 @@ def mark_email_verified(db: Session, user: User) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def update_preferences(
+    db: Session,
+    user: User,
+    *,
+    preferred_work_format: str | None = None,
+    relocation_mode: str | None = None,
+    home_city: str | None = None,
+    preferred_titles: list[str] | None = None,
+    clear_home_city: bool = False,
+) -> User:
+    """Apply a partial update to the four job-preference columns.
+
+    Pass `clear_home_city=True` to explicitly set home_city to NULL (since
+    `home_city=None` alone is indistinguishable from "leave unchanged").
+    """
+
+    if preferred_work_format is not None:
+        user.preferred_work_format = preferred_work_format
+    if relocation_mode is not None:
+        user.relocation_mode = relocation_mode
+    if home_city is not None:
+        user.home_city = home_city
+    elif clear_home_city:
+        user.home_city = None
+    if preferred_titles is not None:
+        user.preferred_titles = preferred_titles
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
