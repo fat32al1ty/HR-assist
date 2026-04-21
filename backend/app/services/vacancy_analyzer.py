@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Any
 
 from openai import APIConnectionError, APIStatusError, OpenAI
@@ -38,6 +39,7 @@ def analyze_vacancy_text(text: str) -> dict[str, Any]:
         timeout=settings.openai_analysis_timeout_seconds,
     )
 
+    started = time.monotonic()
     try:
         response = client.responses.create(
             model=settings.openai_analysis_model,
@@ -106,10 +108,16 @@ def analyze_vacancy_text(text: str) -> dict[str, Any]:
         cause = repr(error.__cause__) if error.__cause__ else str(error)
         raise VacancyAnalysisUnavailable(f"Could not connect to OpenAI API: {cause}") from error
 
+    duration_ms = int((time.monotonic() - started) * 1000)
     usage = getattr(response, "usage", None)
     input_tokens = int(getattr(usage, "input_tokens", 0) or 0)
     output_tokens = int(getattr(usage, "output_tokens", 0) or 0)
-    record_responses_usage(input_tokens=input_tokens, output_tokens=output_tokens)
+    record_responses_usage(
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        model=settings.openai_analysis_model,
+        duration_ms=duration_ms,
+    )
 
     parsed = json.loads(response.output_text)
     if injection_flags:

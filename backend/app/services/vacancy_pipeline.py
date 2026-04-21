@@ -9,7 +9,11 @@ from app.repositories.vacancies import create_vacancy, get_vacancy_by_source_url
 from app.services.openai_usage import OpenAIBudgetExceeded
 from app.services.vacancy_analyzer import analyze_vacancy_text
 from app.services.vacancy_profile_pipeline import persist_vacancy_profile
-from app.services.vacancy_sources import search_vacancies
+from app.services.vacancy_sources import (
+    VacancyParseStats,
+    search_vacancies,
+    vacancy_parse_stats_scope,
+)
 
 ALLOWED_JOB_HOSTS = (
     "hh.ru",
@@ -31,6 +35,7 @@ class VacancyDiscoveryMetrics:
     indexed: int = 0
     failed: int = 0
     already_indexed_skipped: int = 0
+    skipped_parse_errors: int = 0
     sources: list[str] | None = None
 
 
@@ -368,32 +373,35 @@ def discover_and_index_vacancies(
                     db.refresh(vacancy)
                 metrics.failed += 1
 
-    first_pass_items = search_vacancies(
-        query=query,
-        count=count,
-        use_brave_fallback=use_brave_fallback,
-        page_offset=0,
-    )
-    process_items(first_pass_items)
+    parse_stats = VacancyParseStats()
+    with vacancy_parse_stats_scope(parse_stats):
+        first_pass_items = search_vacancies(
+            query=query,
+            count=count,
+            use_brave_fallback=use_brave_fallback,
+            page_offset=0,
+        )
+        process_items(first_pass_items)
 
-    if (
-        not force_reindex
-        and metrics.indexed == 0
-        and metrics.analyzed == 0
-        and metrics.already_indexed_skipped > 0
-    ):
-        expanded_count = min(max(count * 4, 120), 500)
-        for attempt in range(1, 7):
-            second_pass_items = search_vacancies(
-                query=query,
-                count=expanded_count,
-                use_brave_fallback=use_brave_fallback,
-                page_offset=_build_rotation_offset(
-                    query=query, count=expanded_count, attempt=attempt
-                ),
-            )
-            process_items(second_pass_items)
-            if metrics.indexed > 0 or metrics.analyzed > 0:
-                break
+        if (
+            not force_reindex
+            and metrics.indexed == 0
+            and metrics.analyzed == 0
+            and metrics.already_indexed_skipped > 0
+        ):
+            expanded_count = min(max(count * 4, 120), 500)
+            for attempt in range(1, 7):
+                second_pass_items = search_vacancies(
+                    query=query,
+                    count=expanded_count,
+                    use_brave_fallback=use_brave_fallback,
+                    page_offset=_build_rotation_offset(
+                        query=query, count=expanded_count, attempt=attempt
+                    ),
+                )
+                process_items(second_pass_items)
+                if metrics.indexed > 0 or metrics.analyzed > 0:
+                    break
 
+    metrics.skipped_parse_errors = parse_stats.skipped_parse_errors
     return VacancyDiscoveryResult(indexed_vacancies=indexed, metrics=metrics)

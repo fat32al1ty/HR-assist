@@ -127,6 +127,7 @@ def _run_warmup_cycle() -> tuple[list[str], dict[str, int]]:
             "indexed": 0,
             "failed": 0,
             "already_indexed_skipped": 0,
+            "skipped_parse_errors": 0,
             "backfill_considered": 0,
             "backfill_profiled": 0,
             "backfill_filtered": 0,
@@ -152,6 +153,7 @@ def _run_warmup_cycle() -> tuple[list[str], dict[str, int]]:
             aggregate["indexed"] += int(result.metrics.indexed or 0)
             aggregate["failed"] += int(result.metrics.failed or 0)
             aggregate["already_indexed_skipped"] += int(result.metrics.already_indexed_skipped or 0)
+            aggregate["skipped_parse_errors"] += int(result.metrics.skipped_parse_errors or 0)
 
         if settings.vacancy_profile_backfill_enabled:
             elapsed_seconds = (datetime.now(UTC) - started_at).total_seconds()

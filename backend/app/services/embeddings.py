@@ -1,3 +1,4 @@
+import time
 from typing import Any
 
 from openai import APIConnectionError, APIStatusError, OpenAI
@@ -22,6 +23,7 @@ def create_embedding(text: str) -> list[float]:
     }
     client = OpenAI(**client_options)
 
+    started = time.monotonic()
     try:
         response = client.embeddings.create(
             model=settings.openai_embedding_model,
@@ -41,9 +43,14 @@ def create_embedding(text: str) -> list[float]:
             f"Could not connect to OpenAI embeddings API: {cause}"
         ) from error
 
+    duration_ms = int((time.monotonic() - started) * 1000)
     usage = getattr(response, "usage", None)
     prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
-    record_embeddings_usage(input_tokens=prompt_tokens)
+    record_embeddings_usage(
+        input_tokens=prompt_tokens,
+        model=settings.openai_embedding_model,
+        duration_ms=duration_ms,
+    )
 
     vector = response.data[0].embedding
     if len(vector) != settings.vector_size:

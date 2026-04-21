@@ -175,6 +175,7 @@ def _empty_metrics() -> VacancyDiscoveryMetrics:
         indexed=0,
         failed=0,
         already_indexed_skipped=0,
+        skipped_parse_errors=0,
         sources=[],
     )
 
@@ -189,6 +190,7 @@ def _merge_metrics(
     target.indexed += current.indexed
     target.failed += current.failed
     target.already_indexed_skipped += current.already_indexed_skipped
+    target.skipped_parse_errors += current.skipped_parse_errors
     if target.sources is None:
         target.sources = []
     for source_url in current.sources or []:

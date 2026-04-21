@@ -2,9 +2,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
 
 from app.api.routes import auth, dashboard, health, resumes, system, vacancies
 from app.core.config import settings, validate_runtime_settings
+from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 from app.services.vacancy_warmup import start_vacancy_warmup_worker, stop_vacancy_warmup_worker
 from app.services.vector_store import ensure_default_vector_collections
 
@@ -19,6 +21,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
