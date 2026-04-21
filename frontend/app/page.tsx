@@ -26,7 +26,7 @@ type Resume = {
   error_message: string | null;
   created_at: string;
 };
-type AuthFormMode = 'login' | 'reset';
+type AuthFormMode = 'login' | 'register' | 'reset';
 
 type VacancyMatch = {
   vacancy_id: number;
@@ -455,39 +455,35 @@ export default function DashboardPage() {
         return;
       }
 
-      if (!betaKey.trim()) {
-        throw new Error('Введите код тестировщика');
-      }
-
-      let authResponse = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      if (!authResponse.ok) {
+      if (authFormMode === 'register') {
+        if (!betaKey.trim()) {
+          throw new Error('Введите код тестировщика');
+        }
         const registerResponse = await fetch(`${API_BASE_URL}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password, full_name: null, beta_key: betaKey })
         });
-        if (!registerResponse.ok && registerResponse.status !== 409) {
-          const payload = await registerResponse.json().catch(() => ({ detail: 'Не удалось создать аккаунт' }));
+        if (!registerResponse.ok) {
+          const payload = await registerResponse
+            .json()
+            .catch(() => ({ detail: 'Не удалось создать аккаунт' }));
           throw new Error(payload.detail || 'Не удалось создать аккаунт');
         }
-        authResponse = await fetch(`${API_BASE_URL}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
       }
 
-      if (!authResponse.ok) {
-        const payload = await authResponse.json().catch(() => ({ detail: 'Не удалось войти' }));
+      const loginResponse = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+
+      if (!loginResponse.ok) {
+        const payload = await loginResponse.json().catch(() => ({ detail: 'Не удалось войти' }));
         throw new Error(payload.detail || 'Не удалось войти');
       }
 
-      const auth = (await authResponse.json()) as { access_token: string };
+      const auth = (await loginResponse.json()) as { access_token: string };
       window.localStorage.setItem('access_token', auth.access_token);
       setToken(auth.access_token);
       setMessage('');
@@ -974,38 +970,91 @@ export default function DashboardPage() {
 
         {!token ? (
           <section className="panel">
-            <h2>{authFormMode === 'login' ? 'Вход в кабинет' : 'Восстановление пароля'}</h2>
+            <h2>
+              {authFormMode === 'login'
+                ? 'Вход в кабинет'
+                : authFormMode === 'register'
+                  ? 'Регистрация нового пользователя'
+                  : 'Восстановление пароля'}
+            </h2>
             <form className="form" onSubmit={handleAuth}>
-              <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" type="email" />
-              {authFormMode === 'login' ? (
-                <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Пароль" type="password" />
-              ) : (
+              <input
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="Email"
+                type="email"
+                autoComplete="email"
+              />
+              {authFormMode === 'reset' ? (
                 <input
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
-                  placeholder="Новый пароль"
+                  placeholder="Новый пароль (минимум 8 символов)"
                   type="password"
+                  autoComplete="new-password"
+                />
+              ) : (
+                <input
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder={
+                    authFormMode === 'register' ? 'Пароль (минимум 8 символов)' : 'Пароль'
+                  }
+                  type="password"
+                  autoComplete={authFormMode === 'register' ? 'new-password' : 'current-password'}
                 />
               )}
-              <input
-                value={betaKey}
-                onChange={(event) => setBetaKey(event.target.value)}
-                placeholder="Ключ бета-тестера"
-                type="password"
-              />
+              {authFormMode !== 'login' ? (
+                <input
+                  value={betaKey}
+                  onChange={(event) => setBetaKey(event.target.value)}
+                  placeholder="Ключ бета-тестера"
+                  type="password"
+                  autoComplete="off"
+                />
+              ) : null}
               <button className="primary" disabled={busy}>
-                {authFormMode === 'login' ? 'Войти' : 'Сбросить пароль'}
+                {authFormMode === 'login'
+                  ? 'Войти'
+                  : authFormMode === 'register'
+                    ? 'Зарегистрироваться'
+                    : 'Сбросить пароль'}
               </button>
-              <button
-                className="secondary"
-                type="button"
-                onClick={() => {
-                  setAuthFormMode(authFormMode === 'login' ? 'reset' : 'login');
-                  setMessage('');
-                }}
-              >
-                {authFormMode === 'login' ? 'Забыли пароль?' : 'Назад ко входу'}
-              </button>
+              {authFormMode === 'login' ? (
+                <>
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => {
+                      setAuthFormMode('register');
+                      setMessage('');
+                    }}
+                  >
+                    Нет аккаунта? Зарегистрироваться
+                  </button>
+                  <button
+                    className="secondary"
+                    type="button"
+                    onClick={() => {
+                      setAuthFormMode('reset');
+                      setMessage('');
+                    }}
+                  >
+                    Забыли пароль?
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => {
+                    setAuthFormMode('login');
+                    setMessage('');
+                  }}
+                >
+                  Назад ко входу
+                </button>
+              )}
             </form>
             {message ? <p className="message">{message}</p> : null}
           </section>
