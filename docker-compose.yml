@@ -61,8 +61,9 @@ services:
       backend:
         condition: service_healthy
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      NEXT_PUBLIC_API_BASE_URL: http://185.76.242.254:8000
     ports:
+      - "80:3000"
       - "3000:3000"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://' + require('child_process').execSync('hostname -i').toString().trim() + ':3000', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""]

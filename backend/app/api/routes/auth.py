@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token, verify_password
+from app.core.security import create_access_token, hash_password, verify_password
 from app.db.session import get_db
 from app.repositories.auth_otp_codes import (
     PURPOSE_EMAIL_VERIFY,
@@ -14,9 +14,13 @@ from app.repositories.auth_otp_codes import (
 )
 from app.repositories.users import create_user, get_user_by_email, mark_email_verified
 from app.schemas.auth import (
+    AuthMessageResponse,
     LoginStartRequest,
     LoginStartResponse,
+    LoginRequest,
     LoginVerifyRequest,
+    PasswordResetRequest,
+    RegisterResponse,
     RegisterRequest,
     TokenResponse,
     VerifyEmailRequest,
@@ -36,23 +40,7 @@ from app.core.config import settings
 router = APIRouter()
 
 
-@router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> UserRead:
-    if not is_valid_beta_key(payload.beta_key):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid beta tester key")
-
-    existing = get_user_by_email(db, email=payload.email)
-    if existing is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already registered")
-
-    user = create_user(
-        db,
-        email=payload.email,
-        password=payload.password,
-        full_name=payload.full_name,
-        email_verified=False,
-    )
-
+def issue_email_verification_code(*, db: Session, user) -> tuple[str, str]:
     code = generate_otp_code()
     invalidate_active_codes(db, email=user.email, purpose=PURPOSE_EMAIL_VERIFY)
     create_otp_code(
@@ -65,19 +53,46 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> UserRea
         expires_at=otp_expiry(settings.auth_email_code_ttl_minutes),
         max_attempts=settings.auth_code_max_attempts,
     )
-    try:
-        send_email(
-            to_email=user.email,
-            subject="Подтверждение email для HR Assistant",
-            body=f"Ваш код подтверждения: {code}. Код действует {settings.auth_email_code_ttl_minutes} минут.",
-        )
-    except EmailDeliveryError as error:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Could not deliver verification email",
-        ) from error
+    delivery_mode = settings.auth_email_delivery_mode.lower()
+    send_email(
+        to_email=user.email,
+        subject="Подтверждение email для HR Assistant",
+        body=f"Ваш код подтверждения: {code}. Код действует {settings.auth_email_code_ttl_minutes} минут.",
+    )
+    return code, delivery_mode
 
-    return user
+
+@router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
+def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> RegisterResponse:
+    if not is_valid_beta_key(payload.beta_key):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid beta tester key")
+
+    existing = get_user_by_email(db, email=payload.email)
+    if existing is not None and existing.email_verified:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already registered")
+
+    if existing is None:
+        user = create_user(
+            db,
+            email=payload.email,
+            password=payload.password,
+            full_name=payload.full_name,
+            email_verified=True,
+        )
+    else:
+        existing.hashed_password = hash_password(payload.password)
+        existing.full_name = payload.full_name or existing.full_name
+        db.add(existing)
+        db.commit()
+        db.refresh(existing)
+        user = mark_email_verified(db, existing)
+
+    return RegisterResponse(
+        user=UserRead.model_validate(user),
+        message="Account created. Email verification is disabled.",
+        delivery_mode="disabled",
+        debug_code=None,
+    )
 
 
 @router.post("/verify-email", response_model=UserRead)
@@ -102,35 +117,37 @@ def login_start(payload: LoginStartRequest, db: Session = Depends(get_db)) -> Lo
     user = get_user_by_email(db, email=payload.email)
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-    if not user.email_verified:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email is not verified")
 
-    code = generate_otp_code()
-    challenge_id = issue_challenge_id()
-    invalidate_active_codes(db, email=user.email, purpose=PURPOSE_LOGIN_2FA)
-    create_otp_code(
-        db,
-        user_id=user.id,
-        email=user.email,
-        purpose=PURPOSE_LOGIN_2FA,
-        challenge_id=challenge_id,
-        code_hash=hash_otp_code(code),
-        expires_at=otp_expiry(settings.auth_login_code_ttl_minutes),
-        max_attempts=settings.auth_code_max_attempts,
+    return LoginStartResponse(
+        challenge_id="",
+        requires_code=False,
+        message="Login code is not required",
+        delivery_mode="disabled",
+        debug_code=None,
     )
-    try:
-        send_email(
-            to_email=user.email,
-            subject="Код входа для HR Assistant",
-            body=f"Ваш код входа: {code}. Код действует {settings.auth_login_code_ttl_minutes} минут.",
-        )
-    except EmailDeliveryError as error:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Could not deliver login code",
-        ) from error
 
-    return LoginStartResponse(challenge_id=challenge_id, message="Login code was sent to your email")
+
+@router.post("/login", response_model=TokenResponse)
+def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    user = get_user_by_email(db, email=payload.email)
+    if user is None or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is not active")
+    return TokenResponse(access_token=create_access_token(user.email))
+
+
+@router.post("/password/reset", response_model=AuthMessageResponse)
+def reset_password(payload: PasswordResetRequest, db: Session = Depends(get_db)) -> AuthMessageResponse:
+    if not is_valid_beta_key(payload.beta_key):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid beta tester key")
+    user = get_user_by_email(db, email=payload.email)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User is not found")
+    user.hashed_password = hash_password(payload.new_password)
+    db.add(user)
+    db.commit()
+    return AuthMessageResponse(message="Password updated. You can now sign in.")
 
 
 @router.post("/login/verify", response_model=TokenResponse)

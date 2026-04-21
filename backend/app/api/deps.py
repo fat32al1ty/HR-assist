@@ -24,7 +24,4 @@ def get_current_user(
     user = get_user_by_email(db, email=email)
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is not active")
-    if not user.email_verified:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email is not verified")
-
     return user

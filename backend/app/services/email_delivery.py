@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import smtplib
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 
 from app.core.config import settings
 
@@ -22,6 +23,8 @@ def send_email(*, to_email: str, subject: str, body: str) -> None:
     message["Subject"] = subject
     message["From"] = settings.auth_email_from
     message["To"] = to_email
+    message["Date"] = formatdate(localtime=False)
+    message["Message-ID"] = make_msgid(domain=settings.auth_email_from.split("@")[-1])
     message.set_content(body)
 
     try:
