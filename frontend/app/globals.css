@@ -448,6 +448,121 @@ select:focus {
   color: #92400e;
 }
 
+.confirm-card {
+  display: grid;
+  gap: 18px;
+}
+
+.profile-section {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-soft);
+  padding: 18px;
+}
+
+.profile-section h3 {
+  margin: 0;
+  font-size: 19px;
+  letter-spacing: -0.025em;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.profile-skill-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.field textarea {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 11px 14px;
+  width: 100%;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.field textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(22, 119, 255, 0.12);
+}
+
+.field-hint {
+  color: var(--muted);
+  font-weight: 500;
+  font-style: italic;
+  font-size: 13px;
+}
+
+.radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.radio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.radio-chip:hover {
+  border-color: #b9d4ff;
+}
+
+.radio-chip input[type='radio'] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.radio-chip:has(input[type='radio']:checked) {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+}
+
+.profile-confirm-button {
+  justify-self: stretch;
+  min-height: 52px;
+  font-size: 15px;
+}
+
+@media (max-width: 720px) {
+  .profile-grid,
+  .profile-skill-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .sources-box {
   margin-bottom: 14px;
   border: 1px solid var(--line);

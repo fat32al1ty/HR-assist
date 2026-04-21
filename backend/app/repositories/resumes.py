@@ -59,3 +59,23 @@ def update_resume_processing_result(
     db.commit()
     db.refresh(resume)
     return resume
+
+
+def merge_resume_analysis(db: Session, resume: Resume, patch: dict) -> Resume:
+    """Shallow-merge a partial analysis patch into resume.analysis.
+
+    JSONB column is reassigned (SQLAlchemy won't track in-place mutation of
+    a dict). Non-None values in the patch override existing keys; None values
+    in the patch clear the corresponding key.
+    """
+    current = dict(resume.analysis) if isinstance(resume.analysis, dict) else {}
+    for key, value in patch.items():
+        if value is None:
+            current[key] = None
+        else:
+            current[key] = value
+    resume.analysis = current
+    db.add(resume)
+    db.commit()
+    db.refresh(resume)
+    return resume

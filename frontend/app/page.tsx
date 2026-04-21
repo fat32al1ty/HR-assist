@@ -28,6 +28,38 @@ type Resume = {
 };
 type AuthFormMode = 'login' | 'register' | 'reset';
 
+type WorkFormat = 'remote' | 'hybrid' | 'office' | 'any';
+type RelocationMode = 'home_only' | 'any_city';
+type Seniority = 'junior' | 'middle' | 'senior' | 'lead';
+
+type UserPrefs = {
+  preferred_work_format: WorkFormat;
+  relocation_mode: RelocationMode;
+  home_city: string | null;
+  preferred_titles: string[];
+};
+
+type UserRead = UserPrefs & {
+  id: number;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
+  email_verified: boolean;
+  created_at: string;
+};
+
+type ProfileDraft = {
+  target_role: string;
+  specialization: string;
+  seniority: Seniority | '';
+  total_experience_years: string;
+  top_skills: string[];
+  preferred_work_format: WorkFormat;
+  relocation_mode: RelocationMode;
+  home_city: string;
+  preferred_titles: string[];
+};
+
 type VacancyMatch = {
   vacancy_id: number;
   title: string;
@@ -215,6 +247,43 @@ function stageLabel(stage: string): string {
   }
 }
 
+const WORK_FORMAT_OPTIONS: { value: WorkFormat; label: string }[] = [
+  { value: 'any', label: 'Любой' },
+  { value: 'remote', label: 'Удалёнка' },
+  { value: 'hybrid', label: 'Гибрид' },
+  { value: 'office', label: 'Офис' }
+];
+
+const SENIORITY_OPTIONS: { value: Seniority; label: string }[] = [
+  { value: 'junior', label: 'Junior' },
+  { value: 'middle', label: 'Middle' },
+  { value: 'senior', label: 'Senior' },
+  { value: 'lead', label: 'Lead' }
+];
+
+function isSeniority(value: unknown): value is Seniority {
+  return value === 'junior' || value === 'middle' || value === 'senior' || value === 'lead';
+}
+
+function buildProfileDraft(resume: Resume, prefs: UserPrefs): ProfileDraft {
+  const analysis = resume.analysis || {};
+  const years = typeof analysis.total_experience_years === 'number' ? String(analysis.total_experience_years) : '';
+  const hardSkills = asStringArray(analysis.hard_skills).slice(0, 3);
+  const analysisHomeCity = typeof analysis.home_city === 'string' ? analysis.home_city : '';
+  const analysisSeniority = analysis.seniority;
+  return {
+    target_role: asText(analysis.target_role, ''),
+    specialization: asText(analysis.specialization, ''),
+    seniority: isSeniority(analysisSeniority) ? analysisSeniority : '',
+    total_experience_years: years,
+    top_skills: hardSkills,
+    preferred_work_format: prefs.preferred_work_format,
+    relocation_mode: prefs.relocation_mode,
+    home_city: prefs.home_city ?? analysisHomeCity ?? '',
+    preferred_titles: prefs.preferred_titles
+  };
+}
+
 function readStoredJobId(): string | null {
   try {
     const value = window.localStorage.getItem(LAST_JOB_ID_STORAGE_KEY);
@@ -251,6 +320,11 @@ export default function DashboardPage() {
   const [hiddenMatchIds, setHiddenMatchIds] = useState<number[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStatsResponse | null>(null);
   const [warmupStatus, setWarmupStatus] = useState<WarmupStatusResponse | null>(null);
+  const [userPrefs, setUserPrefs] = useState<UserPrefs | null>(null);
+  const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
+  const [profileConfirmed, setProfileConfirmed] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
 
   useEffect(() => {
     const storedToken = window.localStorage.getItem('access_token');
@@ -270,7 +344,18 @@ export default function DashboardPage() {
     void loadResumes(token);
     void loadSelectedVacancies();
     void loadDislikedVacancies();
+    void loadUserPrefs();
   }, [token]);
+
+  useEffect(() => {
+    const selectedResume = resumes.find((resume) => resume.id === selectedResumeId) || null;
+    if (!selectedResume || !userPrefs) {
+      setProfileDraft(null);
+      return;
+    }
+    setProfileDraft(buildProfileDraft(selectedResume, userPrefs));
+    setProfileMessage('');
+  }, [selectedResumeId, resumes, userPrefs]);
 
   useEffect(() => {
     if (!token) {
@@ -407,6 +492,10 @@ export default function DashboardPage() {
     setOpenaiUsageMessage('');
     setLastMatchingQuery('');
     setLastSources([]);
+    setUserPrefs(null);
+    setProfileDraft(null);
+    setProfileConfirmed(false);
+    setProfileMessage('');
     if (nextMessage) {
       setMessage(nextMessage);
     }
@@ -544,6 +633,86 @@ export default function DashboardPage() {
       setSelectedVacancies(data);
     } catch {
       setSelectedVacancies([]);
+    }
+  }
+
+  async function loadUserPrefs() {
+    try {
+      const data = await request<UserRead>('/api/users/me');
+      setUserPrefs({
+        preferred_work_format: data.preferred_work_format,
+        relocation_mode: data.relocation_mode,
+        home_city: data.home_city,
+        preferred_titles: data.preferred_titles
+      });
+    } catch {
+      setUserPrefs(null);
+    }
+  }
+
+  function updateProfileDraft(patch: Partial<ProfileDraft>) {
+    setProfileDraft((current) => (current ? { ...current, ...patch } : current));
+  }
+
+  async function saveProfileAndRecommend() {
+    if (!selectedResumeId || !profileDraft) {
+      setProfileMessage('Сначала выберите резюме.');
+      return;
+    }
+    const years = profileDraft.total_experience_years.trim();
+    const yearsNumber = years === '' ? null : Number(years);
+    if (yearsNumber !== null && (!Number.isFinite(yearsNumber) || yearsNumber < 0 || yearsNumber > 80)) {
+      setProfileMessage('Годы опыта должны быть числом от 0 до 80.');
+      return;
+    }
+
+    const topSkills = profileDraft.top_skills.map((skill) => skill.trim()).filter(Boolean);
+    const homeCityTrimmed = profileDraft.home_city.trim();
+
+    const analysisUpdates: Record<string, unknown> = {};
+    if (profileDraft.target_role.trim()) analysisUpdates.target_role = profileDraft.target_role.trim();
+    if (profileDraft.specialization.trim()) analysisUpdates.specialization = profileDraft.specialization.trim();
+    if (profileDraft.seniority) analysisUpdates.seniority = profileDraft.seniority;
+    if (yearsNumber !== null) analysisUpdates.total_experience_years = yearsNumber;
+    if (topSkills.length > 0) analysisUpdates.top_skills = topSkills;
+
+    const preferenceUpdates: Record<string, unknown> = {
+      preferred_work_format: profileDraft.preferred_work_format,
+      relocation_mode: profileDraft.relocation_mode,
+      preferred_titles: profileDraft.preferred_titles
+    };
+    if (homeCityTrimmed) {
+      preferenceUpdates.home_city = homeCityTrimmed;
+    } else {
+      preferenceUpdates.clear_home_city = true;
+    }
+
+    const body: Record<string, unknown> = {};
+    if (Object.keys(analysisUpdates).length > 0) body.analysis_updates = analysisUpdates;
+    body.preference_updates = preferenceUpdates;
+
+    setProfileSaving(true);
+    setProfileMessage('Сохраняем профиль...');
+    try {
+      const response = await request<{
+        resume: Resume;
+        preferences: UserPrefs;
+      }>(`/api/resumes/${selectedResumeId}/profile-confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      setResumes((current) =>
+        current.map((resume) => (resume.id === response.resume.id ? response.resume : resume))
+      );
+      setUserPrefs(response.preferences);
+      setProfileConfirmed(true);
+      setProfileMessage('Профиль сохранён. Запускаем подбор...');
+      await refreshVacancyIndex();
+    } catch (error) {
+      setProfileMessage(error instanceof Error ? error.message : 'Не удалось сохранить профиль');
+    } finally {
+      setProfileSaving(false);
     }
   }
 
@@ -1177,6 +1346,192 @@ export default function DashboardPage() {
                   ))}
                 </div>
               </section>
+
+              {profileDraft ? (
+                <section className="panel confirm-card">
+                  <h2>Мы поняли тебя так и что ты ищешь</h2>
+                  <p className="panel-note">
+                    Проверь, что анализ резюме не съехал, и задай ориентир подбора. Кнопка ниже
+                    сохранит оба раздела и запустит поиск.
+                  </p>
+
+                  <div className="profile-section">
+                    <h3>Мы поняли тебя так</h3>
+                    <div className="profile-grid">
+                      <label className="field">
+                        <span>Роль</span>
+                        <input
+                          type="text"
+                          value={profileDraft.target_role}
+                          maxLength={200}
+                          onChange={(event) =>
+                            updateProfileDraft({ target_role: event.target.value })
+                          }
+                          placeholder="Senior Backend Engineer"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Специализация</span>
+                        <input
+                          type="text"
+                          value={profileDraft.specialization}
+                          maxLength={200}
+                          onChange={(event) =>
+                            updateProfileDraft({ specialization: event.target.value })
+                          }
+                          placeholder="API, platform, data"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Грейд</span>
+                        <select
+                          value={profileDraft.seniority}
+                          onChange={(event) =>
+                            updateProfileDraft({
+                              seniority: (event.target.value as Seniority | '') || ''
+                            })
+                          }
+                        >
+                          <option value="">Не выбран</option>
+                          {SENIORITY_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Годы опыта</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="80"
+                          step="0.5"
+                          value={profileDraft.total_experience_years}
+                          onChange={(event) =>
+                            updateProfileDraft({ total_experience_years: event.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="field">
+                      <span>Топ-3 скилла</span>
+                      <div className="profile-skill-row">
+                        {[0, 1, 2].map((index) => (
+                          <input
+                            key={`skill-${index}`}
+                            type="text"
+                            maxLength={100}
+                            value={profileDraft.top_skills[index] || ''}
+                            onChange={(event) => {
+                              const next = [...profileDraft.top_skills];
+                              while (next.length <= index) next.push('');
+                              next[index] = event.target.value;
+                              updateProfileDraft({ top_skills: next });
+                            }}
+                            placeholder={index === 0 ? 'Python' : index === 1 ? 'FastAPI' : 'PostgreSQL'}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="profile-section">
+                    <h3>Что ищешь</h3>
+                    <div className="field">
+                      <span>Формат работы</span>
+                      <div className="radio-row">
+                        {WORK_FORMAT_OPTIONS.map((option) => (
+                          <label key={option.value} className="radio-chip">
+                            <input
+                              type="radio"
+                              name="work-format"
+                              value={option.value}
+                              checked={profileDraft.preferred_work_format === option.value}
+                              onChange={() =>
+                                updateProfileDraft({ preferred_work_format: option.value })
+                              }
+                            />
+                            <span>{option.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="field">
+                      <span>Готовность к переезду</span>
+                      <div className="radio-row">
+                        <label className="radio-chip">
+                          <input
+                            type="radio"
+                            name="relocation-mode"
+                            value="home_only"
+                            checked={profileDraft.relocation_mode === 'home_only'}
+                            onChange={() => updateProfileDraft({ relocation_mode: 'home_only' })}
+                          />
+                          <span>Только в моём городе</span>
+                        </label>
+                        <label className="radio-chip">
+                          <input
+                            type="radio"
+                            name="relocation-mode"
+                            value="any_city"
+                            checked={profileDraft.relocation_mode === 'any_city'}
+                            onChange={() => updateProfileDraft({ relocation_mode: 'any_city' })}
+                          />
+                          <span>Открыт к переезду</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {profileDraft.relocation_mode === 'home_only' ? (
+                      <label className="field">
+                        <span>Мой город</span>
+                        <input
+                          type="text"
+                          maxLength={120}
+                          value={profileDraft.home_city}
+                          onChange={(event) =>
+                            updateProfileDraft({ home_city: event.target.value })
+                          }
+                          placeholder="Москва"
+                        />
+                      </label>
+                    ) : null}
+
+                    <label className="field">
+                      <span>
+                        Желаемые названия вакансий (до 10).{' '}
+                        <em className="field-hint">
+                          не исключает другие — просто поднимает совпадающие в выдаче.
+                        </em>
+                      </span>
+                      <textarea
+                        rows={3}
+                        value={profileDraft.preferred_titles.join(', ')}
+                        onChange={(event) => {
+                          const parts = event.target.value
+                            .split(/[,\n]/)
+                            .map((title) => title.trim())
+                            .filter(Boolean)
+                            .slice(0, 10);
+                          updateProfileDraft({ preferred_titles: parts });
+                        }}
+                        placeholder="Senior Backend Engineer, Python Developer"
+                      />
+                    </label>
+                  </div>
+
+                  <button
+                    className="primary profile-confirm-button"
+                    disabled={profileSaving || matchingBusy}
+                    onClick={() => void saveProfileAndRecommend()}
+                  >
+                    {profileSaving ? 'Сохраняем...' : 'Подтвердить и найти работу'}
+                  </button>
+                  {profileMessage ? <p className="message">{profileMessage}</p> : null}
+                </section>
+              ) : null}
 
               <section className="panel">
                 <h2>Подбор вакансий</h2>
