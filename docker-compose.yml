@@ -55,6 +55,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
     container_name: resume_frontend
     restart: unless-stopped
     depends_on:
