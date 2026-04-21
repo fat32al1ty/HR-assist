@@ -36,6 +36,11 @@ jobs:
             echo "HEAD: $(git rev-parse --short HEAD)"
 
             echo "== build & up =="
+            # Pass the git-derived version into the frontend build so the UI
+            # shows the exact ref it was built from. git describe falls back
+            # to the short SHA if no tag is reachable.
+            export APP_VERSION=$(git describe --tags --always --dirty 2>/dev/null || git rev-parse --short HEAD)
+            echo "APP_VERSION=$APP_VERSION"
             docker compose pull --ignore-buildable || true
             docker compose up -d --build --remove-orphans
 

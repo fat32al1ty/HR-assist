@@ -120,6 +120,23 @@ select:focus {
   object-fit: contain;
 }
 
+.app-version {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 999px;
+  font: 500 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #64748b;
+  letter-spacing: 0;
+  text-decoration: none;
+  background: rgba(241, 245, 249, 0.7);
+}
+
+.app-version:hover {
+  color: #334155;
+  border-color: rgba(100, 116, 139, 0.6);
+}
+
 .main {
   padding: 42px 0 64px;
 }
