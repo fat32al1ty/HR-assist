@@ -5,13 +5,17 @@ RUN npm ci
 
 FROM node:20-alpine AS builder
 WORKDIR /app
+ARG APP_VERSION="dev"
+ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
+ARG APP_VERSION="dev"
 ENV NODE_ENV=production
+ENV NEXT_PUBLIC_APP_VERSION=$APP_VERSION
 
 RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
 

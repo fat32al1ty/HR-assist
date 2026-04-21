@@ -940,6 +940,15 @@ export default function DashboardPage() {
           <div className="brand">
             <img className="brand-logo" src="/hr-ai-logo.png" alt="HR Помощник" />
             <span>HR Помощник</span>
+            <a
+              className="app-version"
+              href={`https://github.com/fat32al1ty/HR-assist/releases`}
+              target="_blank"
+              rel="noreferrer"
+              title="Текущая версия сборки"
+            >
+              {process.env.NEXT_PUBLIC_APP_VERSION ?? 'dev'}
+            </a>
           </div>
           {token ? (
             <button className="secondary" onClick={logout}>
