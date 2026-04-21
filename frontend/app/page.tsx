@@ -117,6 +117,76 @@ type RecommendationJobStatusResponse = {
   cancel_requested?: boolean;
 };
 
+type ApplicationStatus =
+  | 'draft'
+  | 'applied'
+  | 'viewed'
+  | 'replied'
+  | 'rejected'
+  | 'interview'
+  | 'offer'
+  | 'declined';
+
+type Application = {
+  id: number;
+  vacancy_id: number | null;
+  status: ApplicationStatus;
+  source_url: string;
+  vacancy_title: string;
+  vacancy_company: string | null;
+  notes: string | null;
+  cover_letter_text: string | null;
+  applied_at: string | null;
+  last_status_change_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type ApplicationFilter = 'all' | 'active' | 'archived' | ApplicationStatus;
+
+const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
+  draft: 'Черновик',
+  applied: 'Откликнулся',
+  viewed: 'Просмотрено',
+  replied: 'Получен ответ',
+  interview: 'Интервью',
+  offer: 'Оффер',
+  rejected: 'Отказ',
+  declined: 'Отклонил сам',
+};
+
+const APPLICATION_ACTIVE_STATUSES: ApplicationStatus[] = [
+  'draft',
+  'applied',
+  'viewed',
+  'replied',
+  'interview',
+  'offer',
+];
+
+const APPLICATION_ARCHIVED_STATUSES: ApplicationStatus[] = ['rejected', 'declined'];
+
+const APPLICATION_STATUS_ORDER: ApplicationStatus[] = [
+  'draft',
+  'applied',
+  'viewed',
+  'replied',
+  'interview',
+  'offer',
+  'rejected',
+  'declined',
+];
+
+const APPLICATION_FILTER_TABS: { value: ApplicationFilter; label: string }[] = [
+  { value: 'all', label: 'Все' },
+  { value: 'active', label: 'В работе' },
+  { value: 'draft', label: 'Черновики' },
+  { value: 'applied', label: 'Откликнулся' },
+  { value: 'interview', label: 'Интервью' },
+  { value: 'offer', label: 'Оффер' },
+  { value: 'archived', label: 'Архив' },
+];
+
 type DashboardStatsResponse = {
   generated_at: string;
   qdrant: {
@@ -327,6 +397,11 @@ export default function DashboardPage() {
   const [profileConfirmed, setProfileConfirmed] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [applicationsMessage, setApplicationsMessage] = useState('');
+  const [applicationFilter, setApplicationFilter] = useState<ApplicationFilter>('active');
+  const [applicationNotesDraft, setApplicationNotesDraft] = useState<Record<number, string>>({});
+  const [applicationBusyIds, setApplicationBusyIds] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const storedToken = window.localStorage.getItem('access_token');
@@ -347,6 +422,7 @@ export default function DashboardPage() {
     void loadSelectedVacancies();
     void loadDislikedVacancies();
     void loadUserPrefs();
+    void loadApplications();
   }, [token]);
 
   useEffect(() => {
@@ -500,6 +576,11 @@ export default function DashboardPage() {
     setProfileDraft(null);
     setProfileConfirmed(false);
     setProfileMessage('');
+    setApplications([]);
+    setApplicationsMessage('');
+    setApplicationNotesDraft({});
+    setApplicationBusyIds({});
+    setApplicationFilter('active');
     if (nextMessage) {
       setMessage(nextMessage);
     }
@@ -727,6 +808,147 @@ export default function DashboardPage() {
     } catch {
       setDislikedVacancies([]);
     }
+  }
+
+  async function loadApplications() {
+    try {
+      const data = await request<Application[]>('/api/applications');
+      setApplications(data);
+      setApplicationNotesDraft((current) => {
+        const next: Record<number, string> = { ...current };
+        for (const row of data) {
+          if (next[row.id] === undefined) {
+            next[row.id] = row.notes ?? '';
+          }
+        }
+        return next;
+      });
+    } catch (error) {
+      setApplications([]);
+      setApplicationsMessage(
+        error instanceof Error ? `Не удалось загрузить отклики: ${error.message}` : 'Не удалось загрузить отклики.'
+      );
+    }
+  }
+
+  function setApplicationBusy(id: number, busyFlag: boolean) {
+    setApplicationBusyIds((current) => {
+      const next = { ...current };
+      if (busyFlag) {
+        next[id] = true;
+      } else {
+        delete next[id];
+      }
+      return next;
+    });
+  }
+
+  async function changeApplicationStatus(applicationId: number, nextStatus: ApplicationStatus) {
+    const existing = applications.find((row) => row.id === applicationId);
+    if (!existing || existing.status === nextStatus) {
+      return;
+    }
+    setApplicationBusy(applicationId, true);
+    try {
+      const updated = await request<Application>(`/api/applications/${applicationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      setApplications((current) => current.map((row) => (row.id === applicationId ? updated : row)));
+      setApplicationsMessage('');
+    } catch (error) {
+      setApplicationsMessage(
+        error instanceof Error ? `Не удалось обновить статус: ${error.message}` : 'Не удалось обновить статус.'
+      );
+    } finally {
+      setApplicationBusy(applicationId, false);
+    }
+  }
+
+  async function saveApplicationNotes(applicationId: number) {
+    const draft = applicationNotesDraft[applicationId] ?? '';
+    const existing = applications.find((row) => row.id === applicationId);
+    if (!existing) {
+      return;
+    }
+    const trimmed = draft.trim();
+    const currentValue = existing.notes ?? '';
+    if (trimmed === currentValue.trim()) {
+      return;
+    }
+    setApplicationBusy(applicationId, true);
+    try {
+      const payload: Record<string, unknown> = trimmed ? { notes: trimmed } : { clear_notes: true };
+      const updated = await request<Application>(`/api/applications/${applicationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      setApplications((current) => current.map((row) => (row.id === applicationId ? updated : row)));
+      setApplicationNotesDraft((current) => ({ ...current, [applicationId]: updated.notes ?? '' }));
+      setApplicationsMessage('');
+    } catch (error) {
+      setApplicationsMessage(
+        error instanceof Error ? `Не удалось сохранить заметку: ${error.message}` : 'Не удалось сохранить заметку.'
+      );
+    } finally {
+      setApplicationBusy(applicationId, false);
+    }
+  }
+
+  async function deleteApplicationRow(applicationId: number) {
+    if (!window.confirm('Удалить отклик? Действие нельзя отменить.')) {
+      return;
+    }
+    setApplicationBusy(applicationId, true);
+    try {
+      await request<void>(`/api/applications/${applicationId}`, { method: 'DELETE' });
+      setApplications((current) => current.filter((row) => row.id !== applicationId));
+      setApplicationNotesDraft((current) => {
+        const next = { ...current };
+        delete next[applicationId];
+        return next;
+      });
+    } catch (error) {
+      setApplicationsMessage(
+        error instanceof Error ? `Не удалось удалить отклик: ${error.message}` : 'Не удалось удалить отклик.'
+      );
+    } finally {
+      setApplicationBusy(applicationId, false);
+    }
+  }
+
+  function filteredApplications(): Application[] {
+    const sorted = [...applications].sort((a, b) => {
+      const aIdx = APPLICATION_STATUS_ORDER.indexOf(a.status);
+      const bIdx = APPLICATION_STATUS_ORDER.indexOf(b.status);
+      if (aIdx !== bIdx) {
+        return aIdx - bIdx;
+      }
+      return new Date(b.last_status_change_at).getTime() - new Date(a.last_status_change_at).getTime();
+    });
+    if (applicationFilter === 'all') {
+      return sorted;
+    }
+    if (applicationFilter === 'active') {
+      return sorted.filter((row) => APPLICATION_ACTIVE_STATUSES.includes(row.status));
+    }
+    if (applicationFilter === 'archived') {
+      return sorted.filter((row) => APPLICATION_ARCHIVED_STATUSES.includes(row.status));
+    }
+    return sorted.filter((row) => row.status === applicationFilter);
+  }
+
+  function formatApplicationDate(value: string | null): string {
+    if (!value) {
+      return '';
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return '';
+    }
+    return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
   async function loadDashboardStats(resumeId: number | null) {
@@ -1727,6 +1949,111 @@ export default function DashboardPage() {
                       </div>
                     </article>
                   ))}
+                </div>
+              </section>
+
+              <section className="panel applications-panel">
+                <div className="applications-header">
+                  <h2>Мои отклики</h2>
+                  <p className="panel-note">
+                    Статусный трекер откликов: черновики, отклик отправлен, интервью, оффер. Отражает только ваши записи.
+                  </p>
+                </div>
+                <div className="applications-filters" role="tablist">
+                  {APPLICATION_FILTER_TABS.map((tab) => (
+                    <button
+                      key={tab.value}
+                      role="tab"
+                      className={`filter-chip${applicationFilter === tab.value ? ' active' : ''}`}
+                      onClick={() => setApplicationFilter(tab.value)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+                {applicationsMessage ? <p className="panel-note">{applicationsMessage}</p> : null}
+                <div className="applications-list">
+                  {applications.length === 0 ? (
+                    <p className="empty-state">
+                      Пока нет откликов. Нажмите «Откликнуться» в подборке или создайте отклик вручную.
+                    </p>
+                  ) : null}
+                  {applications.length > 0 && filteredApplications().length === 0 ? (
+                    <p className="empty-state">В этой категории пока пусто.</p>
+                  ) : null}
+                  {filteredApplications().map((row) => {
+                    const isBusy = Boolean(applicationBusyIds[row.id]);
+                    const draft = applicationNotesDraft[row.id] ?? row.notes ?? '';
+                    const notesChanged = draft.trim() !== (row.notes ?? '').trim();
+                    return (
+                      <article className="application-card" key={`application-${row.id}`}>
+                        <header className="application-card-head">
+                          <div>
+                            <h3>{row.vacancy_title || 'Без названия'}</h3>
+                            <p className="meta">
+                              {row.vacancy_company || 'Компания не указана'}
+                              {row.applied_at ? ` • отклик от ${formatApplicationDate(row.applied_at)}` : ''}
+                            </p>
+                          </div>
+                          <span className={`status-pill status-${row.status}`}>
+                            {APPLICATION_STATUS_LABELS[row.status]}
+                          </span>
+                        </header>
+                        <div className="application-card-controls">
+                          <label className="field">
+                            <span>Статус</span>
+                            <select
+                              value={row.status}
+                              disabled={isBusy}
+                              onChange={(event) =>
+                                void changeApplicationStatus(row.id, event.target.value as ApplicationStatus)
+                              }
+                            >
+                              {APPLICATION_STATUS_ORDER.map((status) => (
+                                <option key={status} value={status}>
+                                  {APPLICATION_STATUS_LABELS[status]}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          {row.source_url ? (
+                            <a href={row.source_url} target="_blank" rel="noreferrer" className="application-link">
+                              Открыть вакансию
+                            </a>
+                          ) : null}
+                        </div>
+                        <label className="field application-notes">
+                          <span>Заметки</span>
+                          <textarea
+                            rows={2}
+                            maxLength={2000}
+                            value={draft}
+                            disabled={isBusy}
+                            onChange={(event) =>
+                              setApplicationNotesDraft((current) => ({ ...current, [row.id]: event.target.value }))
+                            }
+                            placeholder="Напомните себе контекст: когда писать рекрутеру, что ответить на тест, к какому дню готовиться."
+                          />
+                        </label>
+                        <div className="application-card-footer">
+                          <button
+                            className="secondary"
+                            disabled={isBusy || !notesChanged}
+                            onClick={() => void saveApplicationNotes(row.id)}
+                          >
+                            Сохранить заметку
+                          </button>
+                          <button
+                            className="danger"
+                            disabled={isBusy}
+                            onClick={() => void deleteApplicationRow(row.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               </section>
             </div>

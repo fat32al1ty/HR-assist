@@ -1,3 +1,4 @@
+from app.models.application import Application
 from app.models.auth_otp_code import AuthOtpCode
 from app.models.recommendation_job import RecommendationJob
 from app.models.resume import Resume
@@ -9,6 +10,7 @@ from app.models.vacancy import Vacancy
 from app.models.vacancy_profile import VacancyProfile
 
 __all__ = [
+    "Application",
     "AuthOtpCode",
     "RecommendationJob",
     "Resume",
