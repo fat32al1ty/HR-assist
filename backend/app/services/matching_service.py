@@ -76,8 +76,8 @@ BLOCKED_JOB_HOSTS = (
     "djinni.co",
     "workingnomads.com",
 )
-MIN_RELEVANCE_SCORE = 0.55
-FALLBACK_MIN_RELEVANCE_SCORE = 0.48
+MIN_RELEVANCE_SCORE = 0.60
+FALLBACK_MIN_RELEVANCE_SCORE = 0.50
 RELAXED_MIN_RELEVANCE_SCORE = 0.40
 SEMANTIC_GAP_SIMILARITY_THRESHOLD = 0.84
 SEMANTIC_GAP_MAX_REQUIREMENTS_PER_VACANCY = 8
@@ -707,23 +707,31 @@ def _looks_hard_non_it_role(title: str, payload: dict | None, raw_text: str | No
 
 
 def _build_resume_skill_set(analysis: dict | None) -> set[str]:
+    """Hard-skill token bag used for requirement-matching and overlap floor.
+
+    Deliberately narrow — pulls from *curated* fields only:
+    - hard_skills / skills / tools / matching_keywords (LLM-extracted skill phrases)
+    - target_role / specialization (short structured role strings)
+    - experience.role (short job title per position)
+
+    Soft_skills, strengths, summary, and experience.highlights are free-form prose
+    riddled with generic Russian connectors (опыт, знание, планирование, …) that
+    bridged unrelated requirements via bag-of-words intersection and caused
+    cross-domain false matches. Those fields still feed ``_build_resume_skill_phrases``,
+    where the embedding-similarity path can use them without the bag-of-words trap.
+    """
     if not isinstance(analysis, dict):
         return set()
     result: set[str] = set()
-    for key in ("hard_skills", "skills", "tools", "matching_keywords", "soft_skills", "strengths"):
+    for key in ("hard_skills", "skills", "tools", "matching_keywords"):
         result.update(_as_string_set(analysis.get(key)))
-    for key in ("target_role", "specialization", "summary"):
+    for key in ("target_role", "specialization"):
         result.update(_tokenize_text(analysis.get(key)))
     experience = analysis.get("experience")
     if isinstance(experience, list):
         for item in experience:
-            if not isinstance(item, dict):
-                continue
-            result.update(_tokenize_text(item.get("role")))
-            highlights = item.get("highlights")
-            if isinstance(highlights, list):
-                for highlight in highlights:
-                    result.update(_tokenize_text(highlight))
+            if isinstance(item, dict):
+                result.update(_tokenize_text(item.get("role")))
     return result
 
 
@@ -848,16 +856,6 @@ def _stem_token(token: str) -> str:
     return text
 
 
-def _tokens_semantically_overlap(left: set[str], right: set[str]) -> bool:
-    if not left or not right:
-        return False
-    if left.intersection(right):
-        return True
-    left_stems = {_stem_token(item) for item in left}
-    right_stems = {_stem_token(item) for item in right}
-    return bool(left_stems.intersection(right_stems))
-
-
 def _cosine_similarity(left: list[float], right: list[float]) -> float:
     if not left or not right or len(left) != len(right):
         return 0.0
@@ -940,7 +938,11 @@ def _requirement_matches_resume(
             resume_phrase_aliases
         ):
             return True
-    if _tokens_semantically_overlap(req_tokens, resume_skill_tokens):
+
+    # Raw token intersection against the hard-skill token bag. Safe because
+    # ``_build_resume_skill_set`` now excludes soft_skills/strengths — so generic
+    # Russian words like "опыт"/"знание" can no longer bridge unrelated skills.
+    if req_tokens.intersection(resume_skill_tokens):
         return True
 
     req_vector = _embedding_for_phrase(

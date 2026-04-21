@@ -391,7 +391,7 @@ class MatchingHardFilterIntegrationTest(unittest.TestCase):
     def test_title_boost_lifts_score(self) -> None:
         v_a, p_a = self._vacancy(301, "Senior Backend Engineer", "Remote", "remote")
         v_b, p_b = self._vacancy(302, "Python Developer", "Remote", "remote")
-        vector_hits = [(301, 0.60, p_a), (302, 0.60, p_b)]
+        vector_hits = [(301, 0.68, p_a), (302, 0.68, p_b)]
         vacancies_by_id = {301: v_a, 302: v_b}
         user_no_titles = SimpleNamespace(
             preferred_work_format="any",

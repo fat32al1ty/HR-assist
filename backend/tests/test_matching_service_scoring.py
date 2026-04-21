@@ -30,7 +30,7 @@ class MatchingServiceScoringTests(unittest.TestCase):
         self.assertNotIn("observability,", tokens)
 
     def test_hybrid_score_keeps_strong_vector_signal(self) -> None:
-        score = _hybrid_score(0.62, 0.08)
+        score = _hybrid_score(0.68, 0.08)
         self.assertGreaterEqual(score, FALLBACK_MIN_RELEVANCE_SCORE)
         self.assertGreaterEqual(score, MIN_RELEVANCE_SCORE)
 
