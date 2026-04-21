@@ -1411,8 +1411,10 @@ def match_vacancies_for_resume(
     if query_vector is None:
         return []
 
-    recompute_user_preference_profile(db, user_id=user_id)
-    positive_pref, negative_pref = vector_store.get_user_preference_vectors(user_id=user_id)
+    recompute_user_preference_profile(db, user_id=user_id, resume_id=resume_id)
+    positive_pref, negative_pref = vector_store.get_user_preference_vectors(
+        user_id=user_id, resume_id=resume_id
+    )
     query_vector = _blend_resume_with_preferences(query_vector, positive_pref, negative_pref)
 
     resume_skills = _build_resume_skill_set(resume.analysis)
@@ -1426,8 +1428,8 @@ def match_vacancies_for_resume(
     embedding_cache: dict[str, list[float]] = {}
     embedding_budget = {"calls_left": SEMANTIC_GAP_MAX_EMBED_CALLS}
     leadership_preferred = _resume_prefers_leadership(resume_roles)
-    disliked_vacancy_ids = list_disliked_vacancy_ids(db, user_id=user_id)
-    liked_vacancy_ids = list_liked_vacancy_ids(db, user_id=user_id)
+    disliked_vacancy_ids = list_disliked_vacancy_ids(db, user_id=user_id, resume_id=resume_id)
+    liked_vacancy_ids = list_liked_vacancy_ids(db, user_id=user_id, resume_id=resume_id)
     excluded_set = set(disliked_vacancy_ids).union(liked_vacancy_ids)
     search_limit = max(limit * 8, 120)
     found = vector_store.search_vacancy_profiles(query_vector=query_vector, limit=search_limit)

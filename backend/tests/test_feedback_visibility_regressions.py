@@ -5,6 +5,7 @@ from sqlalchemy import delete
 
 from app.api.routes.vacancies import _filter_matches_by_feedback
 from app.db.session import SessionLocal
+from app.models.resume import Resume
 from app.models.user import User
 from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
@@ -24,6 +25,18 @@ class FeedbackVisibilityRegressionTest(unittest.TestCase):
         self.db.add(self.user)
         self.db.commit()
         self.db.refresh(self.user)
+
+        self.resume = Resume(
+            user_id=self.user.id,
+            original_filename="resume.pdf",
+            content_type="application/pdf",
+            storage_path=f"/tmp/{suffix}.pdf",
+            status="uploaded",
+            is_active=True,
+        )
+        self.db.add(self.resume)
+        self.db.commit()
+        self.db.refresh(self.resume)
 
         self.filtered_vacancy = Vacancy(
             source="hh_api",
@@ -56,6 +69,7 @@ class FeedbackVisibilityRegressionTest(unittest.TestCase):
         self.db.add(
             UserVacancyFeedback(
                 user_id=self.user.id,
+                resume_id=self.resume.id,
                 vacancy_id=self.filtered_vacancy.id,
                 liked=True,
                 disliked=False,
@@ -64,6 +78,7 @@ class FeedbackVisibilityRegressionTest(unittest.TestCase):
         self.db.add(
             UserVacancyFeedback(
                 user_id=self.user.id,
+                resume_id=self.resume.id,
                 vacancy_id=self.failed_vacancy.id,
                 liked=False,
                 disliked=True,
@@ -76,13 +91,18 @@ class FeedbackVisibilityRegressionTest(unittest.TestCase):
         self.db.execute(
             delete(Vacancy).where(Vacancy.id.in_([self.filtered_vacancy.id, self.failed_vacancy.id]))
         )
+        self.db.execute(delete(Resume).where(Resume.user_id == self.user.id))
         self.db.execute(delete(User).where(User.id == self.user.id))
         self.db.commit()
         self.db.close()
 
     def test_feedback_lists_include_non_indexed_vacancies(self) -> None:
-        liked = list_liked_vacancies(self.db, user_id=self.user.id, limit=100)
-        disliked = list_disliked_vacancies(self.db, user_id=self.user.id, limit=100)
+        liked = list_liked_vacancies(
+            self.db, user_id=self.user.id, resume_id=self.resume.id, limit=100
+        )
+        disliked = list_disliked_vacancies(
+            self.db, user_id=self.user.id, resume_id=self.resume.id, limit=100
+        )
         self.assertTrue(any(item.id == self.filtered_vacancy.id for item in liked))
         self.assertTrue(any(item.id == self.failed_vacancy.id for item in disliked))
 

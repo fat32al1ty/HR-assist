@@ -11,7 +11,7 @@ from app.models.user import User
 from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
 from app.models.vacancy_profile import VacancyProfile
-from app.repositories.resumes import get_resume_for_user
+from app.repositories.resumes import get_active_resume_for_user, get_resume_for_user
 from app.schemas.dashboard import DashboardStatsRead, QdrantStatsRead, ResumeStatsRead
 from app.services.vector_store import get_vector_store
 
@@ -40,7 +40,18 @@ def dashboard_stats(
     if indexed_vacancies > 0:
         coverage = round((profiled_vacancies / indexed_vacancies) * 100.0, 2)
 
-    positive_pref, negative_pref = vector_store.get_user_preference_vectors(user_id=current_user.id)
+    preference_resume_id = resume_id
+    if preference_resume_id is None:
+        active_resume = get_active_resume_for_user(db, user_id=current_user.id)
+        if active_resume is not None:
+            preference_resume_id = int(active_resume.id)
+
+    if preference_resume_id is not None:
+        positive_pref, negative_pref = vector_store.get_user_preference_vectors(
+            user_id=current_user.id, resume_id=preference_resume_id
+        )
+    else:
+        positive_pref, negative_pref = None, None
     qdrant_stats = QdrantStatsRead(
         status=str(qdrant_health.get("status") or "unknown"),
         collections=list(qdrant_health.get("collections", [])),
@@ -74,6 +85,7 @@ def dashboard_stats(
         db.scalar(
             select(func.count(UserVacancyFeedback.id)).where(
                 UserVacancyFeedback.user_id == current_user.id,
+                UserVacancyFeedback.resume_id == resume_id,
                 UserVacancyFeedback.liked.is_(True),
             )
         )
@@ -83,6 +95,7 @@ def dashboard_stats(
         db.scalar(
             select(func.count(UserVacancyFeedback.id)).where(
                 UserVacancyFeedback.user_id == current_user.id,
+                UserVacancyFeedback.resume_id == resume_id,
                 UserVacancyFeedback.disliked.is_(True),
             )
         )

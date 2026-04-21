@@ -1,3 +1,4 @@
+import uuid
 from functools import lru_cache
 from typing import Any
 
@@ -7,6 +8,10 @@ from qdrant_client.http import models
 from app.core.config import settings
 
 DEFAULT_COLLECTIONS = ("resume_profiles", "vacancy_profiles", "user_preference_profiles")
+
+# Namespace UUID for deterministic per-(user, resume, kind) preference point IDs.
+# Kept stable so the same tuple always resolves to the same Qdrant point.
+PREFERENCE_POINT_NAMESPACE = uuid.UUID("6f3d4a4b-1c8e-4b0e-9d2b-5f3c1a7b8c2d")
 
 
 class VectorStoreUnavailable(RuntimeError):
@@ -199,24 +204,30 @@ class QdrantVectorStore:
                 vectors.append([float(value) for value in vector])
         return vectors
 
-    def _user_preference_point_id(self, *, user_id: int, kind: str) -> int:
+    def _user_preference_point_id(self, *, user_id: int, resume_id: int, kind: str) -> str:
         normalized = kind.strip().lower()
         if normalized not in {"positive", "negative"}:
             raise ValueError(f"Unsupported preference kind: {kind}")
-        # Qdrant point IDs are int or UUID. Keep deterministic compact integer IDs per user.
-        base = int(user_id) * 10
-        return base + (1 if normalized == "positive" else 2)
+        # UUID5 keeps the point ID deterministic per (user, resume, kind) without
+        # leaking the old int-arithmetic namespace; Qdrant accepts UUID strings.
+        return str(
+            uuid.uuid5(
+                PREFERENCE_POINT_NAMESPACE,
+                f"{int(user_id)}:{int(resume_id)}:{normalized}",
+            )
+        )
 
     def upsert_user_preference_vector(
         self,
         *,
         user_id: int,
+        resume_id: int,
         kind: str,
         vector: list[float],
         payload: dict[str, Any] | None = None,
     ) -> tuple[str, str]:
         collection_name = self.ensure_collection("user_preference_profiles")
-        point_id = self._user_preference_point_id(user_id=user_id, kind=kind)
+        point_id = self._user_preference_point_id(user_id=user_id, resume_id=resume_id, kind=kind)
         self.client.upsert(
             collection_name=collection_name,
             points=[
@@ -226,6 +237,7 @@ class QdrantVectorStore:
                     payload={
                         "type": "user_preference_profile",
                         "user_id": user_id,
+                        "resume_id": resume_id,
                         "kind": kind,
                         **(payload or {}),
                     },
@@ -234,25 +246,29 @@ class QdrantVectorStore:
         )
         return collection_name, point_id
 
-    def delete_user_preference_vector(self, *, user_id: int, kind: str) -> None:
+    def delete_user_preference_vector(self, *, user_id: int, resume_id: int, kind: str) -> None:
         collection_name = self.collection_name("user_preference_profiles")
         if not self.client.collection_exists(collection_name):
             return
-        point_id = self._user_preference_point_id(user_id=user_id, kind=kind)
+        point_id = self._user_preference_point_id(user_id=user_id, resume_id=resume_id, kind=kind)
         self.client.delete(
             collection_name=collection_name,
             points_selector=models.PointIdsList(points=[point_id]),
         )
 
     def get_user_preference_vectors(
-        self, *, user_id: int
+        self, *, user_id: int, resume_id: int
     ) -> tuple[list[float] | None, list[float] | None]:
         collection_name = self.collection_name("user_preference_profiles")
         if not self.client.collection_exists(collection_name):
             return None, None
 
-        positive_id = self._user_preference_point_id(user_id=user_id, kind="positive")
-        negative_id = self._user_preference_point_id(user_id=user_id, kind="negative")
+        positive_id = self._user_preference_point_id(
+            user_id=user_id, resume_id=resume_id, kind="positive"
+        )
+        negative_id = self._user_preference_point_id(
+            user_id=user_id, resume_id=resume_id, kind="negative"
+        )
         points = self.client.retrieve(
             collection_name=collection_name,
             ids=[positive_id, negative_id],

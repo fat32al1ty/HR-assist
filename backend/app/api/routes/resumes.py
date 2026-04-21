@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
 from app.repositories.resumes import (
+    ResumeLimitExceeded,
     delete_resume,
     get_resume_for_user,
     list_resumes_for_user,
@@ -66,7 +67,16 @@ async def upload_resume(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File is too large"
         )
 
-    return process_resume_upload(db, user_id=current_user.id, upload=file, content=content)
+    try:
+        return process_resume_upload(db, user_id=current_user.id, upload=file, content=content)
+    except ResumeLimitExceeded as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "resume_limit_exceeded",
+                "limit": error.limit,
+            },
+        ) from error
 
 
 @router.get("/{resume_id}", response_model=ResumeRead)

@@ -103,20 +103,22 @@ def _magnitude(vector: list[float] | None) -> float:
     return math.sqrt(sum(value * value for value in vector))
 
 
-def recompute_user_preference_profile(db: Session, *, user_id: int) -> None:
+def recompute_user_preference_profile(db: Session, *, user_id: int, resume_id: int) -> None:
     store = get_vector_store()
     decay_enabled = bool(settings.preference_decay_enabled)
     half_life_days = float(settings.preference_decay_half_life_days)
     now = datetime.now(UTC)
 
     if decay_enabled:
-        liked_rows = list_liked_vacancy_feedback_ages(db, user_id=user_id)
-        disliked_rows = list_disliked_vacancy_feedback_ages(db, user_id=user_id)
+        liked_rows = list_liked_vacancy_feedback_ages(db, user_id=user_id, resume_id=resume_id)
+        disliked_rows = list_disliked_vacancy_feedback_ages(
+            db, user_id=user_id, resume_id=resume_id
+        )
         liked_ids = [vid for vid, _ in liked_rows]
         disliked_ids = [vid for vid, _ in disliked_rows]
     else:
-        liked_ids = list(list_liked_vacancy_ids(db, user_id=user_id))
-        disliked_ids = list(list_disliked_vacancy_ids(db, user_id=user_id))
+        liked_ids = list(list_liked_vacancy_ids(db, user_id=user_id, resume_id=resume_id))
+        disliked_ids = list(list_disliked_vacancy_ids(db, user_id=user_id, resume_id=resume_id))
         liked_rows = []
         disliked_rows = []
 
@@ -135,11 +137,12 @@ def recompute_user_preference_profile(db: Session, *, user_id: int) -> None:
         unweighted_positive = _centroid(liked_vectors)
         unweighted_negative = _centroid(disliked_vectors)
         logger.info(
-            "preference_decay user_id=%s liked=%d disliked=%d "
+            "preference_decay user_id=%s resume_id=%s liked=%d disliked=%d "
             "pos_mag_before=%.4f pos_mag_after=%.4f "
             "neg_mag_before=%.4f neg_mag_after=%.4f "
             "stale_liked=%d stale_disliked=%d half_life_days=%.1f",
             user_id,
+            resume_id,
             len(liked_ids),
             len(disliked_ids),
             _magnitude(unweighted_positive),
@@ -157,10 +160,11 @@ def recompute_user_preference_profile(db: Session, *, user_id: int) -> None:
     updated_at = now.isoformat()
 
     if positive is None:
-        store.delete_user_preference_vector(user_id=user_id, kind="positive")
+        store.delete_user_preference_vector(user_id=user_id, resume_id=resume_id, kind="positive")
     else:
         store.upsert_user_preference_vector(
             user_id=user_id,
+            resume_id=resume_id,
             kind="positive",
             vector=positive,
             payload={
@@ -171,10 +175,11 @@ def recompute_user_preference_profile(db: Session, *, user_id: int) -> None:
         )
 
     if negative is None:
-        store.delete_user_preference_vector(user_id=user_id, kind="negative")
+        store.delete_user_preference_vector(user_id=user_id, resume_id=resume_id, kind="negative")
     else:
         store.upsert_user_preference_vector(
             user_id=user_id,
+            resume_id=resume_id,
             kind="negative",
             vector=negative,
             payload={

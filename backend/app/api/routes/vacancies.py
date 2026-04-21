@@ -5,7 +5,7 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
-from app.repositories.resumes import get_resume_for_user
+from app.repositories.resumes import get_active_resume_for_user, get_resume_for_user
 from app.repositories.user_vacancy_feedback import (
     list_disliked_vacancies,
     list_disliked_vacancy_ids,
@@ -46,6 +46,22 @@ from app.services.vacancy_pipeline import discover_and_index_vacancies
 from app.services.vacancy_recommendation import recommend_vacancies_for_resume
 
 router = APIRouter()
+
+
+def _require_active_resume_id(db: Session, user: User) -> int:
+    resume = get_active_resume_for_user(db, user_id=user.id)
+    if resume is None:
+        raise HTTPException(status_code=409, detail="no_active_resume")
+    return int(resume.id)
+
+
+def _excluded_ids_for_active_resume(db: Session, user: User) -> set[int]:
+    resume = get_active_resume_for_user(db, user_id=user.id)
+    if resume is None:
+        return set()
+    return list_disliked_vacancy_ids(db, user_id=user.id, resume_id=int(resume.id)).union(
+        list_liked_vacancy_ids(db, user_id=user.id, resume_id=int(resume.id))
+    )
 
 
 def _filter_matches_by_feedback(*, matches: list[dict], excluded_ids: set[int]) -> list[dict]:
@@ -207,9 +223,7 @@ def recommendation_status(
     snapshot = get_job_snapshot_for_user(job_id=job_id, user_id=current_user.id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Recommendation job not found")
-    excluded_ids = list_disliked_vacancy_ids(db, user_id=current_user.id).union(
-        list_liked_vacancy_ids(db, user_id=current_user.id)
-    )
+    excluded_ids = _excluded_ids_for_active_resume(db, current_user)
     matches = _filter_matches_by_feedback(
         matches=snapshot.get("matches") or [], excluded_ids=excluded_ids
     )
@@ -237,9 +251,7 @@ def latest_recommendation_status(
     snapshot = get_latest_job_snapshot_for_user(user_id=current_user.id, resume_id=resume_id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Recommendation job not found")
-    excluded_ids = list_disliked_vacancy_ids(db, user_id=current_user.id).union(
-        list_liked_vacancy_ids(db, user_id=current_user.id)
-    )
+    excluded_ids = _excluded_ids_for_active_resume(db, current_user)
     matches = _filter_matches_by_feedback(
         matches=snapshot.get("matches") or [], excluded_ids=excluded_ids
     )
@@ -273,9 +285,7 @@ def cancel_recommendation(
     snapshot = cancel_job_for_user(job_id=job_id, user_id=current_user.id)
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Recommendation job not found")
-    excluded_ids = list_disliked_vacancy_ids(db, user_id=current_user.id).union(
-        list_liked_vacancy_ids(db, user_id=current_user.id)
-    )
+    excluded_ids = _excluded_ids_for_active_resume(db, current_user)
     matches = _filter_matches_by_feedback(
         matches=snapshot.get("matches") or [], excluded_ids=excluded_ids
     )
@@ -300,13 +310,15 @@ def dislike_vacancy(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> VacancyFeedbackResponse:
+    resume_id = _require_active_resume_id(db, current_user)
     feedback = set_vacancy_disliked(
         db,
         user_id=current_user.id,
+        resume_id=resume_id,
         vacancy_id=payload.vacancy_id,
         disliked=True,
     )
-    recompute_user_preference_profile(db, user_id=current_user.id)
+    recompute_user_preference_profile(db, user_id=current_user.id, resume_id=resume_id)
     return VacancyFeedbackResponse(
         vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked
     )
@@ -318,13 +330,15 @@ def like_vacancy(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> VacancyFeedbackResponse:
+    resume_id = _require_active_resume_id(db, current_user)
     feedback = set_vacancy_liked(
         db,
         user_id=current_user.id,
+        resume_id=resume_id,
         vacancy_id=payload.vacancy_id,
         liked=True,
     )
-    recompute_user_preference_profile(db, user_id=current_user.id)
+    recompute_user_preference_profile(db, user_id=current_user.id, resume_id=resume_id)
     return VacancyFeedbackResponse(
         vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked
     )
@@ -336,13 +350,15 @@ def unlike_vacancy(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> VacancyFeedbackResponse:
+    resume_id = _require_active_resume_id(db, current_user)
     feedback = set_vacancy_liked(
         db,
         user_id=current_user.id,
+        resume_id=resume_id,
         vacancy_id=payload.vacancy_id,
         liked=False,
     )
-    recompute_user_preference_profile(db, user_id=current_user.id)
+    recompute_user_preference_profile(db, user_id=current_user.id, resume_id=resume_id)
     return VacancyFeedbackResponse(
         vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked
     )
@@ -354,7 +370,8 @@ def selected_vacancies(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[VacancyMatchRead]:
-    selected = list_liked_vacancies(db, user_id=current_user.id, limit=limit)
+    resume_id = _require_active_resume_id(db, current_user)
+    selected = list_liked_vacancies(db, user_id=current_user.id, resume_id=resume_id, limit=limit)
     return [
         VacancyMatchRead(
             vacancy_id=item.id,
@@ -375,19 +392,22 @@ def undislike_vacancy(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> VacancyFeedbackResponse:
+    resume_id = _require_active_resume_id(db, current_user)
     set_vacancy_disliked(
         db,
         user_id=current_user.id,
+        resume_id=resume_id,
         vacancy_id=payload.vacancy_id,
         disliked=False,
     )
     feedback = set_vacancy_liked(
         db,
         user_id=current_user.id,
+        resume_id=resume_id,
         vacancy_id=payload.vacancy_id,
         liked=True,
     )
-    recompute_user_preference_profile(db, user_id=current_user.id)
+    recompute_user_preference_profile(db, user_id=current_user.id, resume_id=resume_id)
     return VacancyFeedbackResponse(
         vacancy_id=feedback.vacancy_id, disliked=feedback.disliked, liked=feedback.liked
     )
@@ -399,7 +419,10 @@ def disliked_vacancies(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[VacancyMatchRead]:
-    disliked = list_disliked_vacancies(db, user_id=current_user.id, limit=limit)
+    resume_id = _require_active_resume_id(db, current_user)
+    disliked = list_disliked_vacancies(
+        db, user_id=current_user.id, resume_id=resume_id, limit=limit
+    )
     return [
         VacancyMatchRead(
             vacancy_id=item.id,

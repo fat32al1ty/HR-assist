@@ -36,6 +36,7 @@ class FeedbackFlowIntegrationTest(unittest.TestCase):
             extracted_text="feedback flow",
             analysis={"target_role": "backend engineer"},
             error_message=None,
+            is_active=True,
         )
         self.db.add(self.resume)
 

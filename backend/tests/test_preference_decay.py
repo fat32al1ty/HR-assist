@@ -107,7 +107,7 @@ class RecomputePipelineDecayTests(unittest.TestCase):
         ):
             settings_mock.preference_decay_enabled = decay_enabled
             settings_mock.preference_decay_half_life_days = 30.0
-            recompute_user_preference_profile(db, user_id=7)
+            recompute_user_preference_profile(db, user_id=7, resume_id=11)
 
         return store
 
@@ -136,8 +136,12 @@ class RecomputePipelineDecayTests(unittest.TestCase):
 
     def test_empty_feedback_deletes_preference(self) -> None:
         store = self._run(decay_enabled=True, feedback_ages=[])
-        store.delete_user_preference_vector.assert_any_call(user_id=7, kind="positive")
-        store.delete_user_preference_vector.assert_any_call(user_id=7, kind="negative")
+        store.delete_user_preference_vector.assert_any_call(
+            user_id=7, resume_id=11, kind="positive"
+        )
+        store.delete_user_preference_vector.assert_any_call(
+            user_id=7, resume_id=11, kind="negative"
+        )
         store.upsert_user_preference_vector.assert_not_called()
 
 
