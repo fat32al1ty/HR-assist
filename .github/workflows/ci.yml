@@ -107,7 +107,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt pytest
 
       - name: Run migrations
         run: alembic upgrade head
