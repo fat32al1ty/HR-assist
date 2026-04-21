@@ -104,6 +104,14 @@ def delete_resume(db: Session, resume: Resume) -> None:
             db.commit()
 
 
+def update_resume_label(db: Session, resume: Resume, *, label: str | None) -> Resume:
+    resume.label = label
+    db.add(resume)
+    db.commit()
+    db.refresh(resume)
+    return resume
+
+
 def update_resume_processing_result(
     db: Session,
     resume: Resume,

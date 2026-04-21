@@ -9,13 +9,17 @@ from app.db.session import get_db
 from app.models.user import User
 from app.repositories.resumes import (
     ResumeLimitExceeded,
+    activate_resume,
     delete_resume,
+    get_active_resume_for_user,
     get_resume_for_user,
     list_resumes_for_user,
     merge_resume_analysis,
+    update_resume_label,
 )
 from app.repositories.users import update_preferences
 from app.schemas.resume import (
+    ResumeLabelUpdate,
     ResumeProfileConfirmRequest,
     ResumeProfileConfirmResponse,
     ResumeRead,
@@ -79,6 +83,17 @@ async def upload_resume(
         ) from error
 
 
+@router.get("/active", response_model=ResumeRead)
+def get_active_resume(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ResumeRead:
+    resume = get_active_resume_for_user(db, user_id=current_user.id)
+    if resume is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no_active_resume")
+    return resume
+
+
 @router.get("/{resume_id}", response_model=ResumeRead)
 def get_resume(
     resume_id: int,
@@ -90,6 +105,31 @@ def get_resume(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
 
     return resume
+
+
+@router.patch("/{resume_id}", response_model=ResumeRead)
+def patch_resume(
+    resume_id: int,
+    payload: ResumeLabelUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ResumeRead:
+    resume = get_resume_for_user(db, resume_id=resume_id, user_id=current_user.id)
+    if resume is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+    return update_resume_label(db, resume, label=payload.label)
+
+
+@router.post("/{resume_id}/activate", response_model=ResumeRead)
+def activate_resume_endpoint(
+    resume_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ResumeRead:
+    resume = get_resume_for_user(db, resume_id=resume_id, user_id=current_user.id)
+    if resume is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+    return activate_resume(db, resume=resume)
 
 
 @router.delete("/{resume_id}", status_code=status.HTTP_204_NO_CONTENT)

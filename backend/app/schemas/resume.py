@@ -17,6 +17,7 @@ Seniority = Literal["junior", "middle", "senior", "lead"]
 TARGET_ROLE_MAX = 200
 SPECIALIZATION_MAX = 200
 TOP_SKILLS_MAX = 3
+RESUME_LABEL_MAX = 32
 
 
 class ResumeRead(BaseModel):
@@ -27,10 +28,31 @@ class ResumeRead(BaseModel):
     extracted_text: str | None
     analysis: dict[str, Any] | None
     error_message: str | None
+    is_active: bool
+    label: str | None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ResumeLabelUpdate(BaseModel):
+    """PATCH /resumes/{id} payload for the multi-profile switcher label.
+
+    Empty string clears the label (UI then falls back to the filename).
+    Anything over RESUME_LABEL_MAX chars is rejected so the badge pill stays
+    on a single line at typical viewport widths.
+    """
+
+    label: str | None = Field(default=None, max_length=RESUME_LABEL_MAX)
+
+    @field_validator("label")
+    @classmethod
+    def _strip_or_null(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
 
 
 class ResumeAnalysisUpdate(BaseModel):
