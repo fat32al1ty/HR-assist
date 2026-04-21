@@ -186,6 +186,198 @@ NON_IT_ALLOWLIST_MARKERS = {
     "it ",
     "айти",
 }
+# Substrings that indicate the domain is in the IT / software world.
+# Used by the domain-compatibility gate — if either side has any of these markers,
+# we treat the side as IT-rooted.
+IT_DOMAIN_MARKERS = {
+    "it ",
+    "it-",
+    " it",
+    "айти",
+    "айти-",
+    "software",
+    "saas",
+    "paas",
+    "iaas",
+    "platform",
+    "платформ",
+    "devops",
+    "sre",
+    "site reliability",
+    "observability",
+    "monitoring",
+    "мониторинг",
+    "infrastructure",
+    "инфраструктур",
+    "information security",
+    "информационн",
+    "cybersecurity",
+    "cloud",
+    "облач",
+    "kubernetes",
+    "k8s",
+    "backend",
+    "frontend",
+    "fullstack",
+    "data engineering",
+    "data platform",
+    "data science",
+    "дата-инжинир",
+    "machine learning",
+    "ml ",
+    "mlops",
+    "ai/ml",
+    "ai platform",
+    "llm",
+    "blockchain",
+    "fintech",
+    "финтех",
+    "quality assurance",
+    "test automation",
+    "database administration",
+    "sysadmin",
+    "системный администратор",
+    "web development",
+    "веб-разработ",
+    "веб-разработка",
+    "программирован",
+    "разработка по",
+    "разработка программ",
+    "software development",
+    "software engineering",
+    "internet of things",
+    "iot",
+}
+# Substrings that indicate a clearly non-IT industry.
+# If a vacancy's domain contains any of these AND none of the IT markers above,
+# AND the resume IS IT-rooted, we drop the vacancy as a domain mismatch.
+NON_IT_DOMAIN_MARKERS = {
+    "ремонт",
+    "строитель",
+    "строй",
+    "сметн",
+    "сметчик",
+    "отделк",
+    "монтажн",
+    "автомобил",
+    "автосервис",
+    "автомехан",
+    "автоэлектр",
+    "дизайн интерьер",
+    "интерьер",
+    "медицин",
+    "здравоохран",
+    "фармац",
+    "стоматол",
+    "ветеринар",
+    "юрист",
+    "юридич",
+    "адвокат",
+    "нотариус",
+    "общепит",
+    "ресторан",
+    "бариста",
+    "повар",
+    "кондитер",
+    "пекарь",
+    "кафе",
+    "гостинич",
+    "отель",
+    "туризм",
+    "туристич",
+    "экскурс",
+    "розничн",
+    "продажа",
+    "кассир",
+    "продавец",
+    "торговля",
+    "склад",
+    "грузчик",
+    "логистик",
+    "курьер",
+    "водитель",
+    "такси",
+    "охран",
+    "парикмах",
+    "маникюр",
+    "косметолог",
+    "массаж",
+    "фитнес",
+    "тренер",
+    "няня",
+    "сиделка",
+    "дошкольн",
+    "школьн",
+    "учитель",
+    "воспитатель",
+    "химическ",
+    "биолог",
+    "агро",
+    "ферма",
+    "животновод",
+    "нефтегаз",
+    "нефтян",
+    "газов",
+    "горнодобыв",
+    "металлург",
+    "машиностро",
+    "станкостро",
+    "серийное производство",
+    "производств",
+}
+
+
+def _domain_corpus(domains: list[str] | None) -> str:
+    if not isinstance(domains, list):
+        return ""
+    parts: list[str] = []
+    for item in domains:
+        if isinstance(item, str):
+            text = item.strip().lower()
+            if text:
+                parts.append(text)
+    return " ".join(parts)
+
+
+def _has_domain_compatibility(
+    resume_analysis: dict | None,
+    vacancy_payload: dict | None,
+) -> bool:
+    """True unless we have strong evidence of an IT-vs-non-IT domain mismatch.
+
+    Rules (in order):
+    1. If either side declares no domains, pass (not enough signal).
+    2. If any normalized token intersects (same industry or sub-industry), pass.
+    3. If the vacancy side carries any IT marker, pass — cross-sub-domain IT moves are fine.
+    4. If the resume is IT-rooted AND the vacancy carries a non-IT industry marker, DROP.
+    5. Otherwise pass — ambiguous, let scoring decide.
+    """
+    resume_domains = resume_analysis.get("domains") if isinstance(resume_analysis, dict) else None
+    vacancy_domains = vacancy_payload.get("domains") if isinstance(vacancy_payload, dict) else None
+    res_text = _domain_corpus(resume_domains)
+    vac_text = _domain_corpus(vacancy_domains)
+    if not res_text or not vac_text:
+        return True
+
+    res_tokens = {token for token in _tokenize_text(res_text) if len(token) >= 3}
+    vac_tokens = {token for token in _tokenize_text(vac_text) if len(token) >= 3}
+    if res_tokens and vac_tokens:
+        res_stems = {_stem_token(token) for token in res_tokens}
+        vac_stems = {_stem_token(token) for token in vac_tokens}
+        if res_stems.intersection(vac_stems):
+            return True
+
+    vacancy_is_it = any(marker in vac_text for marker in IT_DOMAIN_MARKERS)
+    if vacancy_is_it:
+        return True
+
+    resume_is_it = any(marker in res_text for marker in IT_DOMAIN_MARKERS)
+    vacancy_is_non_it = any(marker in vac_text for marker in NON_IT_DOMAIN_MARKERS)
+    if resume_is_it and vacancy_is_non_it:
+        return False
+    return True
+
+
 SKILL_ALIAS_GROUPS = (
     {"sre", "site reliability engineering", "site-reliability-engineering"},
     {
@@ -1393,6 +1585,7 @@ def match_vacancies_for_resume(
     drop_work_format = 0
     drop_geo = 0
     drop_no_skill_overlap = 0
+    drop_domain_mismatch = 0
     seniority_penalty_applied = 0
     archived_at_match_time = 0
     title_boosts = 0
@@ -1474,6 +1667,12 @@ def match_vacancies_for_resume(
         if _looks_hard_non_it_role(
             vacancy.title or "", payload if isinstance(payload, dict) else None, vacancy.raw_text
         ):
+            continue
+
+        if not _has_domain_compatibility(
+            resume.analysis, payload if isinstance(payload, dict) else None
+        ):
+            drop_domain_mismatch += 1
             continue
 
         drop_reason = _hard_filter_drop_reason(
@@ -1577,6 +1776,7 @@ def match_vacancies_for_resume(
             metrics["hard_filter_drop_work_format"] = drop_work_format
             metrics["hard_filter_drop_geo"] = drop_geo
             metrics["hard_filter_drop_no_skill_overlap"] = drop_no_skill_overlap
+            metrics["hard_filter_drop_domain_mismatch"] = drop_domain_mismatch
             metrics["seniority_penalty_applied"] = seniority_penalty_applied
             metrics["archived_at_match_time"] = archived_at_match_time
             metrics["title_boost_applied"] = title_boosts
