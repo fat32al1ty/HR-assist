@@ -153,9 +153,7 @@ def login_start(
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(AUTH_LOGIN_LIMIT)
-def login(
-    request: Request, payload: LoginRequest, db: Session = Depends(get_db)
-) -> TokenResponse:
+def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     user = get_user_by_email(db, email=payload.email)
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(

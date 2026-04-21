@@ -141,9 +141,7 @@ class OpenAIUsageTracker:
     def add_responses_usage(self, *, input_tokens: int, output_tokens: int) -> None:
         safe_input = max(0, int(input_tokens))
         safe_output = max(0, int(output_tokens))
-        delta = compute_responses_cost_usd(
-            input_tokens=safe_input, output_tokens=safe_output
-        )
+        delta = compute_responses_cost_usd(input_tokens=safe_input, output_tokens=safe_output)
         self.prompt_tokens += safe_input
         self.completion_tokens += safe_output
         self.api_calls += 1
@@ -191,9 +189,7 @@ class OpenAIUsageTracker:
 
         db = SessionLocal()
         try:
-            new_total = increment_daily_spend(
-                db, user_id=self.user_id, amount_usd=delta_usd
-            )
+            new_total = increment_daily_spend(db, user_id=self.user_id, amount_usd=delta_usd)
         finally:
             db.close()
         if self.daily_budget_enforced and new_total > self.daily_budget_usd:

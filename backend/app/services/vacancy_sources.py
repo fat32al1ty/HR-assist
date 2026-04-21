@@ -45,9 +45,7 @@ class VacancyParseStats:
             self.samples.append({"source": source, "url": url, "reason": reason})
 
 
-_PARSE_STATS: ContextVar[VacancyParseStats | None] = ContextVar(
-    "vacancy_parse_stats", default=None
-)
+_PARSE_STATS: ContextVar[VacancyParseStats | None] = ContextVar("vacancy_parse_stats", default=None)
 
 
 @contextmanager
@@ -66,6 +64,7 @@ def _record_parse_skip(*, source: str, url: str, reason: str) -> None:
     if stats is None:
         return
     stats.record_skip(source=source, url=url, reason=reason)
+
 
 REQUEST_HEADERS = {
     "User-Agent": "HR-Assistant-Bot/1.0 (+https://localhost)",
