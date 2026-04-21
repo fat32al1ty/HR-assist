@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  backend-lint:
+    name: Backend — Lint & Type Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt ruff
+
+      - name: Ruff lint
+        run: ruff check app/
+
+      - name: Ruff format check
+        run: ruff format --check app/
+
+  backend-test:
+    name: Backend — Unit Tests
+    runs-on: ubuntu-latest
+    needs: backend-lint
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: resume_platform_test
+          POSTGRES_USER: resume_user
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U resume_user -d resume_platform_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      qdrant:
+        image: qdrant/qdrant:v1.13.4
+        ports:
+          - 6333:6333
+        options: >-
+          --health-cmd "bash -c '</dev/tcp/127.0.0.1/6333'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://resume_user:testpassword@localhost:5432/resume_platform_test
+      JWT_SECRET_KEY: test-secret-key-for-ci
+      BETA_TESTER_KEYS: ci-beta-key
+      AUTH_EMAIL_DELIVERY_MODE: console
+      AUTH_EMAIL_FROM: no-reply@test.local
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_BASE_URL: https://api.openai.com/v1
+      OPENAI_ANALYSIS_MODEL: gpt-4o-mini
+      OPENAI_MATCHING_MODEL: gpt-4o-mini
+      OPENAI_EMBEDDING_MODEL: text-embedding-3-large
+      OPENAI_REASONING_EFFORT: none
+      OPENAI_ANALYSIS_TIMEOUT_SECONDS: 30
+      OPENAI_REQUEST_BUDGET_USD: 0.50
+      OPENAI_ENFORCE_REQUEST_BUDGET: "false"
+      OPENAI_RESPONSES_INPUT_USD_PER_1M: "2.0"
+      OPENAI_RESPONSES_OUTPUT_USD_PER_1M: "8.0"
+      OPENAI_EMBEDDINGS_INPUT_USD_PER_1M: "0.13"
+      OPENAI_COST_SAFETY_MULTIPLIER: "1.15"
+      QDRANT_URL: http://localhost:6333
+      QDRANT_COLLECTION_PREFIX: hr_assistant_test
+      VECTOR_SIZE: "3072"
+      STORAGE_DIR: /tmp/test-storage
+      MAX_UPLOAD_SIZE_MB: "10"
+      CORS_ORIGINS: '["http://localhost:3000"]'
+      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+      AUTH_CODE_MAX_ATTEMPTS: "5"
+      AUTH_EMAIL_CODE_TTL_MINUTES: "15"
+      AUTH_LOGIN_CODE_TTL_MINUTES: "10"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run migrations
+        run: alembic upgrade head
+
+      - name: Run tests
+        run: python -m pytest tests/ -v --ignore=tests/e2e_recommendation_smoke.py -x
+
+  frontend-lint-build:
+    name: Frontend — Lint & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+
+  docker-build:
+    name: Docker — Build Images
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-lint-build]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
