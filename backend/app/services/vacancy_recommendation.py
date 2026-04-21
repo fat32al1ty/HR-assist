@@ -228,6 +228,12 @@ def recommend_vacancies_for_resume(
             matching_metrics.get("hard_filter_drop_work_format", 0)
         )
         target.hard_filter_drop_geo = int(matching_metrics.get("hard_filter_drop_geo", 0))
+        target.hard_filter_drop_no_skill_overlap = int(
+            matching_metrics.get("hard_filter_drop_no_skill_overlap", 0)
+        )
+        target.seniority_penalty_applied = int(
+            matching_metrics.get("seniority_penalty_applied", 0)
+        )
         target.title_boost_applied = int(matching_metrics.get("title_boost_applied", 0))
         return target
 

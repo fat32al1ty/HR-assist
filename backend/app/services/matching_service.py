@@ -15,7 +15,57 @@ from app.services.user_preference_profile_pipeline import recompute_user_prefere
 from app.services.vector_store import get_vector_store
 
 TITLE_BOOST = 0.10
+TITLE_BOOST_PARTIAL = 0.05
 TITLE_BOOST_SCORE_CAP = 1.0
+
+MIN_SKILLS_FOR_OVERLAP_FLOOR = 3
+SENIORITY_PENALTY = 0.15
+SENIORITY_MISMATCH_GAP = 2
+TITLE_BOOST_TOKEN_STOPWORDS = {
+    "and",
+    "for",
+    "the",
+    "of",
+    "to",
+    "in",
+    "with",
+    "по",
+    "на",
+    "в",
+    "и",
+    "для",
+    "над",
+    "c",
+    "с",
+}
+SENIORITY_RANK = {
+    "intern": 0,
+    "trainee": 0,
+    "стажер": 0,
+    "стажёр": 0,
+    "junior": 1,
+    "младший": 1,
+    "middle": 2,
+    "mid": 2,
+    "средний": 2,
+    "senior": 3,
+    "старший": 3,
+    "lead": 4,
+    "techlead": 4,
+    "tech lead": 4,
+    "team lead": 4,
+    "teamlead": 4,
+    "тимлид": 4,
+    "техлид": 4,
+    "ведущий": 4,
+    "staff": 5,
+    "principal": 5,
+    "head": 5,
+    "director": 5,
+    "руководитель": 5,
+    "директор": 5,
+    "c-level": 5,
+}
 
 ALLOWED_JOB_HOSTS = (
     "hh.ru",
@@ -1036,9 +1086,10 @@ def _lexical_fallback_matches(
                 score += LEADERSHIP_BONUS
             else:
                 score -= LEADERSHIP_MISSING_PENALTY
-        if _preferred_title_match(vacancy.title, preferred_titles):
-            score = min(TITLE_BOOST_SCORE_CAP, score + TITLE_BOOST)
-            if drop_counters is not None:
+        title_boost = _preferred_title_boost_score(vacancy.title, preferred_titles)
+        if title_boost > 0.0:
+            score = min(TITLE_BOOST_SCORE_CAP, score + title_boost)
+            if title_boost >= TITLE_BOOST and drop_counters is not None:
                 drop_counters["title_boost"] = drop_counters.get("title_boost", 0) + 1
         if score < RELAXED_MIN_RELEVANCE_SCORE:
             continue
@@ -1219,6 +1270,105 @@ def _preferred_title_match(vacancy_title: object, preferred_titles: list[str]) -
     return False
 
 
+def _preferred_title_boost_score(vacancy_title: object, preferred_titles: list[str]) -> float:
+    """Tiered title boost: full +0.10 on substring hit, +0.05 on token overlap.
+
+    Falls back to non-stopword token overlap when a literal substring match
+    fails. 2+ shared tokens → full boost; exactly 1 → partial boost.
+    """
+    if _preferred_title_match(vacancy_title, preferred_titles):
+        return TITLE_BOOST
+    if not preferred_titles or not isinstance(vacancy_title, str):
+        return 0.0
+    title_tokens = {
+        token for token in _tokenize_rich_text(vacancy_title) if token not in TITLE_BOOST_TOKEN_STOPWORDS
+    }
+    if not title_tokens:
+        return 0.0
+    best = 0
+    for raw in preferred_titles:
+        if not isinstance(raw, str):
+            continue
+        needle_tokens = {
+            token for token in _tokenize_rich_text(raw) if token not in TITLE_BOOST_TOKEN_STOPWORDS
+        }
+        if not needle_tokens:
+            continue
+        overlap_count = len(title_tokens.intersection(needle_tokens))
+        if overlap_count > best:
+            best = overlap_count
+    if best >= 2:
+        return TITLE_BOOST
+    if best == 1:
+        return TITLE_BOOST_PARTIAL
+    return 0.0
+
+
+def _required_skill_tokens(payload: dict) -> set[str]:
+    """Set of normalized tokens from a vacancy's declared must-have skills."""
+    tokens: set[str] = set()
+    for requirement in _extract_required_requirements(payload):
+        tokens.update(_tokenize_rich_text(requirement))
+    return tokens
+
+
+def _has_sufficient_skill_overlap(
+    resume_skills: set[str],
+    resume_hard_skills: list[str],
+    vacancy_payload: dict,
+) -> bool:
+    """True when the floor doesn't apply OR at least one skill bridges both sides.
+
+    The floor only kicks in when both the resume and the vacancy declare at least
+    `MIN_SKILLS_FOR_OVERLAP_FLOOR` explicit skills — otherwise we don't trust the
+    signal enough to hard-drop. When it does apply, we require at least one token
+    overlap (alias-aware via resume_skills which already expands aliases).
+    """
+    required_tokens = _required_skill_tokens(vacancy_payload)
+    if len(resume_hard_skills) < MIN_SKILLS_FOR_OVERLAP_FLOOR:
+        return True
+    if len(required_tokens) < MIN_SKILLS_FOR_OVERLAP_FLOOR:
+        return True
+    if resume_skills.intersection(required_tokens):
+        return True
+    return False
+
+
+def _seniority_from_value(value: object) -> int | None:
+    """Return a seniority rank 0-5 or None if the input can't be classified."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip().lower()
+    if not text:
+        return None
+    if text in SENIORITY_RANK:
+        return SENIORITY_RANK[text]
+    for key, rank in SENIORITY_RANK.items():
+        if key in text:
+            return rank
+    return None
+
+
+def _seniority_mismatch_penalty(
+    resume_analysis: dict | None,
+    vacancy_payload: dict | None,
+) -> float:
+    """Return additive penalty (0.0 or -SENIORITY_PENALTY) for grade mismatch.
+
+    Applied when both sides declare seniority and the gap is ≥ 2 ranks.
+    Neighboring grades (senior/lead, middle/senior) pass through untouched.
+    """
+    if not isinstance(resume_analysis, dict) or not isinstance(vacancy_payload, dict):
+        return 0.0
+    resume_rank = _seniority_from_value(resume_analysis.get("seniority"))
+    vacancy_rank = _seniority_from_value(vacancy_payload.get("seniority"))
+    if resume_rank is None or vacancy_rank is None:
+        return 0.0
+    if abs(resume_rank - vacancy_rank) >= SENIORITY_MISMATCH_GAP:
+        return -SENIORITY_PENALTY
+    return 0.0
+
+
 def match_vacancies_for_resume(
     db: Session,
     *,
@@ -1240,6 +1390,8 @@ def match_vacancies_for_resume(
     preferred_titles = prefs.get("preferred_titles") or []
     drop_work_format = 0
     drop_geo = 0
+    drop_no_skill_overlap = 0
+    seniority_penalty_applied = 0
     title_boosts = 0
 
     vector_store = get_vector_store()
@@ -1319,13 +1471,20 @@ def match_vacancies_for_resume(
             drop_geo += 1
             continue
 
+        payload_dict = payload if isinstance(payload, dict) else {}
+        if not _has_sufficient_skill_overlap(
+            resume_skills, resume_hard_skills, payload_dict
+        ):
+            drop_no_skill_overlap += 1
+            continue
+
         vacancy_skills = _build_vacancy_skill_set(payload)
         vacancy_title_tokens = _tokenize_rich_text(vacancy.title or "")
         overlap = _overlap_score(resume_skills, vacancy_skills)
         role_overlap = _overlap_score(resume_roles, vacancy_title_tokens) if resume_roles else 0.0
         hybrid = _hybrid_score(float(score), overlap) + (0.05 * role_overlap)
         has_leadership_hint = _title_has_leadership_hint(
-            vacancy.title or "", payload if isinstance(payload, dict) else None
+            vacancy.title or "", payload_dict
         )
         if leadership_preferred:
             if has_leadership_hint:
@@ -1333,9 +1492,16 @@ def match_vacancies_for_resume(
             else:
                 hybrid -= LEADERSHIP_MISSING_PENALTY
 
-        if _preferred_title_match(vacancy.title, preferred_titles):
-            hybrid = min(TITLE_BOOST_SCORE_CAP, hybrid + TITLE_BOOST)
-            title_boosts += 1
+        seniority_delta = _seniority_mismatch_penalty(resume.analysis, payload_dict)
+        if seniority_delta != 0.0:
+            hybrid += seniority_delta
+            seniority_penalty_applied += 1
+
+        title_boost = _preferred_title_boost_score(vacancy.title, preferred_titles)
+        if title_boost > 0.0:
+            hybrid = min(TITLE_BOOST_SCORE_CAP, hybrid + title_boost)
+            if title_boost >= TITLE_BOOST:
+                title_boosts += 1
 
         dedupe_key = (
             f"{(vacancy.title or '').strip().lower()}::{(vacancy.company or '').strip().lower()}"
@@ -1397,6 +1563,8 @@ def match_vacancies_for_resume(
         if metrics is not None:
             metrics["hard_filter_drop_work_format"] = drop_work_format
             metrics["hard_filter_drop_geo"] = drop_geo
+            metrics["hard_filter_drop_no_skill_overlap"] = drop_no_skill_overlap
+            metrics["seniority_penalty_applied"] = seniority_penalty_applied
             metrics["title_boost_applied"] = title_boosts
         return result
 
