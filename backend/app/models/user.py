@@ -34,6 +34,12 @@ class User(Base):
 
     last_hh_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    expected_salary_min: Mapped[int | None] = mapped_column(nullable=True)
+    expected_salary_max: Mapped[int | None] = mapped_column(nullable=True)
+    expected_salary_currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, server_default="RUB"
+    )
+
     resumes = relationship("Resume", back_populates="user", cascade="all, delete-orphan")
     auth_otp_codes = relationship(
         "AuthOtpCode", back_populates="user", cascade="all, delete-orphan"

@@ -24,21 +24,28 @@ class UserRead(BaseModel):
     relocation_mode: RelocationMode
     home_city: str | None
     preferred_titles: list[str]
+    expected_salary_min: int | None = None
+    expected_salary_max: int | None = None
+    expected_salary_currency: str = "RUB"
 
     model_config = {"from_attributes": True}
 
 
 class UserPreferencesUpdate(BaseModel):
-    """Partial update: any subset of the four job-preference fields.
+    """Partial update: any subset of the job-preference fields.
 
-    Unset fields are left unchanged. `home_city` may be cleared by sending
-    an empty string — stored as NULL.
+    Unset fields are left unchanged. ``home_city`` may be cleared by
+    sending an empty string — stored as NULL. ``expected_salary_min`` /
+    ``expected_salary_max`` accept 0 to clear the stored value.
     """
 
     preferred_work_format: WorkFormat | None = None
     relocation_mode: RelocationMode | None = None
     home_city: str | None = Field(default=None, max_length=HOME_CITY_MAX)
     preferred_titles: list[str] | None = Field(default=None, max_length=PREFERRED_TITLES_MAX)
+    expected_salary_min: int | None = Field(default=None, ge=0, le=10_000_000)
+    expected_salary_max: int | None = Field(default=None, ge=0, le=10_000_000)
+    expected_salary_currency: str | None = Field(default=None, min_length=3, max_length=3)
 
     @field_validator("preferred_titles")
     @classmethod

@@ -1,6 +1,16 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -26,5 +36,15 @@ class VacancyProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    salary_min: Mapped[int | None] = mapped_column(nullable=True)
+    salary_max: Mapped[int | None] = mapped_column(nullable=True)
+    salary_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    salary_gross: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    predicted_salary_p25: Mapped[int | None] = mapped_column(nullable=True)
+    predicted_salary_p50: Mapped[int | None] = mapped_column(nullable=True)
+    predicted_salary_p75: Mapped[int | None] = mapped_column(nullable=True)
+    predicted_salary_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    predicted_salary_model_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     vacancy = relationship("Vacancy", back_populates="profile")

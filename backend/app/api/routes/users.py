@@ -31,4 +31,7 @@ def patch_me_preferences(
         home_city=fields.get("home_city"),
         preferred_titles=fields.get("preferred_titles"),
         clear_home_city=clear_home_city,
+        expected_salary_min=fields.get("expected_salary_min"),
+        expected_salary_max=fields.get("expected_salary_max"),
+        expected_salary_currency=fields.get("expected_salary_currency"),
     )

@@ -50,11 +50,16 @@ def update_preferences(
     home_city: str | None = None,
     preferred_titles: list[str] | None = None,
     clear_home_city: bool = False,
+    expected_salary_min: int | None = None,
+    expected_salary_max: int | None = None,
+    expected_salary_currency: str | None = None,
 ) -> User:
-    """Apply a partial update to the four job-preference columns.
+    """Apply a partial update to the job-preference columns.
 
-    Pass `clear_home_city=True` to explicitly set home_city to NULL (since
-    `home_city=None` alone is indistinguishable from "leave unchanged").
+    Pass ``clear_home_city=True`` to explicitly set home_city to NULL
+    (since ``home_city=None`` alone is indistinguishable from "leave
+    unchanged"). Salary expectations treat ``0`` as "clear" so the
+    frontend can reset a value without sending a null.
     """
 
     if preferred_work_format is not None:
@@ -67,6 +72,12 @@ def update_preferences(
         user.home_city = None
     if preferred_titles is not None:
         user.preferred_titles = preferred_titles
+    if expected_salary_min is not None:
+        user.expected_salary_min = expected_salary_min or None
+    if expected_salary_max is not None:
+        user.expected_salary_max = expected_salary_max or None
+    if expected_salary_currency is not None:
+        user.expected_salary_currency = expected_salary_currency.upper()
     db.add(user)
     db.commit()
     db.refresh(user)
