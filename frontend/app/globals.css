@@ -650,6 +650,42 @@ select:focus {
   font-weight: 600;
 }
 
+.match-salary {
+  margin: 6px 0 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.match-salary-label {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.match-salary.salary-fit-below {
+  color: #b45309;
+}
+
+.match-salary.salary-fit-above {
+  color: #047857;
+}
+
+.salary-range-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.salary-range-row input[type='number'] {
+  flex: 1;
+  min-width: 0;
+}
+
+.salary-range-sep {
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .missing-box {
   margin-top: 10px;
   border: 1px solid #fde68a;

@@ -51,6 +51,9 @@ type UserPrefs = {
   relocation_mode: RelocationMode;
   home_city: string | null;
   preferred_titles: string[];
+  expected_salary_min: number | null;
+  expected_salary_max: number | null;
+  expected_salary_currency: string;
 };
 
 type UserRead = UserPrefs & {
@@ -72,6 +75,8 @@ type ProfileDraft = {
   relocation_mode: RelocationMode;
   home_city: string;
   preferred_titles: string[];
+  expected_salary_min: string;
+  expected_salary_max: string;
 };
 
 type VacancyMatch = {
@@ -81,6 +86,9 @@ type VacancyMatch = {
   company: string | null;
   location: string | null;
   similarity_score: number;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  salary_currency?: string | null;
   profile: Record<string, unknown> | null;
   tier?: 'strong' | 'maybe' | null;
   match_run_id?: string | null;
@@ -344,6 +352,39 @@ function scoreToPercent(score: number): string {
   return `${Math.round(score * 100)}%`;
 }
 
+function formatSalaryAmount(amount: number, currency: string): string {
+  const symbol = currency === 'RUB' ? ' ₽' : ` ${currency}`;
+  const formatted = new Intl.NumberFormat('ru-RU').format(amount);
+  return `${formatted}${symbol}`;
+}
+
+function renderSalaryBadge(match: VacancyMatch): {
+  text: string;
+  estimated: boolean;
+  fit: string | null;
+} | null {
+  const currency = match.salary_currency || 'RUB';
+  const min = match.salary_min ?? null;
+  const max = match.salary_max ?? null;
+  const profile = match.profile && typeof match.profile === 'object' ? match.profile : {};
+  const source = typeof profile.salary_source === 'string' ? (profile.salary_source as string) : null;
+  const fit = typeof profile.salary_fit === 'string' ? (profile.salary_fit as string) : null;
+  if (min == null && max == null) {
+    return null;
+  }
+  const estimated = source === 'predicted';
+  let text: string;
+  if (min != null && max != null && min !== max) {
+    text = `${new Intl.NumberFormat('ru-RU').format(min)} – ${formatSalaryAmount(max, currency)}`;
+  } else {
+    text = formatSalaryAmount(min ?? max ?? 0, currency);
+  }
+  if (estimated) {
+    text = `${text} (оценка)`;
+  }
+  return { text, estimated, fit };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -409,7 +450,9 @@ function buildProfileDraft(resume: Resume, prefs: UserPrefs): ProfileDraft {
     preferred_work_format: prefs.preferred_work_format,
     relocation_mode: prefs.relocation_mode,
     home_city: prefs.home_city ?? analysisHomeCity ?? '',
-    preferred_titles: prefs.preferred_titles
+    preferred_titles: prefs.preferred_titles,
+    expected_salary_min: prefs.expected_salary_min ? String(prefs.expected_salary_min) : '',
+    expected_salary_max: prefs.expected_salary_max ? String(prefs.expected_salary_max) : ''
   };
 }
 
@@ -986,7 +1029,10 @@ export default function DashboardPage() {
         preferred_work_format: data.preferred_work_format,
         relocation_mode: data.relocation_mode,
         home_city: data.home_city,
-        preferred_titles: data.preferred_titles
+        preferred_titles: data.preferred_titles,
+        expected_salary_min: data.expected_salary_min,
+        expected_salary_max: data.expected_salary_max,
+        expected_salary_currency: data.expected_salary_currency
       });
     } catch {
       setUserPrefs(null);
@@ -1029,6 +1075,23 @@ export default function DashboardPage() {
     } else {
       preferenceUpdates.clear_home_city = true;
     }
+    const parseSalaryInput = (raw: string): number | null => {
+      const trimmed = raw.trim();
+      if (!trimmed) return 0;
+      const normalized = Number(trimmed.replace(/\s+/g, ''));
+      if (!Number.isFinite(normalized) || normalized < 0 || normalized > 10_000_000) {
+        return null;
+      }
+      return Math.round(normalized);
+    };
+    const parsedMin = parseSalaryInput(profileDraft.expected_salary_min);
+    const parsedMax = parseSalaryInput(profileDraft.expected_salary_max);
+    if (parsedMin === null || parsedMax === null) {
+      setProfileMessage('Зарплата должна быть числом от 0 до 10 000 000.');
+      return;
+    }
+    preferenceUpdates.expected_salary_min = parsedMin;
+    preferenceUpdates.expected_salary_max = parsedMax;
 
     const body: Record<string, unknown> = {};
     if (Object.keys(analysisUpdates).length > 0) body.analysis_updates = analysisUpdates;
@@ -2251,6 +2314,40 @@ export default function DashboardPage() {
                         placeholder="Senior Backend Engineer, Python Developer"
                       />
                     </label>
+
+                    <div className="field">
+                      <span>
+                        Ожидаемая зарплата, ₽/мес.{' '}
+                        <em className="field-hint">
+                          мы не скроем варианты ниже — просто подвинем их вниз.
+                        </em>
+                      </span>
+                      <div className="salary-range-row">
+                        <input
+                          type="number"
+                          min={0}
+                          max={10_000_000}
+                          step={5000}
+                          value={profileDraft.expected_salary_min}
+                          onChange={(event) =>
+                            updateProfileDraft({ expected_salary_min: event.target.value })
+                          }
+                          placeholder="от"
+                        />
+                        <span className="salary-range-sep">—</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={10_000_000}
+                          step={5000}
+                          value={profileDraft.expected_salary_max}
+                          onChange={(event) =>
+                            updateProfileDraft({ expected_salary_max: event.target.value })
+                          }
+                          placeholder="до"
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <button
@@ -2435,6 +2532,23 @@ export default function DashboardPage() {
                         {match.location || 'Локация не указана'}
                       </p>
                       <p className="match-score">Релевантность: {scoreToPercent(match.similarity_score)}</p>
+                      {(() => {
+                        const badge = renderSalaryBadge(match);
+                        if (!badge) return null;
+                        const fitClass = badge.fit ? `salary-fit-${badge.fit}` : '';
+                        const fitLabel =
+                          badge.fit === 'below'
+                            ? ' (ниже ожиданий)'
+                            : badge.fit === 'above'
+                              ? ' (выше ожиданий)'
+                              : '';
+                        return (
+                          <p className={`match-salary ${fitClass}`.trim()}>
+                            <span className="match-salary-label">Зарплата:</span> {badge.text}
+                            {fitLabel}
+                          </p>
+                        );
+                      })()}
                       {reasonFromMatch(match) ? (
                         <p className="match-reason">
                           <span className="match-reason-label">Почему показали:</span>{' '}
