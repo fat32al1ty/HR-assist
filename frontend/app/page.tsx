@@ -2,6 +2,7 @@
 
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   excludeFeedbackVacancies,
   normalizeVacancyId,
@@ -393,6 +394,8 @@ export default function DashboardPage() {
   const [applyingVacancyIds, setApplyingVacancyIds] = useState<Record<number, boolean>>({});
   const [curatedSkills, setCuratedSkills] = useState<CuratedSkillRead[]>([]);
   const [curatingSkillKey, setCuratingSkillKey] = useState<string | null>(null);
+  const [lastSearchAt, setLastSearchAt] = useState<Date | null>(null);
+  const [lastAnalyzedCount, setLastAnalyzedCount] = useState<number | null>(null);
   const isAdmin = Boolean(user?.is_admin);
 
   /** Syncs resumes into both local state and the Session context. */
@@ -582,6 +585,9 @@ export default function DashboardPage() {
       setMatchingMessage(metricsInfo ? `${headline} ${metricsInfo}` : headline);
       setMatchingProgress(100);
       setMatchingStage('Готово');
+      setLastSearchAt(new Date());
+      const analyzedCount = typeof metrics.analyzed === 'number' ? metrics.analyzed : null;
+      if (analyzedCount !== null) setLastAnalyzedCount(analyzedCount);
       return;
     }
 
@@ -1039,19 +1045,13 @@ export default function DashboardPage() {
     }
   }
 
-  async function uploadResume(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!file) {
-      setMessage('Выберите PDF или DOCX файл');
-      return;
-    }
-
+  async function uploadResume(targetFile: File) {
     setBusy(true);
-    setMessage('Анализируем резюме...');
+    setMessage('Анализируем резюме…');
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', targetFile);
       const resume = await request<Resume>('/api/resumes', { method: 'POST', body: formData });
       setResumes((current) => [resume, ...current]);
       setMessage(resume.status === 'completed' ? 'Анализ готов' : resume.error_message || 'Не удалось обработать резюме');
@@ -1060,6 +1060,14 @@ export default function DashboardPage() {
       setMessage(error instanceof Error ? error.message : 'Не удалось загрузить резюме');
     } finally {
       setBusy(false);
+    }
+  }
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const picked = event.target.files?.[0] ?? null;
+    setFile(picked);
+    if (picked) {
+      void uploadResume(picked);
     }
   }
 
@@ -1452,19 +1460,6 @@ export default function DashboardPage() {
   return (
     <main className="page">
       <section className="main">
-        <div className="headline">
-          <div>
-            <span className="hero-kicker">AI-профиль кандидата</span>
-            <h1>Умный HR-помощник для анализа резюме</h1>
-            <p>Загрузите резюме и запускайте целевой подбор вакансий одной кнопкой. В выдачу попадают только отфильтрованные вакансии.</p>
-            <div className="hero-tags">
-              <span>PDF и DOCX</span>
-              <span>Qdrant matching</span>
-              <span>OpenAI анализ</span>
-            </div>
-          </div>
-        </div>
-
         {!token ? (
           <section className="panel">
             <h2>
@@ -1563,25 +1558,24 @@ export default function DashboardPage() {
                 Поддерживаются PDF и DOCX. Можно хранить до {RESUME_LIMIT} профилей —
                 например, IC и менеджерский — и переключаться между ними.
               </p>
-              <form className="form" onSubmit={uploadResume}>
+              <div className="form">
                 <input
                   type="file"
                   accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   disabled={busy || resumes.length >= RESUME_LIMIT}
-                  onChange={(event) => setFile(event.target.files?.[0] || null)}
+                  onChange={handleFileChange}
                 />
-                <button
-                  className="primary"
-                  disabled={busy || resumes.length >= RESUME_LIMIT}
-                >
-                  Проанализировать
-                </button>
+                {busy && (
+                  <p className="panel-note" style={{ color: 'var(--color-ink-secondary)' }}>
+                    Анализируем резюме…
+                  </p>
+                )}
                 {resumes.length >= RESUME_LIMIT ? (
                   <p className="panel-note">
                     Достигнут лимит {RESUME_LIMIT} профилей. Удалите один, чтобы загрузить новый.
                   </p>
                 ) : null}
-              </form>
+              </div>
               {message ? <p className="message">{message}</p> : null}
 
               <Card className="mt-4">
@@ -1706,7 +1700,13 @@ export default function DashboardPage() {
                         />
                       </label>
                       {resume.error_message ? <p className="message">{resume.error_message}</p> : null}
-                      {resume.analysis && expandedResumeIds[resume.id] ? <Analysis data={resume.analysis} /> : null}
+                      {resume.analysis ? (
+                        <Analysis
+                          data={resume.analysis}
+                          expectedSalaryMin={userPrefs?.expected_salary_min}
+                          expectedSalaryMax={userPrefs?.expected_salary_max}
+                        />
+                      ) : null}
                     </article>
                   ))}
                 </div>
@@ -1714,95 +1714,9 @@ export default function DashboardPage() {
 
               {profileDraft ? (
                 <section className="panel confirm-card">
-                  <h2>Мы поняли тебя так и что ты ищешь</h2>
-                  <p className="panel-note">
-                    Проверь, что анализ резюме не съехал, и задай ориентир подбора. Кнопка ниже
-                    сохранит оба раздела и запустит поиск.
-                  </p>
+                  <h2>Что ищу</h2>
 
                   <div className="profile-section">
-                    <h3>Мы поняли тебя так</h3>
-                    <div className="profile-grid">
-                      <label className="field">
-                        <span>Роль</span>
-                        <input
-                          type="text"
-                          value={profileDraft.target_role}
-                          maxLength={200}
-                          onChange={(event) =>
-                            updateProfileDraft({ target_role: event.target.value })
-                          }
-                          placeholder="Senior Backend Engineer"
-                        />
-                      </label>
-                      <label className="field">
-                        <span>Специализация</span>
-                        <input
-                          type="text"
-                          value={profileDraft.specialization}
-                          maxLength={200}
-                          onChange={(event) =>
-                            updateProfileDraft({ specialization: event.target.value })
-                          }
-                          placeholder="API, platform, data"
-                        />
-                      </label>
-                      <label className="field">
-                        <span>Грейд</span>
-                        <select
-                          value={profileDraft.seniority}
-                          onChange={(event) =>
-                            updateProfileDraft({
-                              seniority: (event.target.value as Seniority | '') || ''
-                            })
-                          }
-                        >
-                          <option value="">Не выбран</option>
-                          {SENIORITY_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="field">
-                        <span>Годы опыта</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="80"
-                          step="0.5"
-                          value={profileDraft.total_experience_years}
-                          onChange={(event) =>
-                            updateProfileDraft({ total_experience_years: event.target.value })
-                          }
-                        />
-                      </label>
-                    </div>
-                    <div className="field">
-                      <span>Топ-3 скилла</span>
-                      <div className="profile-skill-row">
-                        {[0, 1, 2].map((index) => (
-                          <input
-                            key={`skill-${index}`}
-                            type="text"
-                            maxLength={100}
-                            value={profileDraft.top_skills[index] || ''}
-                            onChange={(event) => {
-                              const next = [...profileDraft.top_skills];
-                              while (next.length <= index) next.push('');
-                              next[index] = event.target.value;
-                              updateProfileDraft({ top_skills: next });
-                            }}
-                            placeholder={index === 0 ? 'Python' : index === 1 ? 'FastAPI' : 'PostgreSQL'}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="profile-section">
-                    <h3>Что ищешь</h3>
                     <div className="field">
                       <span>Формат работы</span>
                       <div className="radio-row">
@@ -1923,85 +1837,109 @@ export default function DashboardPage() {
 
                   <button
                     className="primary profile-confirm-button"
+                    style={{ width: '100%' }}
                     disabled={profileSaving || matchingBusy}
                     onClick={() => void saveProfileAndRecommend()}
                   >
-                    {profileSaving ? 'Сохраняем...' : 'Подтвердить и найти работу'}
+                    {profileSaving ? 'Сохраняем…' : matchingBusy ? 'Ищем…' : 'Искать вакансии'}
                   </button>
                   {profileMessage ? <p className="message">{profileMessage}</p> : null}
+
                   {curatedSkills.length > 0 ? (
-                    <div className="curated-block">
-                      {curatedSkills.some((row) => row.direction === 'added') ? (
-                        <div className="curated-group">
-                          <p className="curated-title">Добавлено вручную</p>
-                          <ul className="curated-list">
-                            {curatedSkills
-                              .filter((row) => row.direction === 'added')
-                              .map((row) => (
-                                <li key={`curated-added-${row.id}`}>
-                                  <span>{row.skill_text}</span>
-                                  <button
-                                    type="button"
-                                    className="fit-micro-btn fit-micro-undo"
-                                    title="Снять отметку"
-                                    aria-label={`Снять отметку с «${row.skill_text}»`}
-                                    disabled={Boolean(curatingSkillKey)}
-                                    onClick={() => void uncurateSkill(row.id)}
-                                  >
-                                    ✕
-                                  </button>
-                                </li>
-                              ))}
-                          </ul>
+                    <Collapsible>
+                      <CollapsibleTrigger className="flex items-center justify-between w-full text-left px-0 py-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)] transition-colors mt-3">
+                        <span>Ручная курация скиллов</span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                            {curatedSkills.length}
+                          </span>
+                          <span>▼</span>
+                        </span>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="data-[state=open]:animate-slide-down">
+                        <div className="curated-block">
+                          {curatedSkills.some((row) => row.direction === 'added') ? (
+                            <div className="curated-group">
+                              <p className="curated-title">Добавлено вручную</p>
+                              <ul className="curated-list">
+                                {curatedSkills
+                                  .filter((row) => row.direction === 'added')
+                                  .map((row) => (
+                                    <li key={`curated-added-${row.id}`}>
+                                      <span>{row.skill_text}</span>
+                                      <button
+                                        type="button"
+                                        className="fit-micro-btn fit-micro-undo"
+                                        title="Снять отметку"
+                                        aria-label={`Снять отметку с «${row.skill_text}»`}
+                                        disabled={Boolean(curatingSkillKey)}
+                                        onClick={() => void uncurateSkill(row.id)}
+                                      >
+                                        ✕
+                                      </button>
+                                    </li>
+                                  ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                          {curatedSkills.some((row) => row.direction === 'rejected') ? (
+                            <div className="curated-group">
+                              <p className="curated-title">Отмечено как не моё</p>
+                              <ul className="curated-list">
+                                {curatedSkills
+                                  .filter((row) => row.direction === 'rejected')
+                                  .map((row) => (
+                                    <li key={`curated-rejected-${row.id}`}>
+                                      <span>{row.skill_text}</span>
+                                      <button
+                                        type="button"
+                                        className="fit-micro-btn fit-micro-undo"
+                                        title="Снять отметку"
+                                        aria-label={`Снять отметку с «${row.skill_text}»`}
+                                        disabled={Boolean(curatingSkillKey)}
+                                        onClick={() => void uncurateSkill(row.id)}
+                                      >
+                                        ✕
+                                      </button>
+                                    </li>
+                                  ))}
+                              </ul>
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
-                      {curatedSkills.some((row) => row.direction === 'rejected') ? (
-                        <div className="curated-group">
-                          <p className="curated-title">Отмечено как не моё</p>
-                          <ul className="curated-list">
-                            {curatedSkills
-                              .filter((row) => row.direction === 'rejected')
-                              .map((row) => (
-                                <li key={`curated-rejected-${row.id}`}>
-                                  <span>{row.skill_text}</span>
-                                  <button
-                                    type="button"
-                                    className="fit-micro-btn fit-micro-undo"
-                                    title="Снять отметку"
-                                    aria-label={`Снять отметку с «${row.skill_text}»`}
-                                    disabled={Boolean(curatingSkillKey)}
-                                    onClick={() => void uncurateSkill(row.id)}
-                                  >
-                                    ✕
-                                  </button>
-                                </li>
-                              ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                    </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   ) : null}
                 </section>
               ) : null}
 
               <section className="panel">
                 <h2>Подбор вакансий</h2>
-                <div className="inline-form">
-                  <select
-                    value={selectedResumeId ?? ''}
-                    onChange={(event) => setSelectedResumeId(event.target.value ? Number(event.target.value) : null)}
+                {resumes.length > 1 ? (
+                  <div className="inline-form">
+                    <select
+                      value={selectedResumeId ?? ''}
+                      onChange={(event) => setSelectedResumeId(event.target.value ? Number(event.target.value) : null)}
+                    >
+                      <option value="">Выберите резюме</option>
+                      {resumes.map((resume) => (
+                        <option key={resume.id} value={resume.id}>
+                          #{resume.id} {resume.original_filename}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+                {!profileDraft ? (
+                  <button
+                    className="primary"
+                    style={{ width: '100%' }}
+                    onClick={() => void refreshVacancyIndex()}
+                    disabled={matchingBusy || !selectedResumeId}
                   >
-                    <option value="">Выберите резюме</option>
-                    {resumes.map((resume) => (
-                      <option key={resume.id} value={resume.id}>
-                        #{resume.id} {resume.original_filename}
-                      </option>
-                    ))}
-                  </select>
-                  <button className="primary" onClick={refreshVacancyIndex} disabled={matchingBusy}>
-                    Обновить подбор
+                    {matchingBusy ? 'Ищем…' : 'Искать вакансии'}
                   </button>
-                </div>
+                ) : null}
                 {matchingBusy || matchingProgress > 0 ? (
                   <div className="progress-box">
                     <div className="progress-head">
@@ -2041,6 +1979,11 @@ export default function DashboardPage() {
                       ))}
                     </ul>
                   </details>
+                ) : null}
+                {visibleMatches.length > 0 && lastSearchAt ? (
+                  <p className="panel-note" style={{ fontWeight: 600, marginBottom: 8 }}>
+                    {`Топ-${visibleMatches.length}${lastAnalyzedCount ? ` из ${lastAnalyzedCount} просмотренных` : ''} · последний запуск ${lastSearchAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
+                  </p>
                 ) : null}
                 <div className="vacancy-list">
                   {visibleMatches.length === 0 ? <p className="empty-state">После запуска здесь появятся подходящие вакансии.</p> : null}
@@ -2121,10 +2064,16 @@ export default function DashboardPage() {
                         );
                       })()}
                       {reasonFromMatch(match) ? (
-                        <p className="match-reason">
-                          <span className="match-reason-label">Почему показали:</span>{' '}
-                          {reasonFromMatch(match)}
-                        </p>
+                        <Collapsible>
+                          <CollapsibleTrigger className="text-left text-[var(--text-sm)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-secondary)] transition-colors py-1">
+                            Почему показали ▼
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="data-[state=open]:animate-slide-down">
+                            <p className="match-reason">
+                              {reasonFromMatch(match)}
+                            </p>
+                          </CollapsibleContent>
+                        </Collapsible>
                       ) : null}
                       <div className="fit-grid">
                         <div className="fit-box fit-matched">
@@ -2277,53 +2226,77 @@ export default function DashboardPage() {
               </section>
 
               <section className="panel">
-                <h2>Отобранные вакансии</h2>
-                <div className="vacancy-list">
-                  {selectedVacancies.length === 0 ? <p className="empty-state">Пока нет отобранных. Нажмите Плюс в подборке.</p> : null}
-                  {selectedVacancies.map((item) => (
-                    <article className="vacancy-item" key={`selected-${item.vacancy_id}`}>
-                      <h3>{item.title}</h3>
-                      <p className="meta">
-                        {item.company || 'Компания не указана'}
-                        {' • '}
-                        {item.location || 'Локация не указана'}
-                      </p>
-                      <div className="vacancy-actions">
-                        <a href={item.source_url} target="_blank" rel="noreferrer">
-                          Открыть источник
-                        </a>
-                        <button className="secondary" disabled={matchingBusy} onClick={() => void unlikeVacancy(item.vacancy_id)}>
-                          Убрать
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center justify-between w-full text-left px-0 py-2">
+                    <h2 style={{ margin: 0 }}>Отобранные вакансии</h2>
+                    <span className="flex items-center gap-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                      <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                        {selectedVacancies.length}
+                      </span>
+                      <span>▼</span>
+                    </span>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="data-[state=open]:animate-slide-down">
+                    <div className="vacancy-list">
+                      {selectedVacancies.length === 0 ? <p className="empty-state">Пока нет отобранных. Нажмите Плюс в подборке.</p> : null}
+                      {selectedVacancies.map((item) => (
+                        <article className="vacancy-item" key={`selected-${item.vacancy_id}`}>
+                          <h3>{item.title}</h3>
+                          <p className="meta">
+                            {item.company || 'Компания не указана'}
+                            {' • '}
+                            {item.location || 'Локация не указана'}
+                          </p>
+                          <div className="vacancy-actions">
+                            <a href={item.source_url} target="_blank" rel="noreferrer">
+                              Открыть источник
+                            </a>
+                            <button className="secondary" disabled={matchingBusy} onClick={() => void unlikeVacancy(item.vacancy_id)}>
+                              Убрать
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </section>
 
               <section className="panel">
-                <h2>Минусованные вакансии</h2>
-                <div className="vacancy-list">
-                  {dislikedVacancies.length === 0 ? <p className="empty-state">Пока нет минусованных вакансий.</p> : null}
-                  {dislikedVacancies.map((item) => (
-                    <article className="vacancy-item" key={`disliked-${item.vacancy_id}`}>
-                      <h3>{item.title}</h3>
-                      <p className="meta">
-                        {item.company || 'Компания не указана'}
-                        {' • '}
-                        {item.location || 'Локация не указана'}
-                      </p>
-                      <div className="vacancy-actions">
-                        <a href={item.source_url} target="_blank" rel="noreferrer">
-                          Открыть источник
-                        </a>
-                        <button className="secondary" disabled={matchingBusy} onClick={() => void undislikeVacancy(item.vacancy_id)}>
-                          Снять минус
-                        </button>
-                      </div>
-                    </article>
-                  ))}
-                </div>
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center justify-between w-full text-left px-0 py-2">
+                    <h2 style={{ margin: 0 }}>Отклонённые вакансии</h2>
+                    <span className="flex items-center gap-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                      <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                        {dislikedVacancies.length}
+                      </span>
+                      <span>▼</span>
+                    </span>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="data-[state=open]:animate-slide-down">
+                    <div className="vacancy-list">
+                      {dislikedVacancies.length === 0 ? <p className="empty-state">Пока нет минусованных вакансий.</p> : null}
+                      {dislikedVacancies.map((item) => (
+                        <article className="vacancy-item" key={`disliked-${item.vacancy_id}`}>
+                          <h3>{item.title}</h3>
+                          <p className="meta">
+                            {item.company || 'Компания не указана'}
+                            {' • '}
+                            {item.location || 'Локация не указана'}
+                          </p>
+                          <div className="vacancy-actions">
+                            <a href={item.source_url} target="_blank" rel="noreferrer">
+                              Открыть источник
+                            </a>
+                            <button className="secondary" disabled={matchingBusy} onClick={() => void undislikeVacancy(item.vacancy_id)}>
+                              Снять минус
+                            </button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
               </section>
 
               {/* Applications section moved to /applications route — slice 2.8.4 */}
@@ -2335,7 +2308,11 @@ export default function DashboardPage() {
   );
 }
 
-function Analysis({ data }: { data: Record<string, unknown> }) {
+function Analysis({ data, expectedSalaryMin, expectedSalaryMax }: {
+  data: Record<string, unknown>;
+  expectedSalaryMin?: number | null;
+  expectedSalaryMax?: number | null;
+}) {
   const hardSkills = asStringArray(data.hard_skills);
   const softSkills = asStringArray(data.soft_skills);
   const tools = asStringArray(data.tools);
@@ -2344,43 +2321,89 @@ function Analysis({ data }: { data: Record<string, unknown> }) {
   const weaknesses = asStringArray(data.weaknesses);
   const riskFlags = asStringArray(data.risk_flags);
   const recommendations = asStringArray(data.recommendations);
-  const matchingKeywords = asStringArray(data.matching_keywords);
   const totalExperience = asNumber(data.total_experience_years);
   const seniorityConfidence = asNumber(data.seniority_confidence);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  const role = asText(data.target_role, '') || asText(data.specialization, '') || '—';
+  const grade = asText(data.seniority, '—');
+  const top5Skills = hardSkills.slice(0, 5).join(', ') || '—';
+  const salaryDisplay =
+    expectedSalaryMin || expectedSalaryMax
+      ? [
+          expectedSalaryMin ? new Intl.NumberFormat('ru-RU').format(expectedSalaryMin) : null,
+          expectedSalaryMax ? new Intl.NumberFormat('ru-RU').format(expectedSalaryMax) : null,
+        ]
+          .filter(Boolean)
+          .join(' – ') + ' ₽'
+      : 'не указано';
 
   return (
     <div className="analysis">
-      <div className="profile-card">
-        <div>
-          <span className="eyebrow">Кандидат</span>
-          <h4>{asText(data.candidate_name, 'Имя не определено')}</h4>
-          <p>{asText(data.target_role, 'Целевая роль не определена')}</p>
-        </div>
-        <div>
-          <span className="eyebrow">Грейд (оценка модели)</span>
-          <h4>{asText(data.seniority, 'Не определен')}</h4>
-          <p>{seniorityConfidence === null ? 'Уверенность не рассчитана' : `Уверенность модели: ${Math.round(seniorityConfidence * 100)}%`}</p>
-        </div>
-        <div>
-          <span className="eyebrow">Опыт</span>
-          <h4>{totalExperience === null ? 'Не указан' : `${totalExperience} лет`}</h4>
-          <p>{asText(data.specialization, 'Специализация не определена')}</p>
-        </div>
-      </div>
+      <Card className="mb-4">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-[var(--text-base)] font-semibold text-[var(--color-ink)]">
+            Твой профиль
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          <div className="flex justify-between">
+            <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">Роль</span>
+            <span className="text-[var(--text-sm)] text-[var(--color-ink)]">{role}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">Грейд</span>
+            <span className="text-[var(--text-sm)] text-[var(--color-ink)]">{grade}</span>
+          </div>
+          <div className="flex justify-between items-start gap-4">
+            <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)] shrink-0">Топ-5 скиллов</span>
+            <span className="text-[var(--text-sm)] text-[var(--color-ink)] text-right">{top5Skills}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">Ожидаемая зарплата</span>
+            <span className="text-[var(--text-sm)] text-[var(--color-ink)]">{salaryDisplay}</span>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="analysis-section">
-        <h4>Краткий профиль</h4>
-        <p>{asText(data.summary, 'Описание пока недоступно')}</p>
-      </div>
-      <List title="Hard skills" items={hardSkills} />
-      <List title="Soft skills" items={softSkills} />
-      <List title="Инструменты и технологии" items={tools} />
-      <List title="Домены и отрасли" items={domains} />
-      <List title="Сильные стороны" items={strengths} />
-      <List title="Зоны роста" items={weaknesses} />
-      <List title="Риски для найма" items={riskFlags} />
-      <List title="Рекомендации" items={recommendations} />
-      <List title="Ключевые слова для matching" items={matchingKeywords} />
+      <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <CollapsibleTrigger className="flex items-center justify-between w-full text-left px-0 py-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)] transition-colors">
+          <span>Подробности профиля</span>
+          <span className="ml-2">{detailsOpen ? '▲' : '▼'}</span>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="data-[state=open]:animate-slide-down">
+          <div className="profile-card">
+            <div>
+              <span className="eyebrow">Кандидат</span>
+              <h4>{asText(data.candidate_name, 'Имя не определено')}</h4>
+              <p>{asText(data.target_role, 'Целевая роль не определена')}</p>
+            </div>
+            <div>
+              <span className="eyebrow">Грейд (оценка модели)</span>
+              <h4>{asText(data.seniority, 'Не определен')}</h4>
+              <p>{seniorityConfidence === null ? 'Уверенность не рассчитана' : `Уверенность модели: ${Math.round(seniorityConfidence * 100)}%`}</p>
+            </div>
+            <div>
+              <span className="eyebrow">Опыт</span>
+              <h4>{totalExperience === null ? 'Не указан' : `${totalExperience} лет`}</h4>
+              <p>{asText(data.specialization, 'Специализация не определена')}</p>
+            </div>
+          </div>
+
+          <div className="analysis-section">
+            <h4>Краткий профиль</h4>
+            <p>{asText(data.summary, 'Описание пока недоступно')}</p>
+          </div>
+          <List title="Hard skills" items={hardSkills} />
+          <List title="Soft skills" items={softSkills} />
+          <List title="Инструменты и технологии" items={tools} />
+          <List title="Домены и отрасли" items={domains} />
+          <List title="Сильные стороны" items={strengths} />
+          <List title="Зоны роста" items={weaknesses} />
+          <List title="Риски для найма" items={riskFlags} />
+          <List title="Рекомендации" items={recommendations} />
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }
