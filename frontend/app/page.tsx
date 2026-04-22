@@ -12,12 +12,7 @@ import {
   formatRecommendationMetrics
 } from '../lib/recommendationStats';
 import { createDwellTracker, trackClick } from '../lib/telemetry';
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  (typeof window !== 'undefined'
-    ? `${window.location.protocol}//${window.location.hostname}:8000`
-    : 'http://localhost:8000');
+import { API_BASE_URL, RESUME_LIMIT, apiFetch } from '@/lib/api';
 const MIN_PROGRESS_VISIBLE_MS = 1400;
 const RECOMMEND_TIMEOUT_MS = 540000;
 const LAST_JOB_ID_STORAGE_KEY = 'last_recommendation_job_id';
@@ -34,7 +29,6 @@ type Resume = {
   created_at: string;
 };
 
-const RESUME_LIMIT = 2;
 const RESUME_LABEL_MAX = 32;
 
 function resumeDisplayName(resume: Resume): string {
@@ -790,15 +784,10 @@ export default function DashboardPage() {
         if (!betaKey.trim()) {
           throw new Error('Введите код тестировщика');
         }
-        await fetch(`${API_BASE_URL}/api/auth/password/reset`, {
+        await apiFetch('/api/auth/password/reset', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, new_password: newPassword, beta_key: betaKey })
-        }).then(async (response) => {
-          if (!response.ok) {
-            const payload = await response.json().catch(() => ({ detail: 'Не удалось обновить пароль' }));
-            throw new Error(payload.detail || 'Не удалось обновить пароль');
-          }
+          body: JSON.stringify({ email, new_password: newPassword, beta_key: betaKey }),
+          fallbackError: 'Не удалось обновить пароль'
         });
         setAuthFormMode('login');
         setPassword(newPassword);
@@ -811,31 +800,18 @@ export default function DashboardPage() {
         if (!betaKey.trim()) {
           throw new Error('Введите код тестировщика');
         }
-        const registerResponse = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        await apiFetch('/api/auth/register', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, full_name: null, beta_key: betaKey })
+          body: JSON.stringify({ email, password, full_name: null, beta_key: betaKey }),
+          fallbackError: 'Не удалось создать аккаунт'
         });
-        if (!registerResponse.ok) {
-          const payload = await registerResponse
-            .json()
-            .catch(() => ({ detail: 'Не удалось создать аккаунт' }));
-          throw new Error(payload.detail || 'Не удалось создать аккаунт');
-        }
       }
 
-      const loginResponse = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const auth = await apiFetch<{ access_token: string }>('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
+        fallbackError: 'Не удалось войти'
       });
-
-      if (!loginResponse.ok) {
-        const payload = await loginResponse.json().catch(() => ({ detail: 'Не удалось войти' }));
-        throw new Error(payload.detail || 'Не удалось войти');
-      }
-
-      const auth = (await loginResponse.json()) as { access_token: string };
       window.localStorage.setItem('access_token', auth.access_token);
       setToken(auth.access_token);
       setMessage('');
