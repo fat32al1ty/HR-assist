@@ -99,6 +99,7 @@ LEADERSHIP_BONUS = 0.03
 LEADERSHIP_MISSING_PENALTY = 0.02
 POSITIVE_PROFILE_WEIGHT = 0.25
 NEGATIVE_PROFILE_WEIGHT = 0.18
+DOMAIN_MISMATCH_PENALTY = 0.10
 UNLIKELY_STACK_TOKENS = {
     "1c",
     "ml",
@@ -1805,11 +1806,16 @@ def match_vacancies_for_resume(
         ):
             continue
 
-        if not _has_domain_compatibility(
+        # Soft domain gate: cross-domain items (IT resume ↔ non-IT vacancy)
+        # used to be dropped outright, which hid cross-domain senior
+        # candidates (e.g. ML → hardware) entirely. Now we still rank them
+        # but subtract DOMAIN_MISMATCH_PENALTY from hybrid so they only
+        # survive when everything else is strong.
+        domain_compatible = _has_domain_compatibility(
             resume.analysis, payload if isinstance(payload, dict) else None
-        ):
+        )
+        if not domain_compatible:
             drop_domain_mismatch += 1
-            continue
 
         drop_reason = _hard_filter_drop_reason(
             vacancy_profile=payload if isinstance(payload, dict) else None,
@@ -1833,6 +1839,8 @@ def match_vacancies_for_resume(
         overlap = _overlap_score(resume_skills, vacancy_skills)
         role_overlap = _overlap_score(resume_roles, vacancy_title_tokens) if resume_roles else 0.0
         hybrid = _hybrid_score(float(score), overlap) + (0.05 * role_overlap)
+        if not domain_compatible:
+            hybrid -= DOMAIN_MISMATCH_PENALTY
         has_leadership_hint = _title_has_leadership_hint(vacancy.title or "", payload_dict)
         if leadership_preferred:
             if has_leadership_hint:
