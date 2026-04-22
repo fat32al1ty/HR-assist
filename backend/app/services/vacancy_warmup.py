@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from threading import Event, Lock, Thread
 
@@ -12,6 +13,8 @@ from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
 from app.services.vacancy_pipeline import discover_and_index_vacancies
 from app.services.vacancy_profile_backfill import backfill_missing_vacancy_profiles
+
+logger = logging.getLogger(__name__)
 
 _worker_thread: Thread | None = None
 _stop_event = Event()
@@ -223,6 +226,53 @@ def stop_vacancy_warmup_worker() -> None:
     if _worker_thread is not None and _worker_thread.is_alive():
         _worker_thread.join(timeout=3.0)
     _set_state(running=False)
+
+
+def _run_resume_upload_warmup(*, user_id: int, resume_id: int) -> None:
+    db = SessionLocal()
+    try:
+        resume = db.get(Resume, resume_id)
+        if resume is None or resume.user_id != user_id:
+            return
+        query = _query_from_resume_analysis(resume.analysis)
+        if not query:
+            return
+        discover_and_index_vacancies(
+            db,
+            query=query,
+            count=max(1, settings.vacancy_warmup_on_upload_discover_count),
+            rf_only=settings.vacancy_warmup_rf_only,
+            force_reindex=False,
+            use_brave_fallback=False,
+            max_analyzed=max(1, settings.vacancy_warmup_on_upload_max_analyzed),
+        )
+    except Exception as error:
+        logger.warning(
+            "resume_upload_warmup_failed user_id=%s resume_id=%s error=%s",
+            user_id,
+            resume_id,
+            error,
+        )
+    finally:
+        db.close()
+
+
+def trigger_warmup_for_resume(*, user_id: int, resume_id: int) -> Thread | None:
+    """Prime the vacancy index for this user's resume in a background thread.
+
+    Returns the spawned Thread (or None when disabled) so callers that care
+    about completion — primarily tests — can join it.
+    """
+    if not settings.vacancy_warmup_on_resume_upload:
+        return None
+    thread = Thread(
+        target=_run_resume_upload_warmup,
+        kwargs={"user_id": user_id, "resume_id": resume_id},
+        daemon=True,
+        name=f"resume-upload-warmup-{resume_id}",
+    )
+    thread.start()
+    return thread
 
 
 def get_vacancy_warmup_status() -> dict[str, object]:

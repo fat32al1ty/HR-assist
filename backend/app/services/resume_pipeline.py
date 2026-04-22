@@ -6,6 +6,7 @@ from app.services.file_storage import save_upload
 from app.services.resume_analyzer import analyze_resume_text
 from app.services.resume_parser import extract_text
 from app.services.resume_profile_pipeline import persist_resume_profile
+from app.services.vacancy_warmup import trigger_warmup_for_resume
 
 
 def process_resume_upload(db: Session, *, user_id: int, upload: UploadFile, content: bytes):
@@ -32,13 +33,15 @@ def process_resume_upload(db: Session, *, user_id: int, upload: UploadFile, cont
         )
         analysis = analyze_resume_text(extracted_text)
         persist_resume_profile(db, resume_id=resume.id, user_id=user_id, profile=analysis)
-        return update_resume_processing_result(
+        completed = update_resume_processing_result(
             db,
             resume,
             status="completed",
             extracted_text=extracted_text,
             analysis=analysis,
         )
+        trigger_warmup_for_resume(user_id=user_id, resume_id=completed.id)
+        return completed
     except Exception as error:
         return update_resume_processing_result(
             db,

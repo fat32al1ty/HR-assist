@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     vacancy_warmup_max_analyzed_per_query: int = 2
     vacancy_warmup_cycle_timeout_seconds: int = 120
     vacancy_warmup_rf_only: bool = True
+    vacancy_warmup_on_resume_upload: bool = True
+    vacancy_warmup_on_upload_discover_count: int = 40
+    vacancy_warmup_on_upload_max_analyzed: int = 40
     vacancy_profile_backfill_enabled: bool = True
     vacancy_profile_backfill_limit_per_cycle: int = 3
     preference_decay_enabled: bool = False
