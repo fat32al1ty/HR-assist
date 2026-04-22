@@ -47,6 +47,10 @@ class VacancyMatchRead(BaseModel):
     location: str | None
     similarity_score: float
     profile: dict[str, Any] | None = None
+    # "strong" (score >= 0.60), "maybe" (0.45 <= score < 0.60), or null for
+    # older/lexical-fallback items. The UI groups strong and maybe into
+    # separate blocks; null falls through to "maybe".
+    tier: str | None = None
 
 
 class PreferenceOverrides(BaseModel):

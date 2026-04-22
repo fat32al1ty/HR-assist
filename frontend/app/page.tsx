@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, Fragment, useEffect, useState } from 'react';
 import {
   excludeFeedbackVacancies,
   normalizeVacancyId,
@@ -81,6 +81,7 @@ type VacancyMatch = {
   location: string | null;
   similarity_score: number;
   profile: Record<string, unknown> | null;
+  tier?: 'strong' | 'maybe' | null;
 };
 
 type CuratedDirection = 'added' | 'rejected';
@@ -2316,7 +2317,10 @@ export default function DashboardPage() {
                 ) : null}
                 <div className="vacancy-list">
                   {visibleMatches.length === 0 ? <p className="empty-state">После запуска здесь появятся подходящие вакансии.</p> : null}
-                  {visibleMatches.map((match) => {
+                  {visibleMatches.map((match, matchIndex) => {
+                    const showTierDivider =
+                      match.tier === 'maybe' &&
+                      (matchIndex === 0 || visibleMatches[matchIndex - 1]?.tier !== 'maybe');
                     const matchedSkills = matchedSkillsFromMatch(match);
                     const matchedRequirements = matchedRequirementsFromMatch(match);
                     const missingRequirements = missingRequirementsFromMatch(match);
@@ -2344,7 +2348,16 @@ export default function DashboardPage() {
                     const isCurating = (skill: string, direction: CuratedDirection) =>
                       curatingSkillKey === `${match.vacancy_id}::${direction}::${skill.toLowerCase()}`;
                     return (
-                    <article className="vacancy-item" key={match.vacancy_id}>
+                    <Fragment key={match.vacancy_id}>
+                    {showTierDivider ? (
+                      <div className="vacancy-tier-divider">
+                        <h3 className="vacancy-tier-title">Может подойти — проверь</h3>
+                        <p className="vacancy-tier-hint">
+                          Эти вакансии слабее совпадают по профилю, но иногда среди них находится удачное предложение.
+                        </p>
+                      </div>
+                    ) : null}
+                    <article className="vacancy-item">
                       <h3>{match.title}</h3>
                       <p className="meta">
                         {match.company || 'Компания не указана'}
@@ -2448,6 +2461,7 @@ export default function DashboardPage() {
                         </button>
                       </div>
                     </article>
+                    </Fragment>
                     );
                   })}
                 </div>

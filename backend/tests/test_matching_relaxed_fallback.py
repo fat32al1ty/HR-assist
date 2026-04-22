@@ -18,10 +18,13 @@ class MatchingRelaxedFallbackTest(unittest.TestCase):
         vector_store = MagicMock()
         vector_store.get_resume_vector.return_value = [0.1, 0.2, 0.3]
         vector_store.get_user_preference_vectors.return_value = (None, None)
+        # Semantic score must drop below MAYBE_MATCH_THRESHOLD (0.45) for
+        # the relaxed-fallback path to fire; at 0.46 the item would now be
+        # classified as a "maybe" match and skip relaxed fallback entirely.
         vector_store.search_vacancy_profiles.return_value = [
             (
                 101,
-                0.46,
+                0.42,
                 {
                     "vacancy_id": 101,
                     "is_vacancy": True,

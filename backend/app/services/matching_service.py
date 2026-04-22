@@ -87,6 +87,9 @@ BLOCKED_JOB_HOSTS = (
 MIN_RELEVANCE_SCORE = 0.60
 FALLBACK_MIN_RELEVANCE_SCORE = 0.50
 RELAXED_MIN_RELEVANCE_SCORE = 0.40
+STRONG_MATCH_THRESHOLD = MIN_RELEVANCE_SCORE
+MAYBE_MATCH_THRESHOLD = 0.45
+MAYBE_MATCH_CAP_DIVISOR = 2
 SEMANTIC_GAP_SIMILARITY_THRESHOLD = 0.84
 SEMANTIC_GAP_MAX_REQUIREMENTS_PER_VACANCY = 8
 SEMANTIC_GAP_MAX_RESUME_PHRASES = 36
@@ -1883,16 +1886,32 @@ def match_vacancies_for_resume(
         )
 
     ranked_all.sort(key=lambda item: item[0], reverse=True)
-    ranked_strict = [item for item in ranked_all if item[0] >= MIN_RELEVANCE_SCORE]
-    top_matches = [item[1] for item in ranked_strict[:limit]]
-    if not top_matches:
-        ranked_fallback = [item for item in ranked_all if item[0] >= FALLBACK_MIN_RELEVANCE_SCORE]
-        top_matches = [item[1] for item in ranked_fallback[:limit]]
+    # Two-tier selection: strong picks first, then maybe fills below the strict
+    # cutoff down to MAYBE_MATCH_THRESHOLD. Old behavior returned strict-only
+    # and only fell back to 0.50+ when strict was empty — that discarded real
+    # borderline signal users wanted to see. UI partitions on the `tier` key.
+    ranked_strong = [item for item in ranked_all if item[0] >= STRONG_MATCH_THRESHOLD]
+    ranked_maybe = [
+        item for item in ranked_all if MAYBE_MATCH_THRESHOLD <= item[0] < STRONG_MATCH_THRESHOLD
+    ]
+
+    top_matches: list[dict] = []
+    for _hybrid, payload in ranked_strong[:limit]:
+        top_matches.append({**payload, "tier": "strong"})
+
+    maybe_cap = limit if not ranked_strong else max(1, limit // MAYBE_MATCH_CAP_DIVISOR)
+    for _hybrid, payload in ranked_maybe[:maybe_cap]:
+        profile = payload.get("profile")
+        if isinstance(profile, dict):
+            profile = {**profile, "tier_reason": "below_strict_threshold"}
+        else:
+            profile = {"tier_reason": "below_strict_threshold"}
+        top_matches.append({**payload, "tier": "maybe", "profile": profile})
+
     if not top_matches:
         # Last-resort mode: keep recommendations non-empty when candidates exist but strict
         # thresholds are too conservative for the current resume wording.
         ranked_relaxed = [item for item in ranked_all if item[0] >= RELAXED_MIN_RELEVANCE_SCORE]
-        top_matches = []
         for hybrid, payload in ranked_relaxed[:limit]:
             profile = payload.get("profile")
             if isinstance(profile, dict):
@@ -1904,6 +1923,7 @@ def match_vacancies_for_resume(
                     **payload,
                     "similarity_score": round(float(hybrid), 5),
                     "profile": profile,
+                    "tier": "maybe",
                 }
             )
 
