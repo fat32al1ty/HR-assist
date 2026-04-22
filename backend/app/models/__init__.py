@@ -1,5 +1,11 @@
 from app.models.application import Application
 from app.models.auth_otp_code import AuthOtpCode
+from app.models.esco import (
+    EscoOccupation,
+    EscoOccupationSkill,
+    EscoSkill,
+    EscoSkillRelation,
+)
 from app.models.recommendation_job import RecommendationJob
 from app.models.resume import Resume
 from app.models.resume_profile import ResumeProfile
@@ -13,6 +19,10 @@ from app.models.vacancy_profile import VacancyProfile
 __all__ = [
     "Application",
     "AuthOtpCode",
+    "EscoOccupation",
+    "EscoOccupationSkill",
+    "EscoSkill",
+    "EscoSkillRelation",
     "RecommendationJob",
     "Resume",
     "ResumeProfile",
