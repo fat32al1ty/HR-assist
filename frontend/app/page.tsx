@@ -15,7 +15,8 @@ import {
 } from '../lib/recommendationStats';
 import { createDwellTracker, trackClick } from '../lib/telemetry';
 import { API_BASE_URL, RESUME_LIMIT, apiFetch } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useSession } from '@/lib/session';
 import { type Resume, resumeDisplayName } from '@/types/resume';
 const MIN_PROGRESS_VISIBLE_MS = 1400;
@@ -397,6 +398,7 @@ export default function DashboardPage() {
   const [lastSearchAt, setLastSearchAt] = useState<Date | null>(null);
   const [lastAnalyzedCount, setLastAnalyzedCount] = useState<number | null>(null);
   const isAdmin = Boolean(user?.is_admin);
+  const [dragOver, setDragOver] = useState(false);
 
   /** Syncs resumes into both local state and the Session context. */
   function setResumes(next: Resume[] | ((prev: Resume[]) => Resume[])) {
@@ -1461,128 +1463,177 @@ export default function DashboardPage() {
     <main className="page">
       <section className="main">
         {!token ? (
-          <section className="panel">
-            <h2>
-              {authFormMode === 'login'
-                ? 'Вход в кабинет'
-                : authFormMode === 'register'
-                  ? 'Регистрация нового пользователя'
-                  : 'Восстановление пароля'}
-            </h2>
-            <form className="form" onSubmit={handleAuth}>
-              <input
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="Email"
-                type="email"
-                autoComplete="email"
-              />
-              {authFormMode === 'reset' ? (
-                <input
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  placeholder="Новый пароль (минимум 8 символов)"
-                  type="password"
-                  autoComplete="new-password"
-                />
-              ) : (
-                <input
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder={
-                    authFormMode === 'register' ? 'Пароль (минимум 8 символов)' : 'Пароль'
-                  }
-                  type="password"
-                  autoComplete={authFormMode === 'register' ? 'new-password' : 'current-password'}
-                />
-              )}
-              {authFormMode !== 'login' ? (
-                <input
-                  value={betaKey}
-                  onChange={(event) => setBetaKey(event.target.value)}
-                  placeholder="Ключ бета-тестера"
-                  type="password"
-                  autoComplete="off"
-                />
-              ) : null}
-              <button className="primary" disabled={busy}>
-                {authFormMode === 'login'
-                  ? 'Войти'
-                  : authFormMode === 'register'
-                    ? 'Зарегистрироваться'
-                    : 'Сбросить пароль'}
-              </button>
-              {authFormMode === 'login' ? (
-                <>
-                  <button
-                    className="secondary"
-                    type="button"
-                    onClick={() => {
-                      setAuthFormMode('register');
-                      setMessage('');
-                    }}
-                  >
-                    Нет аккаунта? Зарегистрироваться
-                  </button>
-                  <button
-                    className="secondary"
-                    type="button"
-                    onClick={() => {
-                      setAuthFormMode('reset');
-                      setMessage('');
-                    }}
-                  >
-                    Забыли пароль?
-                  </button>
-                </>
-              ) : (
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={() => {
-                    setAuthFormMode('login');
-                    setMessage('');
-                  }}
-                >
-                  Назад ко входу
-                </button>
-              )}
-            </form>
-            {message ? <p className="message">{message}</p> : null}
-          </section>
-        ) : (
-          <section className="workspace">
-            <aside className="panel">
-              <h2>Загрузка резюме</h2>
-              <p className="panel-note">
-                Поддерживаются PDF и DOCX. Можно хранить до {RESUME_LIMIT} профилей —
-                например, IC и менеджерский — и переключаться между ними.
-              </p>
-              <div className="form">
-                <input
-                  type="file"
-                  accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  disabled={busy || resumes.length >= RESUME_LIMIT}
-                  onChange={handleFileChange}
-                />
-                {busy && (
-                  <p className="panel-note" style={{ color: 'var(--color-ink-secondary)' }}>
-                    Анализируем резюме…
-                  </p>
-                )}
-                {resumes.length >= RESUME_LIMIT ? (
-                  <p className="panel-note">
-                    Достигнут лимит {RESUME_LIMIT} профилей. Удалите один, чтобы загрузить новый.
+          /* ── Auth screen ──────────────────────────────────────────────── */
+          <div className="flex items-center justify-center min-h-[70vh]">
+            <Card className="w-full max-w-md animate-fade-in">
+              <CardHeader>
+                <CardTitle>
+                  {authFormMode === 'login'
+                    ? 'Вход в кабинет'
+                    : authFormMode === 'register'
+                      ? 'Регистрация'
+                      : 'Восстановление пароля'}
+                </CardTitle>
+                <CardDescription>
+                  {authFormMode === 'login'
+                    ? 'Войдите, чтобы начать подбор вакансий'
+                    : authFormMode === 'register'
+                      ? 'Создайте аккаунт — нужен ключ бета-тестера'
+                      : 'Введите новый пароль и ключ бета-тестера'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form className="flex flex-col gap-3" onSubmit={handleAuth}>
+                  <input
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="Email"
+                    type="email"
+                    autoComplete="email"
+                  />
+                  {authFormMode === 'reset' ? (
+                    <input
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      placeholder="Новый пароль (минимум 8 символов)"
+                      type="password"
+                      autoComplete="new-password"
+                    />
+                  ) : (
+                    <input
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder={
+                        authFormMode === 'register' ? 'Пароль (минимум 8 символов)' : 'Пароль'
+                      }
+                      type="password"
+                      autoComplete={authFormMode === 'register' ? 'new-password' : 'current-password'}
+                    />
+                  )}
+                  {authFormMode !== 'login' ? (
+                    <input
+                      value={betaKey}
+                      onChange={(event) => setBetaKey(event.target.value)}
+                      placeholder="Ключ бета-тестера"
+                      type="password"
+                      autoComplete="off"
+                    />
+                  ) : null}
+                  <Button type="submit" variant="primary" size="lg" disabled={busy} className="w-full mt-1">
+                    {authFormMode === 'login'
+                      ? 'Войти'
+                      : authFormMode === 'register'
+                        ? 'Зарегистрироваться'
+                        : 'Сбросить пароль'}
+                  </Button>
+                  {authFormMode === 'login' ? (
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        variant="secondary"
+                        type="button"
+                        className="w-full"
+                        onClick={() => {
+                          setAuthFormMode('register');
+                          setMessage('');
+                        }}
+                      >
+                        Нет аккаунта? Зарегистрироваться
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        type="button"
+                        className="w-full"
+                        onClick={() => {
+                          setAuthFormMode('reset');
+                          setMessage('');
+                        }}
+                      >
+                        Забыли пароль?
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      className="w-full"
+                      onClick={() => {
+                        setAuthFormMode('login');
+                        setMessage('');
+                      }}
+                    >
+                      Назад ко входу
+                    </Button>
+                  )}
+                </form>
+                {message ? (
+                  <p className="mt-3 rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[var(--text-sm)]">
+                    {message}
                   </p>
                 ) : null}
-              </div>
-              {message ? <p className="message">{message}</p> : null}
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          /* ── Logged-in workspace ──────────────────────────────────────── */
+          <div className="workspace stagger-children">
+            {/* ── Sidebar ─────────────────────────────────────────────── */}
+            <aside className="flex flex-col gap-4 animate-fade-in">
+              {/* Upload card */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-[var(--text-2xl)]">Резюме</CardTitle>
+                  <CardDescription>
+                    PDF или DOCX · до {RESUME_LIMIT} профилей
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  {/* Drop zone */}
+                  <label
+                    className={[
+                      'flex flex-col items-center justify-center gap-2 rounded-[var(--radius-md)] border-2 border-dashed',
+                      'px-4 py-5 cursor-pointer transition-colors duration-[var(--duration-fast)]',
+                      dragOver
+                        ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)]'
+                        : 'border-[var(--color-border)] bg-[var(--color-surface-muted)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)]',
+                      (busy || resumes.length >= RESUME_LIMIT) ? 'opacity-50 pointer-events-none' : '',
+                    ].join(' ')}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOver(false);
+                      const f = e.dataTransfer.files[0];
+                      if (f) void uploadResume(f);
+                    }}
+                  >
+                    <span className="text-[var(--color-ink-muted)] text-[var(--text-sm)] font-[var(--font-body)] select-none">
+                      {busy ? 'Анализируем…' : dragOver ? 'Отпустите файл' : 'Перетащите или нажмите'}
+                    </span>
+                    <input
+                      type="file"
+                      className="sr-only"
+                      accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      disabled={busy || resumes.length >= RESUME_LIMIT}
+                      onChange={handleFileChange}
+                    />
+                  </label>
+                  {resumes.length >= RESUME_LIMIT ? (
+                    <p className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                      Лимит {RESUME_LIMIT} профилей достигнут. Удалите один, чтобы загрузить новый.
+                    </p>
+                  ) : null}
+                  {message ? (
+                    <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[var(--text-sm)]">
+                      {message}
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
 
-              <Card className="mt-4">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-[var(--text-base)] font-semibold text-[var(--color-ink)]">
-                    Моя воронка
-                  </CardTitle>
+              {/* Funnel card */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-[var(--text-2xl)]">Моя воронка</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
                   {(() => {
@@ -1599,9 +1650,9 @@ export default function DashboardPage() {
                       <>
                         <div className="flex justify-between items-baseline">
                           <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
-                            Проанализировано вакансий
+                            Проанализировано
                           </span>
-                          <span className="text-[var(--text-sm)] font-medium text-[var(--color-ink)]">
+                          <span className="text-[var(--text-sm)] font-semibold font-[var(--font-mono)] text-[var(--color-ink)]">
                             {funnel ? funnel.analyzed_count : '—'}
                           </span>
                         </div>
@@ -1609,9 +1660,9 @@ export default function DashboardPage() {
                           <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
                             Отобрано
                           </span>
-                          <span className="text-[var(--text-sm)] font-medium text-[var(--color-ink)]">
+                          <span className="text-[var(--text-sm)] font-semibold font-[var(--font-mono)] text-[var(--color-ink)]">
                             {funnel && (funnel.selected_count > 0 || funnel.matched_count > 0)
-                              ? `${funnel.selected_count} из ${funnel.matched_count} совпадений`
+                              ? `${funnel.selected_count} / ${funnel.matched_count}`
                               : '—'}
                           </span>
                         </div>
@@ -1619,7 +1670,7 @@ export default function DashboardPage() {
                           <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
                             Последний поиск
                           </span>
-                          <span className="text-[var(--text-sm)] font-medium text-[var(--color-ink)]">
+                          <span className="text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
                             {funnel ? formatRelativeTimeRu(funnel.last_search_at) : '—'}
                           </span>
                         </div>
@@ -1627,7 +1678,7 @@ export default function DashboardPage() {
                           <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
                             Следующее обновление
                           </span>
-                          <span className="text-[var(--text-sm)] font-medium text-[var(--color-ink)]">
+                          <span className="text-[var(--text-sm)] font-semibold font-[var(--font-mono)] text-[var(--color-ink)]">
                             {warmupStatus?.running
                               ? 'идёт сейчас'
                               : showCountdown
@@ -1652,43 +1703,71 @@ export default function DashboardPage() {
               </Card>
             </aside>
 
+            {/* ── Main column ─────────────────────────────────────────── */}
             <div className="workspace-main">
-              <section className="panel">
-                <h2>Мое резюме</h2>
-                <div className="resume-list">
-                  {resumes.length === 0 ? <p className="empty-state">Пока нет загруженных резюме.</p> : null}
+              {/* ── Резюме section ──────────────────────────────────── */}
+              <Card className="animate-fade-in">
+                <CardHeader className="pb-4">
+                  <CardTitle>Мое резюме</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  {resumes.length === 0 ? (
+                    <p className="text-[var(--color-ink-secondary)] text-[var(--text-sm)] italic">
+                      Пока нет загруженных резюме.
+                    </p>
+                  ) : null}
                   {resumes.map((resume) => (
                     <article
-                      className={`resume-item${resume.is_active ? ' resume-item-active' : ''}`}
                       key={resume.id}
+                      className={[
+                        'grid gap-3 border rounded-[var(--radius-xl)] bg-[var(--color-surface)] p-5',
+                        resume.is_active
+                          ? 'border-[var(--color-accent)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_18%,transparent)]'
+                          : 'border-[var(--color-border)]',
+                      ].join(' ')}
                     >
-                      <div className="resume-item-head">
-                        <div>
-                          <h3>
+                      <div className="flex justify-between gap-4 items-start flex-wrap">
+                        <div className="flex flex-col gap-1">
+                          <h3 className="text-[var(--text-2xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.03em] break-all">
                             {resume.original_filename}
-                            {resume.is_active ? <span className="resume-active-tag">активный</span> : null}
+                            {resume.is_active ? (
+                              <span className="resume-active-tag ml-2">активный</span>
+                            ) : null}
                           </h3>
-                          <span className={`status ${resume.status}`}>{statusLabels[resume.status] || resume.status}</span>
+                          <span className={`status ${resume.status}`}>
+                            {statusLabels[resume.status] || resume.status}
+                          </span>
                         </div>
-                        <div className="resume-actions">
+                        <div className="inline-flex gap-2 flex-wrap justify-end">
                           {!resume.is_active ? (
-                            <button
-                              className="secondary"
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               disabled={busy}
                               onClick={() => void activateResumeProfile(resume.id)}
                             >
                               Сделать активным
-                            </button>
+                            </Button>
                           ) : null}
-                          <button className="secondary resume-toggle" disabled={busy} onClick={() => toggleResumeDetails(resume.id)}>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => toggleResumeDetails(resume.id)}
+                          >
                             {expandedResumeIds[resume.id] ? 'Свернуть' : 'Показать детали'}
-                          </button>
-                          <button className="danger" disabled={busy} onClick={() => void deleteResume(resume.id)}>
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => void deleteResume(resume.id)}
+                          >
                             Удалить
-                          </button>
+                          </Button>
                         </div>
                       </div>
-                      <label className="field resume-label-field">
+                      <label className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
                         <span>Короткое имя профиля</span>
                         <input
                           type="text"
@@ -1699,7 +1778,11 @@ export default function DashboardPage() {
                           onBlur={(event) => void saveResumeLabel(resume.id, event.target.value)}
                         />
                       </label>
-                      {resume.error_message ? <p className="message">{resume.error_message}</p> : null}
+                      {resume.error_message ? (
+                        <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[var(--text-sm)]">
+                          {resume.error_message}
+                        </p>
+                      ) : null}
                       {resume.analysis ? (
                         <Analysis
                           data={resume.analysis}
@@ -1709,215 +1792,228 @@ export default function DashboardPage() {
                       ) : null}
                     </article>
                   ))}
-                </div>
-              </section>
+                </CardContent>
+              </Card>
 
+              {/* ── Что ищу section ─────────────────────────────────── */}
               {profileDraft ? (
-                <section className="panel confirm-card">
-                  <h2>Что ищу</h2>
+                <Card className="animate-fade-in">
+                  <CardHeader className="pb-4">
+                    <CardTitle>Что ищу</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-5">
+                    <div className="grid gap-4 border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface-muted)] p-5">
+                      <div className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                        <span>Формат работы</span>
+                        <div className="radio-row">
+                          {WORK_FORMAT_OPTIONS.map((option) => (
+                            <label key={option.value} className="radio-chip">
+                              <input
+                                type="radio"
+                                name="work-format"
+                                value={option.value}
+                                checked={profileDraft.preferred_work_format === option.value}
+                                onChange={() =>
+                                  updateProfileDraft({ preferred_work_format: option.value })
+                                }
+                              />
+                              <span>{option.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
 
-                  <div className="profile-section">
-                    <div className="field">
-                      <span>Формат работы</span>
-                      <div className="radio-row">
-                        {WORK_FORMAT_OPTIONS.map((option) => (
-                          <label key={option.value} className="radio-chip">
+                      <div className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                        <span>Готовность к переезду</span>
+                        <div className="radio-row">
+                          <label className="radio-chip">
                             <input
                               type="radio"
-                              name="work-format"
-                              value={option.value}
-                              checked={profileDraft.preferred_work_format === option.value}
-                              onChange={() =>
-                                updateProfileDraft({ preferred_work_format: option.value })
-                              }
+                              name="relocation-mode"
+                              value="home_only"
+                              checked={profileDraft.relocation_mode === 'home_only'}
+                              onChange={() => updateProfileDraft({ relocation_mode: 'home_only' })}
                             />
-                            <span>{option.label}</span>
+                            <span>Только в моём городе</span>
                           </label>
-                        ))}
+                          <label className="radio-chip">
+                            <input
+                              type="radio"
+                              name="relocation-mode"
+                              value="any_city"
+                              checked={profileDraft.relocation_mode === 'any_city'}
+                              onChange={() => updateProfileDraft({ relocation_mode: 'any_city' })}
+                            />
+                            <span>Открыт к переезду</span>
+                          </label>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="field">
-                      <span>Готовность к переезду</span>
-                      <div className="radio-row">
-                        <label className="radio-chip">
+                      {profileDraft.relocation_mode === 'home_only' ? (
+                        <label className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                          <span>Мой город</span>
                           <input
-                            type="radio"
-                            name="relocation-mode"
-                            value="home_only"
-                            checked={profileDraft.relocation_mode === 'home_only'}
-                            onChange={() => updateProfileDraft({ relocation_mode: 'home_only' })}
+                            type="text"
+                            maxLength={120}
+                            value={profileDraft.home_city}
+                            onChange={(event) =>
+                              updateProfileDraft({ home_city: event.target.value })
+                            }
+                            placeholder="Москва"
                           />
-                          <span>Только в моём городе</span>
                         </label>
-                        <label className="radio-chip">
-                          <input
-                            type="radio"
-                            name="relocation-mode"
-                            value="any_city"
-                            checked={profileDraft.relocation_mode === 'any_city'}
-                            onChange={() => updateProfileDraft({ relocation_mode: 'any_city' })}
-                          />
-                          <span>Открыт к переезду</span>
-                        </label>
-                      </div>
-                    </div>
+                      ) : null}
 
-                    {profileDraft.relocation_mode === 'home_only' ? (
-                      <label className="field">
-                        <span>Мой город</span>
-                        <input
-                          type="text"
-                          maxLength={120}
-                          value={profileDraft.home_city}
-                          onChange={(event) =>
-                            updateProfileDraft({ home_city: event.target.value })
-                          }
-                          placeholder="Москва"
+                      <label className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                        <span>
+                          Желаемые названия вакансий (до 10){' '}
+                          <em className="font-normal not-italic text-[var(--color-ink-muted)]">
+                            — поднимают совпадающие в выдаче
+                          </em>
+                        </span>
+                        <textarea
+                          rows={3}
+                          value={profileDraft.preferred_titles.join(', ')}
+                          onChange={(event) => {
+                            const parts = event.target.value
+                              .split(/[,\n]/)
+                              .map((title) => title.trim())
+                              .filter(Boolean)
+                              .slice(0, 10);
+                            updateProfileDraft({ preferred_titles: parts });
+                          }}
+                          placeholder="Senior Backend Engineer, Python Developer"
                         />
                       </label>
-                    ) : null}
 
-                    <label className="field">
-                      <span>
-                        Желаемые названия вакансий (до 10).{' '}
-                        <em className="field-hint">
-                          не исключает другие — просто поднимает совпадающие в выдаче.
-                        </em>
-                      </span>
-                      <textarea
-                        rows={3}
-                        value={profileDraft.preferred_titles.join(', ')}
-                        onChange={(event) => {
-                          const parts = event.target.value
-                            .split(/[,\n]/)
-                            .map((title) => title.trim())
-                            .filter(Boolean)
-                            .slice(0, 10);
-                          updateProfileDraft({ preferred_titles: parts });
-                        }}
-                        placeholder="Senior Backend Engineer, Python Developer"
-                      />
-                    </label>
-
-                    <div className="field">
-                      <span>
-                        Ожидаемая зарплата, ₽/мес.{' '}
-                        <em className="field-hint">
-                          мы не скроем варианты ниже — просто подвинем их вниз.
-                        </em>
-                      </span>
-                      <div className="salary-range-row">
-                        <input
-                          type="number"
-                          min={0}
-                          max={10_000_000}
-                          step={5000}
-                          value={profileDraft.expected_salary_min}
-                          onChange={(event) =>
-                            updateProfileDraft({ expected_salary_min: event.target.value })
-                          }
-                          placeholder="от"
-                        />
-                        <span className="salary-range-sep">—</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={10_000_000}
-                          step={5000}
-                          value={profileDraft.expected_salary_max}
-                          onChange={(event) =>
-                            updateProfileDraft({ expected_salary_max: event.target.value })
-                          }
-                          placeholder="до"
-                        />
+                      <div className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                        <span>
+                          Ожидаемая зарплата, ₽/мес.{' '}
+                          <em className="font-normal not-italic text-[var(--color-ink-muted)]">
+                            — варианты ниже не скрываем, просто опускаем
+                          </em>
+                        </span>
+                        <div className="salary-range-row">
+                          <input
+                            type="number"
+                            min={0}
+                            max={10_000_000}
+                            step={5000}
+                            value={profileDraft.expected_salary_min}
+                            onChange={(event) =>
+                              updateProfileDraft({ expected_salary_min: event.target.value })
+                            }
+                            placeholder="от"
+                          />
+                          <span className="salary-range-sep">—</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={10_000_000}
+                            step={5000}
+                            value={profileDraft.expected_salary_max}
+                            onChange={(event) =>
+                              updateProfileDraft({ expected_salary_max: event.target.value })
+                            }
+                            placeholder="до"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <button
-                    className="primary profile-confirm-button"
-                    style={{ width: '100%' }}
-                    disabled={profileSaving || matchingBusy}
-                    onClick={() => void saveProfileAndRecommend()}
-                  >
-                    {profileSaving ? 'Сохраняем…' : matchingBusy ? 'Ищем…' : 'Искать вакансии'}
-                  </button>
-                  {profileMessage ? <p className="message">{profileMessage}</p> : null}
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      className="w-full"
+                      disabled={profileSaving || matchingBusy}
+                      onClick={() => void saveProfileAndRecommend()}
+                    >
+                      {profileSaving ? 'Сохраняем…' : matchingBusy ? 'Ищем…' : 'Искать вакансии'}
+                    </Button>
+                    {profileMessage ? (
+                      <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[var(--text-sm)]">
+                        {profileMessage}
+                      </p>
+                    ) : null}
 
-                  {curatedSkills.length > 0 ? (
-                    <Collapsible>
-                      <CollapsibleTrigger className="flex items-center justify-between w-full text-left px-0 py-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)] transition-colors mt-3">
-                        <span>Ручная курация скиллов</span>
-                        <span className="flex items-center gap-2">
-                          <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
-                            {curatedSkills.length}
+                    {curatedSkills.length > 0 ? (
+                      <Collapsible>
+                        <CollapsibleTrigger className="group flex items-center justify-between w-full text-left px-0 py-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)] transition-colors">
+                          <span>Ручная курация скиллов</span>
+                          <span className="flex items-center gap-2">
+                            <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                              {curatedSkills.length}
+                            </span>
+                            <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
                           </span>
-                          <span>▼</span>
-                        </span>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="data-[state=open]:animate-slide-down">
-                        <div className="curated-block">
-                          {curatedSkills.some((row) => row.direction === 'added') ? (
-                            <div className="curated-group">
-                              <p className="curated-title">Добавлено вручную</p>
-                              <ul className="curated-list">
-                                {curatedSkills
-                                  .filter((row) => row.direction === 'added')
-                                  .map((row) => (
-                                    <li key={`curated-added-${row.id}`}>
-                                      <span>{row.skill_text}</span>
-                                      <button
-                                        type="button"
-                                        className="fit-micro-btn fit-micro-undo"
-                                        title="Снять отметку"
-                                        aria-label={`Снять отметку с «${row.skill_text}»`}
-                                        disabled={Boolean(curatingSkillKey)}
-                                        onClick={() => void uncurateSkill(row.id)}
-                                      >
-                                        ✕
-                                      </button>
-                                    </li>
-                                  ))}
-                              </ul>
-                            </div>
-                          ) : null}
-                          {curatedSkills.some((row) => row.direction === 'rejected') ? (
-                            <div className="curated-group">
-                              <p className="curated-title">Отмечено как не моё</p>
-                              <ul className="curated-list">
-                                {curatedSkills
-                                  .filter((row) => row.direction === 'rejected')
-                                  .map((row) => (
-                                    <li key={`curated-rejected-${row.id}`}>
-                                      <span>{row.skill_text}</span>
-                                      <button
-                                        type="button"
-                                        className="fit-micro-btn fit-micro-undo"
-                                        title="Снять отметку"
-                                        aria-label={`Снять отметку с «${row.skill_text}»`}
-                                        disabled={Boolean(curatingSkillKey)}
-                                        onClick={() => void uncurateSkill(row.id)}
-                                      >
-                                        ✕
-                                      </button>
-                                    </li>
-                                  ))}
-                              </ul>
-                            </div>
-                          ) : null}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  ) : null}
-                </section>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="data-[state=open]:animate-slide-down">
+                          <div className="curated-block mt-2">
+                            {curatedSkills.some((row) => row.direction === 'added') ? (
+                              <div className="curated-group">
+                                <p className="curated-title">Добавлено вручную</p>
+                                <ul className="curated-list">
+                                  {curatedSkills
+                                    .filter((row) => row.direction === 'added')
+                                    .map((row) => (
+                                      <li key={`curated-added-${row.id}`}>
+                                        <span>{row.skill_text}</span>
+                                        <button
+                                          type="button"
+                                          className="fit-micro-btn fit-micro-undo"
+                                          title="Снять отметку"
+                                          aria-label={`Снять отметку с «${row.skill_text}»`}
+                                          disabled={Boolean(curatingSkillKey)}
+                                          onClick={() => void uncurateSkill(row.id)}
+                                        >
+                                          ✕
+                                        </button>
+                                      </li>
+                                    ))}
+                                </ul>
+                              </div>
+                            ) : null}
+                            {curatedSkills.some((row) => row.direction === 'rejected') ? (
+                              <div className="curated-group">
+                                <p className="curated-title">Отмечено как не моё</p>
+                                <ul className="curated-list">
+                                  {curatedSkills
+                                    .filter((row) => row.direction === 'rejected')
+                                    .map((row) => (
+                                      <li key={`curated-rejected-${row.id}`}>
+                                        <span>{row.skill_text}</span>
+                                        <button
+                                          type="button"
+                                          className="fit-micro-btn fit-micro-undo"
+                                          title="Снять отметку"
+                                          aria-label={`Снять отметку с «${row.skill_text}»`}
+                                          disabled={Boolean(curatingSkillKey)}
+                                          onClick={() => void uncurateSkill(row.id)}
+                                        >
+                                          ✕
+                                        </button>
+                                      </li>
+                                    ))}
+                                </ul>
+                              </div>
+                            ) : null}
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
+                    ) : null}
+                  </CardContent>
+                </Card>
               ) : null}
 
-              <section className="panel">
-                <h2>Подбор вакансий</h2>
-                {resumes.length > 1 ? (
-                  <div className="inline-form">
+              {/* ── Подбор вакансий section ─────────────────────────── */}
+              <Card className="animate-fade-in">
+                <CardHeader className="pb-4">
+                  <CardTitle>Подбор вакансий</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  {resumes.length > 1 ? (
                     <select
+                      className="w-full"
                       value={selectedResumeId ?? ''}
                       onChange={(event) => setSelectedResumeId(event.target.value ? Number(event.target.value) : null)}
                     >
@@ -1928,380 +2024,465 @@ export default function DashboardPage() {
                         </option>
                       ))}
                     </select>
-                  </div>
-                ) : null}
-                {!profileDraft ? (
-                  <button
-                    className="primary"
-                    style={{ width: '100%' }}
-                    onClick={() => void refreshVacancyIndex()}
-                    disabled={matchingBusy || !selectedResumeId}
-                  >
-                    {matchingBusy ? 'Ищем…' : 'Искать вакансии'}
-                  </button>
-                ) : null}
-                {matchingBusy || matchingProgress > 0 ? (
-                  <div className="progress-box">
-                    <div className="progress-head">
-                      <span>{matchingStage || 'Идет выполнение...'}</span>
-                      <span>{matchingProgress}%</span>
-                    </div>
-                    <div className="progress-track">
-                      <div className="progress-fill" style={{ width: `${matchingProgress}%` }} />
-                    </div>
-                    {matchingBusy && currentJobId ? (
-                      <div className="progress-actions">
-                        <button
-                          className="danger progress-cancel"
-                          disabled={cancelRequested}
-                          onClick={() => void cancelRecommendationJob()}
-                        >
-                          {cancelRequested ? 'Останавливаем...' : 'Отменить'}
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {matchingMessage ? <p className="message">{matchingMessage}</p> : null}
-                {currentJobId ? <p className="panel-note">Job ID: {currentJobId}</p> : null}
-                {openaiUsageMessage ? <p className="panel-note">{openaiUsageMessage}</p> : null}
-                {lastMatchingQuery ? <p className="panel-note">Поисковый запрос: {lastMatchingQuery}</p> : null}
-                {lastSources.length > 0 ? (
-                  <details className="sources-box">
-                    <summary>Источники текущего запуска ({lastSources.length})</summary>
-                    <ul>
-                      {lastSources.map((sourceUrl) => (
-                        <li key={sourceUrl}>
-                          <a href={sourceUrl} target="_blank" rel="noreferrer">
-                            {sourceUrl}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                ) : null}
-                {visibleMatches.length > 0 && lastSearchAt ? (
-                  <p className="panel-note" style={{ fontWeight: 600, marginBottom: 8 }}>
-                    {`Топ-${visibleMatches.length}${lastAnalyzedCount ? ` из ${lastAnalyzedCount} просмотренных` : ''} · последний запуск ${lastSearchAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
-                  </p>
-                ) : null}
-                <div className="vacancy-list">
-                  {visibleMatches.length === 0 ? <p className="empty-state">После запуска здесь появятся подходящие вакансии.</p> : null}
-                  {visibleMatches.map((match, matchIndex) => {
-                    const showTierDivider =
-                      match.tier === 'maybe' &&
-                      (matchIndex === 0 || visibleMatches[matchIndex - 1]?.tier !== 'maybe');
-                    const matchedSkills = matchedSkillsFromMatch(match);
-                    const matchedRequirements = matchedRequirementsFromMatch(match);
-                    const missingRequirements = missingRequirementsFromMatch(match);
-                    const matchedEntries = matchedRequirements.length > 0 ? matchedRequirements : matchedSkills;
-                    const curatedForResume = curatedSkills;
-                    const curatedAddedLower = new Set(
-                      curatedForResume.filter((row) => row.direction === 'added').map((row) => row.skill_text.toLowerCase())
-                    );
-                    const curatedRejectedLower = new Set(
-                      curatedForResume.filter((row) => row.direction === 'rejected').map((row) => row.skill_text.toLowerCase())
-                    );
-                    const locallyAddedForMatch = curatedForResume
-                      .filter(
-                        (row) =>
-                          row.direction === 'added' &&
-                          row.source_vacancy_id === match.vacancy_id &&
-                          !matchedEntries.some((item) => item.toLowerCase() === row.skill_text.toLowerCase())
-                      )
-                      .map((row) => row.skill_text);
-                    const visibleMissing = missingRequirements.filter(
-                      (item) =>
-                        !curatedAddedLower.has(item.toLowerCase()) &&
-                        !curatedRejectedLower.has(item.toLowerCase())
-                    );
-                    const isCurating = (skill: string, direction: CuratedDirection) =>
-                      curatingSkillKey === `${match.vacancy_id}::${direction}::${skill.toLowerCase()}`;
-                    return (
-                    <Fragment key={match.vacancy_id}>
-                    {showTierDivider ? (
-                      <div className="vacancy-tier-divider">
-                        <h3 className="vacancy-tier-title">Может подойти — проверь</h3>
-                        <p className="vacancy-tier-hint">
-                          Эти вакансии слабее совпадают по профилю, но иногда среди них находится удачное предложение.
-                        </p>
-                      </div>
-                    ) : null}
-                    <article
-                      className="vacancy-item"
-                      data-vacancy-id={normalizeVacancyId(match.vacancy_id)}
-                      ref={(el) => {
-                        const id = normalizeVacancyId(match.vacancy_id);
-                        if (el) {
-                          cardRefs.current.set(id, el);
-                        } else {
-                          cardRefs.current.delete(id);
-                        }
-                      }}
+                  ) : null}
+                  {!profileDraft ? (
+                    <Button
+                      variant="primary"
+                      size="lg"
+                      className="w-full"
+                      onClick={() => void refreshVacancyIndex()}
+                      disabled={matchingBusy || !selectedResumeId}
                     >
-                      <h3>{match.title}</h3>
-                      <p className="meta">
-                        {match.company || 'Компания не указана'}
-                        {' • '}
-                        {match.location || 'Локация не указана'}
-                      </p>
-                      <p className="match-score">Релевантность: {scoreToPercent(match.similarity_score)}</p>
-                      {(() => {
-                        const badge = renderSalaryBadge(match);
-                        if (!badge) return null;
-                        const fitClass = badge.fit ? `salary-fit-${badge.fit}` : '';
-                        const fitLabel =
-                          badge.fit === 'below'
-                            ? ' (ниже ожиданий)'
-                            : badge.fit === 'above'
-                              ? ' (выше ожиданий)'
-                              : '';
-                        return (
-                          <p className={`match-salary ${fitClass}`.trim()}>
-                            <span className="match-salary-label">Зарплата:</span> {badge.text}
-                            {fitLabel}
-                          </p>
-                        );
-                      })()}
-                      {reasonFromMatch(match) ? (
-                        <Collapsible>
-                          <CollapsibleTrigger className="text-left text-[var(--text-sm)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-secondary)] transition-colors py-1">
-                            Почему показали ▼
-                          </CollapsibleTrigger>
-                          <CollapsibleContent className="data-[state=open]:animate-slide-down">
-                            <p className="match-reason">
-                              {reasonFromMatch(match)}
-                            </p>
-                          </CollapsibleContent>
-                        </Collapsible>
+                      {matchingBusy ? 'Ищем…' : 'Искать вакансии'}
+                    </Button>
+                  ) : null}
+                  {matchingBusy || matchingProgress > 0 ? (
+                    <div className="progress-box">
+                      <div className="progress-head">
+                        <span>{matchingStage || 'Идет выполнение...'}</span>
+                        <span>{matchingProgress}%</span>
+                      </div>
+                      <div className="progress-track">
+                        <div className="progress-fill" style={{ width: `${matchingProgress}%` }} />
+                      </div>
+                      {matchingBusy && currentJobId ? (
+                        <div className="progress-actions">
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            disabled={cancelRequested}
+                            onClick={() => void cancelRecommendationJob()}
+                          >
+                            {cancelRequested ? 'Останавливаем...' : 'Отменить'}
+                          </Button>
+                        </div>
                       ) : null}
-                      <div className="fit-grid">
-                        <div className="fit-box fit-matched">
-                          <p className="fit-title">Ты подходишь</p>
-                          {matchedEntries.length > 0 || locallyAddedForMatch.length > 0 ? (
-                            <ul>
-                              {matchedEntries.map((item) => (
-                                <li key={`${match.vacancy_id}-match-${item}`}>{item}</li>
-                              ))}
-                              {locallyAddedForMatch.map((item) => (
-                                <li
-                                  key={`${match.vacancy_id}-match-added-${item}`}
-                                  className="fit-item-added"
-                                >
-                                  {item}
-                                  <span className="curated-badge" title="Добавлено вручную">
-                                    ✓
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="fit-empty">совпадение по ключевым словам в описании</p>
-                          )}
-                        </div>
-                        <div className="fit-box fit-missing">
-                          <p className="fit-title">Чего не хватает</p>
-                          {visibleMissing.length > 0 ? (
-                            <ul>
-                              {visibleMissing.map((item) => (
-                                <li
-                                  key={`${match.vacancy_id}-miss-${item}`}
-                                  className="fit-missing-item"
-                                >
-                                  <span className="fit-missing-text">{item}</span>
-                                  <span className="fit-missing-actions">
-                                    <button
-                                      type="button"
-                                      className="fit-micro-btn fit-micro-add"
-                                      title="Добавить в профиль"
-                                      aria-label={`Добавить навык «${item}» в профиль`}
-                                      disabled={
-                                        !selectedResumeId ||
-                                        matchingBusy ||
-                                        Boolean(curatingSkillKey)
-                                      }
-                                      onClick={() => void curateMatchSkill(match, item, 'added')}
-                                    >
-                                      {isCurating(item, 'added') ? '…' : '✓'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="fit-micro-btn fit-micro-reject"
-                                      title="Отметить как не моё"
-                                      aria-label={`Отметить «${item}» как не моё`}
-                                      disabled={
-                                        !selectedResumeId ||
-                                        matchingBusy ||
-                                        Boolean(curatingSkillKey)
-                                      }
-                                      onClick={() => void curateMatchSkill(match, item, 'rejected')}
-                                    >
-                                      {isCurating(item, 'rejected') ? '…' : '✗'}
-                                    </button>
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="fit-empty">совпадение по всем указанным требованиям</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="vacancy-actions">
-                        <a
-                          href={match.source_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={() =>
-                            trackClick({
-                              vacancy_id: normalizeVacancyId(match.vacancy_id),
-                              click_kind: 'open_source',
-                              match_run_id: match.match_run_id ?? null,
-                              resume_id: selectedResumeId ?? null,
-                              position: matchIndex,
-                            })
-                          }
-                        >
-                          Открыть источник
-                        </a>
-                        <button
-                          className="primary"
-                          disabled={
-                            matchingBusy ||
-                            Boolean(applyingVacancyIds[normalizeVacancyId(match.vacancy_id)])
-                          }
-                          onClick={() => {
-                            trackClick({
-                              vacancy_id: normalizeVacancyId(match.vacancy_id),
-                              click_kind: 'apply',
-                              match_run_id: match.match_run_id ?? null,
-                              resume_id: selectedResumeId ?? null,
-                              position: matchIndex,
-                            });
-                            void applyToVacancy(match);
-                          }}
-                        >
-                          {applyingVacancyIds[normalizeVacancyId(match.vacancy_id)]
-                            ? 'Создаём…'
-                            : 'Откликнуться'}
-                        </button>
-                        <button
-                          className="secondary"
-                          disabled={matchingBusy}
-                          onClick={() => {
-                            trackClick({
-                              vacancy_id: normalizeVacancyId(match.vacancy_id),
-                              click_kind: 'like',
-                              match_run_id: match.match_run_id ?? null,
-                              resume_id: selectedResumeId ?? null,
-                              position: matchIndex,
-                            });
-                            void likeVacancy(match);
-                          }}
-                        >
-                          Плюс
-                        </button>
-                        <button
-                          className="danger"
-                          disabled={matchingBusy}
-                          onClick={() => {
-                            trackClick({
-                              vacancy_id: normalizeVacancyId(match.vacancy_id),
-                              click_kind: 'dislike',
-                              match_run_id: match.match_run_id ?? null,
-                              resume_id: selectedResumeId ?? null,
-                              position: matchIndex,
-                            });
-                            void dislikeVacancy(match);
-                          }}
-                        >
-                          Минус
-                        </button>
-                      </div>
-                    </article>
-                    </Fragment>
-                    );
-                  })}
-                </div>
-              </section>
+                    </div>
+                  ) : null}
+                  {matchingMessage ? (
+                    <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[var(--text-sm)]">
+                      {matchingMessage}
+                    </p>
+                  ) : null}
+                  {currentJobId ? (
+                    <p className="text-[var(--text-xs)] text-[var(--color-ink-muted)]">
+                      Job ID: {currentJobId}
+                    </p>
+                  ) : null}
+                  {openaiUsageMessage ? (
+                    <p className="text-[var(--text-xs)] text-[var(--color-ink-muted)]">
+                      {openaiUsageMessage}
+                    </p>
+                  ) : null}
+                  {lastMatchingQuery ? (
+                    <p className="text-[var(--text-xs)] text-[var(--color-ink-muted)]">
+                      Запрос: {lastMatchingQuery}
+                    </p>
+                  ) : null}
+                  {lastSources.length > 0 ? (
+                    <details className="sources-box">
+                      <summary>Источники текущего запуска ({lastSources.length})</summary>
+                      <ul>
+                        {lastSources.map((sourceUrl) => (
+                          <li key={sourceUrl}>
+                            <a href={sourceUrl} target="_blank" rel="noreferrer">
+                              {sourceUrl}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                  {visibleMatches.length > 0 && lastSearchAt ? (
+                    <p className="text-[var(--text-sm)] font-semibold text-[var(--color-ink-secondary)]">
+                      {`Топ-${visibleMatches.length}${lastAnalyzedCount ? ` из ${lastAnalyzedCount} просмотренных` : ''} · последний запуск ${lastSearchAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
+                    </p>
+                  ) : null}
 
-              <section className="panel">
+                  {/* Match cards */}
+                  <div className="flex flex-col gap-3">
+                    {visibleMatches.length === 0 ? (
+                      <p className="text-[var(--color-ink-secondary)] text-[var(--text-sm)] italic">
+                        После запуска здесь появятся подходящие вакансии.
+                      </p>
+                    ) : null}
+                    {visibleMatches.map((match, matchIndex) => {
+                      const showTierDivider =
+                        match.tier === 'maybe' &&
+                        (matchIndex === 0 || visibleMatches[matchIndex - 1]?.tier !== 'maybe');
+                      const matchedSkills = matchedSkillsFromMatch(match);
+                      const matchedRequirements = matchedRequirementsFromMatch(match);
+                      const missingRequirements = missingRequirementsFromMatch(match);
+                      const matchedEntries = matchedRequirements.length > 0 ? matchedRequirements : matchedSkills;
+                      const curatedForResume = curatedSkills;
+                      const curatedAddedLower = new Set(
+                        curatedForResume.filter((row) => row.direction === 'added').map((row) => row.skill_text.toLowerCase())
+                      );
+                      const curatedRejectedLower = new Set(
+                        curatedForResume.filter((row) => row.direction === 'rejected').map((row) => row.skill_text.toLowerCase())
+                      );
+                      const locallyAddedForMatch = curatedForResume
+                        .filter(
+                          (row) =>
+                            row.direction === 'added' &&
+                            row.source_vacancy_id === match.vacancy_id &&
+                            !matchedEntries.some((item) => item.toLowerCase() === row.skill_text.toLowerCase())
+                        )
+                        .map((row) => row.skill_text);
+                      const visibleMissing = missingRequirements.filter(
+                        (item) =>
+                          !curatedAddedLower.has(item.toLowerCase()) &&
+                          !curatedRejectedLower.has(item.toLowerCase())
+                      );
+                      const isCurating = (skill: string, direction: CuratedDirection) =>
+                        curatingSkillKey === `${match.vacancy_id}::${direction}::${skill.toLowerCase()}`;
+                      return (
+                        <Fragment key={match.vacancy_id}>
+                          {showTierDivider ? (
+                            <div className="vacancy-tier-divider">
+                              <h3 className="vacancy-tier-title">Может подойти — проверь</h3>
+                              <p className="vacancy-tier-hint">
+                                Эти вакансии слабее совпадают по профилю, но иногда среди них находится удачное предложение.
+                              </p>
+                            </div>
+                          ) : null}
+                          {/* Match card using token classes */}
+                          <article
+                            className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface)] p-4 flex flex-col gap-3 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-shadow duration-[var(--duration-fast)]"
+                            data-vacancy-id={normalizeVacancyId(match.vacancy_id)}
+                            ref={(el) => {
+                              const id = normalizeVacancyId(match.vacancy_id);
+                              if (el) {
+                                cardRefs.current.set(id, el);
+                              } else {
+                                cardRefs.current.delete(id);
+                              }
+                            }}
+                          >
+                            {/* Card header row */}
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <h3 className="text-[var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.025em] text-[var(--color-ink)]">
+                                {match.title}
+                              </h3>
+                              {/* Score + salary right-aligned, mono */}
+                              <div className="flex flex-col items-end gap-1 shrink-0 font-[var(--font-mono)] text-[var(--text-sm)]">
+                                <span className="font-semibold text-[var(--color-ink)]">
+                                  {scoreToPercent(match.similarity_score)}
+                                </span>
+                                {(() => {
+                                  const badge = renderSalaryBadge(match);
+                                  if (!badge) return null;
+                                  const fitColor =
+                                    badge.fit === 'below'
+                                      ? 'text-[var(--color-warning)]'
+                                      : badge.fit === 'above'
+                                        ? 'text-[var(--color-success)]'
+                                        : 'text-[var(--color-ink-secondary)]';
+                                  return (
+                                    <span className={fitColor}>
+                                      {badge.text}
+                                    </span>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+
+                            {/* Meta */}
+                            <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] m-0">
+                              {match.company || 'Компания не указана'}
+                              {' · '}
+                              {match.location || 'Локация не указана'}
+                            </p>
+
+                            {/* Почему показали */}
+                            {reasonFromMatch(match) ? (
+                              <Collapsible>
+                                <CollapsibleTrigger className="group flex items-center justify-end w-full text-right text-[var(--text-xs)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-secondary)] transition-colors py-0.5 gap-1">
+                                  <span>Почему показали</span>
+                                  <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="data-[state=open]:animate-slide-down">
+                                  <p className="match-reason text-[var(--text-sm)] text-[var(--color-ink-secondary)] leading-[var(--leading-snug)] mt-1">
+                                    {reasonFromMatch(match)}
+                                  </p>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            ) : null}
+
+                            {/* Fit grid — pill badges */}
+                            <div className="fit-grid">
+                              <div className="fit-box fit-matched">
+                                <p className="fit-title">Подходишь</p>
+                                {matchedEntries.length > 0 || locallyAddedForMatch.length > 0 ? (
+                                  <ul>
+                                    {matchedEntries.map((item) => (
+                                      <li key={`${match.vacancy_id}-match-${item}`}>{item}</li>
+                                    ))}
+                                    {locallyAddedForMatch.map((item) => (
+                                      <li
+                                        key={`${match.vacancy_id}-match-added-${item}`}
+                                        className="fit-item-added"
+                                      >
+                                        {item}
+                                        <span className="curated-badge" title="Добавлено вручную">
+                                          ✓
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="fit-empty">совпадение по ключевым словам</p>
+                                )}
+                              </div>
+                              <div className="fit-box fit-missing">
+                                <p className="fit-title">Не хватает</p>
+                                {visibleMissing.length > 0 ? (
+                                  <ul>
+                                    {visibleMissing.map((item) => (
+                                      <li
+                                        key={`${match.vacancy_id}-miss-${item}`}
+                                        className="fit-missing-item"
+                                      >
+                                        <span className="fit-missing-text">{item}</span>
+                                        <span className="fit-missing-actions">
+                                          <button
+                                            type="button"
+                                            className="fit-micro-btn fit-micro-add"
+                                            title="Добавить в профиль"
+                                            aria-label={`Добавить навык «${item}» в профиль`}
+                                            disabled={
+                                              !selectedResumeId ||
+                                              matchingBusy ||
+                                              Boolean(curatingSkillKey)
+                                            }
+                                            onClick={() => void curateMatchSkill(match, item, 'added')}
+                                          >
+                                            {isCurating(item, 'added') ? '…' : '✓'}
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="fit-micro-btn fit-micro-reject"
+                                            title="Отметить как не моё"
+                                            aria-label={`Отметить «${item}» как не моё`}
+                                            disabled={
+                                              !selectedResumeId ||
+                                              matchingBusy ||
+                                              Boolean(curatingSkillKey)
+                                            }
+                                            onClick={() => void curateMatchSkill(match, item, 'rejected')}
+                                          >
+                                            {isCurating(item, 'rejected') ? '…' : '✗'}
+                                          </button>
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="fit-empty">все требования закрыты</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center gap-2 flex-wrap pt-1">
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                disabled={
+                                  matchingBusy ||
+                                  Boolean(applyingVacancyIds[normalizeVacancyId(match.vacancy_id)])
+                                }
+                                onClick={() => {
+                                  trackClick({
+                                    vacancy_id: normalizeVacancyId(match.vacancy_id),
+                                    click_kind: 'apply',
+                                    match_run_id: match.match_run_id ?? null,
+                                    resume_id: selectedResumeId ?? null,
+                                    position: matchIndex,
+                                  });
+                                  void applyToVacancy(match);
+                                }}
+                              >
+                                {applyingVacancyIds[normalizeVacancyId(match.vacancy_id)]
+                                  ? 'Создаём…'
+                                  : 'Откликнуться'}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={matchingBusy}
+                                onClick={() => {
+                                  trackClick({
+                                    vacancy_id: normalizeVacancyId(match.vacancy_id),
+                                    click_kind: 'like',
+                                    match_run_id: match.match_run_id ?? null,
+                                    resume_id: selectedResumeId ?? null,
+                                    position: matchIndex,
+                                  });
+                                  void likeVacancy(match);
+                                }}
+                              >
+                                + Плюс
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={matchingBusy}
+                                onClick={() => {
+                                  trackClick({
+                                    vacancy_id: normalizeVacancyId(match.vacancy_id),
+                                    click_kind: 'dislike',
+                                    match_run_id: match.match_run_id ?? null,
+                                    resume_id: selectedResumeId ?? null,
+                                    position: matchIndex,
+                                  });
+                                  void dislikeVacancy(match);
+                                }}
+                              >
+                                − Минус
+                              </Button>
+                              <a
+                                href={match.source_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="ml-auto text-[var(--text-sm)] text-[var(--color-ink-muted)] hover:text-[var(--color-accent)] transition-colors no-underline font-semibold"
+                                onClick={() =>
+                                  trackClick({
+                                    vacancy_id: normalizeVacancyId(match.vacancy_id),
+                                    click_kind: 'open_source',
+                                    match_run_id: match.match_run_id ?? null,
+                                    resume_id: selectedResumeId ?? null,
+                                    position: matchIndex,
+                                  })
+                                }
+                              >
+                                Источник →
+                              </a>
+                            </div>
+                          </article>
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Collapsible archived sections ──────────────────── */}
+              <Card className="animate-fade-in">
                 <Collapsible>
-                  <CollapsibleTrigger className="flex items-center justify-between w-full text-left px-0 py-2">
-                    <h2 style={{ margin: 0 }}>Отобранные вакансии</h2>
-                    <span className="flex items-center gap-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
-                      <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
-                        {selectedVacancies.length}
+                  <CardHeader className="pb-4">
+                    <CollapsibleTrigger className="group flex items-center justify-between w-full text-left gap-3">
+                      <CardTitle>Отобранные вакансии</CardTitle>
+                      <span className="flex items-center gap-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                        <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                          {selectedVacancies.length}
+                        </span>
+                        <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
                       </span>
-                      <span>▼</span>
-                    </span>
-                  </CollapsibleTrigger>
+                    </CollapsibleTrigger>
+                  </CardHeader>
                   <CollapsibleContent className="data-[state=open]:animate-slide-down">
-                    <div className="vacancy-list">
-                      {selectedVacancies.length === 0 ? <p className="empty-state">Пока нет отобранных. Нажмите Плюс в подборке.</p> : null}
+                    <CardContent className="pt-0 flex flex-col gap-3">
+                      {selectedVacancies.length === 0 ? (
+                        <p className="text-[var(--color-ink-secondary)] text-[var(--text-sm)] italic">
+                          Пока нет отобранных. Нажмите «+ Плюс» в подборке.
+                        </p>
+                      ) : null}
                       {selectedVacancies.map((item) => (
-                        <article className="vacancy-item" key={`selected-${item.vacancy_id}`}>
-                          <h3>{item.title}</h3>
-                          <p className="meta">
-                            {item.company || 'Компания не указана'}
-                            {' • '}
-                            {item.location || 'Локация не указана'}
+                        <article
+                          key={`selected-${item.vacancy_id}`}
+                          className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface)] p-4 flex flex-col gap-2"
+                        >
+                          <h3 className="text-[var(--text-lg)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.02em]">
+                            {item.title}
+                          </h3>
+                          <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] m-0">
+                            {item.company || 'Компания не указана'} · {item.location || 'Локация не указана'}
                           </p>
-                          <div className="vacancy-actions">
-                            <a href={item.source_url} target="_blank" rel="noreferrer">
-                              Открыть источник
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <a
+                              href={item.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[var(--text-sm)] font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors no-underline"
+                            >
+                              Источник →
                             </a>
-                            <button className="secondary" disabled={matchingBusy} onClick={() => void unlikeVacancy(item.vacancy_id)}>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={matchingBusy}
+                              onClick={() => void unlikeVacancy(item.vacancy_id)}
+                            >
                               Убрать
-                            </button>
+                            </Button>
                           </div>
                         </article>
                       ))}
-                    </div>
+                    </CardContent>
                   </CollapsibleContent>
                 </Collapsible>
-              </section>
+              </Card>
 
-              <section className="panel">
+              <Card className="animate-fade-in">
                 <Collapsible>
-                  <CollapsibleTrigger className="flex items-center justify-between w-full text-left px-0 py-2">
-                    <h2 style={{ margin: 0 }}>Отклонённые вакансии</h2>
-                    <span className="flex items-center gap-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
-                      <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
-                        {dislikedVacancies.length}
+                  <CardHeader className="pb-4">
+                    <CollapsibleTrigger className="group flex items-center justify-between w-full text-left gap-3">
+                      <CardTitle>Отклонённые вакансии</CardTitle>
+                      <span className="flex items-center gap-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                        <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                          {dislikedVacancies.length}
+                        </span>
+                        <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
                       </span>
-                      <span>▼</span>
-                    </span>
-                  </CollapsibleTrigger>
+                    </CollapsibleTrigger>
+                  </CardHeader>
                   <CollapsibleContent className="data-[state=open]:animate-slide-down">
-                    <div className="vacancy-list">
-                      {dislikedVacancies.length === 0 ? <p className="empty-state">Пока нет минусованных вакансий.</p> : null}
+                    <CardContent className="pt-0 flex flex-col gap-3">
+                      {dislikedVacancies.length === 0 ? (
+                        <p className="text-[var(--color-ink-secondary)] text-[var(--text-sm)] italic">
+                          Пока нет минусованных вакансий.
+                        </p>
+                      ) : null}
                       {dislikedVacancies.map((item) => (
-                        <article className="vacancy-item" key={`disliked-${item.vacancy_id}`}>
-                          <h3>{item.title}</h3>
-                          <p className="meta">
-                            {item.company || 'Компания не указана'}
-                            {' • '}
-                            {item.location || 'Локация не указана'}
+                        <article
+                          key={`disliked-${item.vacancy_id}`}
+                          className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface)] p-4 flex flex-col gap-2"
+                        >
+                          <h3 className="text-[var(--text-lg)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.02em]">
+                            {item.title}
+                          </h3>
+                          <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] m-0">
+                            {item.company || 'Компания не указана'} · {item.location || 'Локация не указана'}
                           </p>
-                          <div className="vacancy-actions">
-                            <a href={item.source_url} target="_blank" rel="noreferrer">
-                              Открыть источник
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <a
+                              href={item.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[var(--text-sm)] font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors no-underline"
+                            >
+                              Источник →
                             </a>
-                            <button className="secondary" disabled={matchingBusy} onClick={() => void undislikeVacancy(item.vacancy_id)}>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={matchingBusy}
+                              onClick={() => void undislikeVacancy(item.vacancy_id)}
+                            >
                               Снять минус
-                            </button>
+                            </Button>
                           </div>
                         </article>
                       ))}
-                    </div>
+                    </CardContent>
                   </CollapsibleContent>
                 </Collapsible>
-              </section>
+              </Card>
 
               {/* Applications section moved to /applications route — slice 2.8.4 */}
             </div>
-          </section>
+          </div>
         )}
       </section>
     </main>
@@ -2342,34 +2523,34 @@ function Analysis({ data, expectedSalaryMin, expectedSalaryMax }: {
     <div className="analysis">
       <Card className="mb-4">
         <CardHeader className="pb-2">
-          <CardTitle className="text-[var(--text-base)] font-semibold text-[var(--color-ink)]">
+          <CardTitle className="text-[var(--text-xl)]">
             Твой профиль
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
-          <div className="flex justify-between">
+          <div className="flex justify-between gap-4">
             <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">Роль</span>
-            <span className="text-[var(--text-sm)] text-[var(--color-ink)]">{role}</span>
+            <span className="text-[var(--text-sm)] text-[var(--color-ink)] text-right">{role}</span>
           </div>
-          <div className="flex justify-between">
+          <div className="flex justify-between gap-4">
             <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">Грейд</span>
-            <span className="text-[var(--text-sm)] text-[var(--color-ink)]">{grade}</span>
+            <span className="text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">{grade}</span>
           </div>
           <div className="flex justify-between items-start gap-4">
             <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)] shrink-0">Топ-5 скиллов</span>
             <span className="text-[var(--text-sm)] text-[var(--color-ink)] text-right">{top5Skills}</span>
           </div>
-          <div className="flex justify-between">
+          <div className="flex justify-between gap-4">
             <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">Ожидаемая зарплата</span>
-            <span className="text-[var(--text-sm)] text-[var(--color-ink)]">{salaryDisplay}</span>
+            <span className="text-[var(--text-sm)] font-[var(--font-mono)] text-[var(--color-ink)]">{salaryDisplay}</span>
           </div>
         </CardContent>
       </Card>
 
       <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <CollapsibleTrigger className="flex items-center justify-between w-full text-left px-0 py-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)] transition-colors">
+        <CollapsibleTrigger className="group flex items-center justify-between w-full text-left px-0 py-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)] transition-colors">
           <span>Подробности профиля</span>
-          <span className="ml-2">{detailsOpen ? '▲' : '▼'}</span>
+          <span className="ml-2 transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
         </CollapsibleTrigger>
         <CollapsibleContent className="data-[state=open]:animate-slide-down">
           <div className="profile-card">

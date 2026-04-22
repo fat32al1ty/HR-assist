@@ -334,6 +334,9 @@
     overflow: hidden;
   }
 
+  /* Utility to suppress anchor underline when overriding in JSX */
+  .no-underline { text-decoration: none !important; }
+
   /* Staggered children: apply to parent, first 8 children get delays */
   .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
   .stagger-children > *:nth-child(2) { animation-delay: 60ms; }

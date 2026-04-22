@@ -178,3 +178,38 @@ DO:
 DON'T:
 - Open a dialog from inside another dialog.
 - Use `DialogContent` for informational toasts — use a lightweight `Badge` or inline message.
+
+---
+
+## Anchor screen — `/` (slice 2.8.7)
+
+Applied conventions (reference for 2.8.8):
+
+### Workspace layout
+`div.workspace` / `div.workspace-main` — grid retained via legacy CSS; `.stagger-children` class added for orchestrated entry.  All sections use `<Card>` with `CardHeader` + `CardContent`.
+
+### Page-load reveal
+Parent `div.workspace` has `stagger-children` applied. Each major section (sidebar, resume card, "Что ищу" card, matches card, archive cards) carries `animate-fade-in`. Stagger offsets: 0 / 60 / 120 / 180 / 240 / 300 ms. `prefers-reduced-motion` guard in `@layer base` collapses all durations to `0.01ms`.
+
+### Drop-zone file input
+File input is hidden (`sr-only`); wrapped in a `<label>` that acts as the full drop zone. Three visual states: default (`border-dashed border-border bg-surface-muted`), hover (`border-border-strong bg-surface-raised`), drag-over (`border-accent bg-accent-subtle`). `dragOver` React state drives the class switch.
+
+### Collapsible chevron
+All `CollapsibleTrigger` elements use `group` + `group-data-[state=open]:rotate-180` on the `▼` glyph. Duration is `duration-[var(--duration-fast)]`.
+
+### Message / alert inline
+Error and status messages use: `bg-warning-subtle text-warning border border-warning/25 rounded-md px-3 py-2 text-sm`. No `.message` legacy class.
+
+### Match card
+- Title: `font-display font-semibold text-xl tracking-tight`.
+- Score + salary: right-aligned column, `font-mono text-sm`.
+- "Почему показали": right-aligned trigger, `text-xs text-ink-muted`, chevron rotates on open.
+- "Откликнуться": `Button variant="primary" size="sm"`. Like/dislike: `variant="ghost" size="sm"`.
+- Source link: `ml-auto text-sm text-ink-muted hover:text-accent no-underline`.
+- Card shadow: `shadow-sm` default, `shadow-md` on hover via `hover:shadow-md transition-shadow`.
+
+### Inline messages removed
+`.message`, `.panel-note`, `.empty-state` class references eliminated from `/`. Replaced with token-based inline styles or italic `text-ink-secondary text-sm` paragraphs.
+
+### Legacy classes retained in globals.css (still used by other routes)
+`.workspace`, `.workspace-main`, `.panel`, `.vacancy-tier-divider`, `.fit-grid`, `.fit-box`, `.resume-active-tag`, `.status`, `.match-reason`, `.match-salary`, `.salary-range-row`, `.progress-box`, `.progress-*`, `.curated-*`, `.fit-micro-btn`, `.radio-chip`, `.sources-box`. These will be purged in 2.8.8 when the last consumer is migrated.
