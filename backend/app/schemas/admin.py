@@ -32,21 +32,7 @@ class ResumeStatsRead(BaseModel):
     last_query: str | None = None
 
 
-class DashboardStatsRead(BaseModel):
+class AdminDashboardStatsRead(BaseModel):
     generated_at: datetime
     qdrant: QdrantStatsRead
     resume: ResumeStatsRead | None = None
-
-
-class UserFunnelStatsRead(BaseModel):
-    resume_id: int | None = None
-    analyzed_count: int = 0
-    matched_count: int = 0
-    selected_count: int = 0
-    last_search_at: datetime | None = None
-    next_warmup_eta: datetime | None = None
-
-
-class UserDashboardRead(BaseModel):
-    generated_at: datetime
-    funnel: UserFunnelStatsRead

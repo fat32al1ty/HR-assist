@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 
 from app.api.routes import (
+    admin,
     applications,
     auth,
     dashboard,
@@ -43,6 +44,7 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(system.router, prefix="/api/system", tags=["system"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])

@@ -27,6 +27,7 @@ class UserRead(BaseModel):
     expected_salary_min: int | None = None
     expected_salary_max: int | None = None
     expected_salary_currency: str = "RUB"
+    is_admin: bool = False
 
     model_config = {"from_attributes": True}
 

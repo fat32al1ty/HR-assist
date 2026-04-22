@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   excludeFeedbackVacancies,
   normalizeVacancyId,
@@ -13,6 +14,7 @@ import {
 } from '../lib/recommendationStats';
 import { createDwellTracker, trackClick } from '../lib/telemetry';
 import { API_BASE_URL, RESUME_LIMIT, apiFetch } from '@/lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 const MIN_PROGRESS_VISIBLE_MS = 1400;
 const RECOMMEND_TIMEOUT_MS = 540000;
 const LAST_JOB_ID_STORAGE_KEY = 'last_recommendation_job_id';
@@ -55,6 +57,7 @@ type UserRead = UserPrefs & {
   email: string;
   full_name: string | null;
   is_active: boolean;
+  is_admin: boolean;
   email_verified: boolean;
   created_at: string;
 };
@@ -234,64 +237,21 @@ const APPLICATION_FILTER_TABS: { value: ApplicationFilter; label: string }[] = [
 
 type DashboardStatsResponse = {
   generated_at: string;
-  qdrant: {
-    status: string;
-    collections: string[];
-    indexed_vacancies: number;
-    profiled_vacancies: number;
-    profile_coverage_percent: number;
-    preference_positive_ready: boolean;
-    preference_negative_ready: boolean;
-  };
-  resume: {
-    resume_id: number;
-    resume_embedded: boolean;
-    target_role: string | null;
-    specialization: string | null;
-    indexed_vacancies: number;
-    vector_candidates_top300: number;
-    relevant_over_55_top300: number;
+  funnel: {
+    resume_id: number | null;
+    analyzed_count: number;
+    matched_count: number;
     selected_count: number;
-    disliked_count: number;
-    last_job_id: string | null;
-    last_job_status: string | null;
-    last_job_matches: number | null;
-    last_job_sources: number | null;
-    last_job_analyzed: number | null;
-    last_job_created_at: string | null;
-    last_query: string | null;
-  } | null;
+    last_search_at: string | null;
+    next_warmup_eta: string | null;
+  };
 };
 
 type WarmupStatusResponse = {
   enabled: boolean;
   running: boolean;
-  cycle: number;
-  last_started_at: string | null;
   last_finished_at: string | null;
-  last_duration_seconds: number | null;
-  last_error: string | null;
-  last_queries: string[];
-  last_metrics: {
-    fetched?: number;
-    prefiltered?: number;
-    analyzed?: number;
-    filtered?: number;
-    indexed?: number;
-    failed?: number;
-    already_indexed_skipped?: number;
-    backfill_considered?: number;
-    backfill_profiled?: number;
-    backfill_filtered?: number;
-    backfill_failed?: number;
-  };
   interval_seconds: number;
-  queries_per_cycle: number;
-  discover_count: number;
-  max_analyzed_per_query: number;
-  cycle_timeout_seconds: number;
-  profile_backfill_enabled: boolean;
-  profile_backfill_limit_per_cycle: number;
 };
 
 const statusLabels: Record<string, string> = {
@@ -411,6 +371,30 @@ function formatCountdown(totalMs: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
+function formatRelativeTimeRu(isoString: string | null): string {
+  if (!isoString) return '—';
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return '—';
+  const diffMs = Date.now() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return 'только что';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} мин назад`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) {
+    const h = diffHour;
+    const suffix = h === 1 ? 'час' : h < 5 ? 'часа' : 'часов';
+    return `${h} ${suffix} назад`;
+  }
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay === 1) return 'вчера';
+  if (diffDay < 7) {
+    const suffix = diffDay < 5 ? 'дня' : 'дней';
+    return `${diffDay} ${suffix} назад`;
+  }
+  return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+}
+
 const WORK_FORMAT_OPTIONS: { value: WorkFormat; label: string }[] = [
   { value: 'any', label: 'Любой' },
   { value: 'remote', label: 'Удалёнка' },
@@ -503,6 +487,7 @@ export default function DashboardPage() {
   const [applyingVacancyIds, setApplyingVacancyIds] = useState<Record<number, boolean>>({});
   const [curatedSkills, setCuratedSkills] = useState<CuratedSkillRead[]>([]);
   const [curatingSkillKey, setCuratingSkillKey] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const storedToken = window.localStorage.getItem('access_token');
@@ -730,6 +715,7 @@ export default function DashboardPage() {
     setCoverLetterDrafts({});
     setApplyingVacancyIds({});
     setApplicationFilter('active');
+    setIsAdmin(false);
     if (nextMessage) {
       setMessage(nextMessage);
     }
@@ -1010,6 +996,7 @@ export default function DashboardPage() {
         expected_salary_max: data.expected_salary_max,
         expected_salary_currency: data.expected_salary_currency
       });
+      setIsAdmin(data.is_admin);
     } catch {
       setUserPrefs(null);
     }
@@ -1965,102 +1952,78 @@ export default function DashboardPage() {
               </form>
               {message ? <p className="message">{message}</p> : null}
 
-              <div className="stats-box">
-                <h3>Qdrant stats</h3>
-                {dashboardStats ? (
-                  <ul className="stats-list">
-                    <li>Status: {dashboardStats.qdrant.status}</li>
-                    <li>Collections: {dashboardStats.qdrant.collections.length}</li>
-                    <li>Indexed vacancies: {dashboardStats.qdrant.indexed_vacancies}</li>
-                    <li>Profiled vacancies: {dashboardStats.qdrant.profiled_vacancies}</li>
-                    <li>Coverage: {dashboardStats.qdrant.profile_coverage_percent}%</li>
-                    <li>
-                      Pref vectors: +{dashboardStats.qdrant.preference_positive_ready ? 'yes' : 'no'} / -
-                      {dashboardStats.qdrant.preference_negative_ready ? 'yes' : 'no'}
-                    </li>
-                  </ul>
-                ) : (
-                  <p className="panel-note">No stats yet.</p>
-                )}
-
-                {dashboardStats?.resume ? (
-                  <>
-                    <h3>Resume scope</h3>
-                    <ul className="stats-list">
-                      <li>Resume vector: {dashboardStats.resume.resume_embedded ? 'ready' : 'missing'}</li>
-                      <li>Role: {dashboardStats.resume.target_role || 'n/a'}</li>
-                      <li>Specialization: {dashboardStats.resume.specialization || 'n/a'}</li>
-                      <li>Vector candidates (top300): {dashboardStats.resume.vector_candidates_top300}</li>
-                      <li>Relevant &gt;=55%: {dashboardStats.resume.relevant_over_55_top300}</li>
-                      <li>Selected / Disliked: {dashboardStats.resume.selected_count} / {dashboardStats.resume.disliked_count}</li>
-                      <li>Last job status: {dashboardStats.resume.last_job_status || 'n/a'}</li>
-                      <li>Last job matches: {dashboardStats.resume.last_job_matches ?? 0}</li>
-                      <li>Last job analyzed: {dashboardStats.resume.last_job_analyzed ?? 0}</li>
-                      <li>Last job sources: {dashboardStats.resume.last_job_sources ?? 0}</li>
-                    </ul>
-                  </>
-                ) : (
-                  <p className="panel-note">Select resume to see scoped stats.</p>
-                )}
-
-                <h3>Автоматическое обновление</h3>
-                {warmupStatus ? (
-                  warmupStatus.enabled ? (
-                    (() => {
-                      const intervalMin = Math.max(1, Math.round(warmupStatus.interval_seconds / 60));
-                      const finishedMs = warmupStatus.last_finished_at
-                        ? new Date(warmupStatus.last_finished_at).getTime()
-                        : null;
-                      const nextAt =
-                        finishedMs !== null ? finishedMs + warmupStatus.interval_seconds * 1000 : null;
-                      const remainingMs = nextAt !== null ? nextAt - nowTick : null;
-                      return (
-                        <>
-                          <p className="panel-note">Обновляем индекс вакансий каждые {intervalMin} мин.</p>
-                          {warmupStatus.running ? (
-                            <p className="panel-note">Сейчас идёт автоматическое обновление...</p>
-                          ) : remainingMs !== null ? (
-                            <p className="panel-note">
-                              Следующее обновление через {formatCountdown(remainingMs)}.
-                            </p>
-                          ) : (
-                            <p className="panel-note">Следующее обновление скоро.</p>
-                          )}
-                          {warmupStatus.last_error ? (
-                            <p className="message">Последняя ошибка: {warmupStatus.last_error}</p>
-                          ) : null}
-                          <details className="warmup-tech">
-                            <summary>Техническая статистика</summary>
-                            <ul className="stats-list">
-                              <li>Running: {warmupStatus.running ? 'yes' : 'no'}</li>
-                              <li>Cycle: {warmupStatus.cycle}</li>
-                              <li>Interval: {warmupStatus.interval_seconds}s</li>
-                              <li>Last duration: {warmupStatus.last_duration_seconds ?? 0}s</li>
-                              <li>Last indexed: {warmupStatus.last_metrics.indexed ?? 0}</li>
-                              <li>Last analyzed: {warmupStatus.last_metrics.analyzed ?? 0}</li>
-                              <li>Last fetched: {warmupStatus.last_metrics.fetched ?? 0}</li>
-                              <li>Backfill profiled: {warmupStatus.last_metrics.backfill_profiled ?? 0}</li>
-                              <li>Backfill considered: {warmupStatus.last_metrics.backfill_considered ?? 0}</li>
-                              <li>Queries per cycle: {warmupStatus.queries_per_cycle}</li>
-                              <li>Max analyzed/query: {warmupStatus.max_analyzed_per_query}</li>
-                              <li>
-                                Backfill/cycle:{' '}
-                                {warmupStatus.profile_backfill_enabled
-                                  ? warmupStatus.profile_backfill_limit_per_cycle
-                                  : 0}
-                              </li>
-                            </ul>
-                          </details>
-                        </>
-                      );
-                    })()
-                  ) : (
-                    <p className="panel-note">Автоматическое обновление выключено.</p>
-                  )
-                ) : (
-                  <p className="panel-note">Статус недоступен.</p>
-                )}
-              </div>
+              <Card className="mt-4">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-[var(--text-base)] font-semibold text-[var(--color-ink)]">
+                    Моя воронка
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  {(() => {
+                    const funnel = dashboardStats?.funnel;
+                    const nextEtaMs = funnel?.next_warmup_eta
+                      ? new Date(funnel.next_warmup_eta).getTime() - nowTick
+                      : null;
+                    const showCountdown =
+                      warmupStatus?.enabled &&
+                      funnel?.next_warmup_eta != null &&
+                      nextEtaMs !== null &&
+                      nextEtaMs > 0;
+                    return (
+                      <>
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                            Проанализировано вакансий
+                          </span>
+                          <span className="text-[var(--text-sm)] font-medium text-[var(--color-ink)]">
+                            {funnel ? funnel.analyzed_count : '—'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                            Отобрано
+                          </span>
+                          <span className="text-[var(--text-sm)] font-medium text-[var(--color-ink)]">
+                            {funnel && (funnel.selected_count > 0 || funnel.matched_count > 0)
+                              ? `${funnel.selected_count} из ${funnel.matched_count} совпадений`
+                              : '—'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                            Последний поиск
+                          </span>
+                          <span className="text-[var(--text-sm)] font-medium text-[var(--color-ink)]">
+                            {funnel ? formatRelativeTimeRu(funnel.last_search_at) : '—'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                            Следующее обновление
+                          </span>
+                          <span className="text-[var(--text-sm)] font-medium text-[var(--color-ink)]">
+                            {warmupStatus?.running
+                              ? 'идёт сейчас'
+                              : showCountdown
+                              ? formatCountdown(nextEtaMs as number)
+                              : '—'}
+                          </span>
+                        </div>
+                        {isAdmin ? (
+                          <div className="mt-1 pt-2 border-t border-[var(--color-border)]">
+                            <Link
+                              href="/admin"
+                              className="text-[var(--text-sm)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-secondary)] transition-colors"
+                            >
+                              Админ-панель →
+                            </Link>
+                          </div>
+                        ) : null}
+                      </>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
             </aside>
 
             <div className="workspace-main">
