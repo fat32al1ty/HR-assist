@@ -7,6 +7,10 @@ import {
   removeVacancyFromList,
   removeVacancyMatchEntry
 } from '../lib/vacancyMatching';
+import {
+  formatRecommendationHeadline,
+  formatRecommendationMetrics
+} from '../lib/recommendationStats';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -556,11 +560,7 @@ export default function DashboardPage() {
   }
 
   function formatMetricsInfo(metrics: RecommendationJobStatusResponse['metrics']): string {
-    return (
-      `Источников: ${metrics.fetched || 0}, проанализировано: ${metrics.analyzed || 0}, ` +
-      `уже в индексе: ${metrics.already_indexed_skipped || 0}, отфильтровано: ${metrics.filtered || 0}, ` +
-      `проиндексировано: ${metrics.indexed || 0}.`
-    );
+    return formatRecommendationMetrics(metrics);
   }
 
   function applyJobSnapshot(status: RecommendationJobStatusResponse) {
@@ -583,11 +583,8 @@ export default function DashboardPage() {
       );
       setMatches(visibleMatches);
       const metricsInfo = formatMetricsInfo(metrics);
-      setMatchingMessage(
-        visibleMatches.length > 0
-          ? `Найдено совпадений: ${visibleMatches.length}. ${metricsInfo}`
-          : `Подходящие вакансии не найдены. ${metricsInfo}`
-      );
+      const headline = formatRecommendationHeadline(visibleMatches.length);
+      setMatchingMessage(metricsInfo ? `${headline} ${metricsInfo}` : headline);
       setMatchingProgress(100);
       setMatchingStage('Готово');
       return;
