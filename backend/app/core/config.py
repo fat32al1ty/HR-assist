@@ -53,6 +53,16 @@ class Settings(BaseSettings):
     vacancy_profile_backfill_limit_per_cycle: int = 3
     preference_decay_enabled: bool = False
     preference_decay_half_life_days: float = 30.0
+    rerank_enabled: bool = False
+    rerank_model_name: str = "BAAI/bge-reranker-v2-m3"
+    rerank_candidate_limit: int = 50
+    rerank_blend_weight: float = 0.6
+    rerank_batch_size: int = 16
+    llm_rerank_enabled: bool = False
+    llm_rerank_model: str = "gpt-4o-mini"
+    llm_rerank_top_k: int = 20
+    llm_rerank_budget_floor_usd: float = 0.05
+    llm_rerank_cache_ttl_hours: int = 24
     openai_responses_input_usd_per_1m: float = 2.0
     openai_responses_output_usd_per_1m: float = 8.0
     openai_embeddings_input_usd_per_1m: float = 0.13

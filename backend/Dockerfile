@@ -10,7 +10,10 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install CPU-only torch first — the transitive pull from
+# sentence-transformers would otherwise fetch the ~2 GB CUDA wheel.
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 \
+  && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 

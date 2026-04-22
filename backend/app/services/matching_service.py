@@ -2039,6 +2039,15 @@ def _candidate_to_match_dict(cand, *, tier: str, tier_reason: str | None = None)
     profile = dict(cand.augmented_profile) if isinstance(cand.augmented_profile, dict) else {}
     if tier_reason is not None:
         profile["tier_reason"] = tier_reason
+    annotations = cand.annotations if isinstance(cand.annotations, dict) else {}
+    reason_ru = annotations.get("reason_ru")
+    if isinstance(reason_ru, str) and reason_ru.strip():
+        profile["reason_ru"] = reason_ru
+    if annotations.get("rerank_skipped"):
+        profile["rerank_skipped"] = True
+    confidence = annotations.get("llm_confidence")
+    if isinstance(confidence, (int, float)):
+        profile["llm_confidence"] = float(confidence)
     return {
         "vacancy_id": vacancy.id,
         "title": vacancy.title,
@@ -2062,10 +2071,12 @@ def _default_matching_stages(db: Session, vector_store, *, search_limit: int) ->
     and is the best tradeoff until real engagement signals arrive in 2.6.
     """
     from .matching.stages.augment import AugmentStage
+    from .matching.stages.cross_encoder_rerank import CrossEncoderRerankStage
     from .matching.stages.dedupe import DedupeStage
     from .matching.stages.diversify import MMRDiversifyStage
     from .matching.stages.domain_gate import DomainGateStage
     from .matching.stages.filter import HardFilterStage
+    from .matching.stages.llm_rerank import LLMRerankStage
     from .matching.stages.recall import VectorRecallStage
     from .matching.stages.role_family_gate import RoleFamilyGateStage
     from .matching.stages.scoring import ScoringStage
@@ -2078,8 +2089,10 @@ def _default_matching_stages(db: Session, vector_store, *, search_limit: int) ->
         DomainGateStage(),
         ScoringStage(),
         DedupeStage(),
+        CrossEncoderRerankStage(),
         MMRDiversifyStage(lambda_=0.9, top_n=30),
         TierStage(),
+        LLMRerankStage(),
         AugmentStage(),
     ]
 
