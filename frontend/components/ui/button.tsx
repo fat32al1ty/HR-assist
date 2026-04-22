@@ -11,9 +11,10 @@ const buttonVariants = cva(
     'inline-flex items-center justify-center gap-2 whitespace-nowrap',
     'font-semibold leading-none tracking-tight',
     'rounded-[var(--radius-md)]',
-    'transition-colors duration-[var(--duration-fast)]',
+    'transition-[background-color,border-color,color,box-shadow,transform] duration-[var(--duration-fast)]',
     'focus-visible:outline-2 focus-visible:outline-[var(--color-focus-ring)] focus-visible:outline-offset-2',
     'disabled:opacity-55 disabled:cursor-not-allowed',
+    'active:translate-y-[1px]',
     'select-none',
   ],
   {
@@ -22,16 +23,16 @@ const buttonVariants = cva(
         primary: [
           'bg-[var(--color-accent)] text-[var(--color-on-accent)]',
           'shadow-[var(--shadow-sm)]',
-          'hover:bg-[var(--color-accent-hover)]',
+          'hover:bg-[var(--color-accent-hover)] hover:shadow-[var(--shadow-md)]',
         ],
         secondary: [
           'bg-[var(--color-surface-raised)] text-[var(--color-ink)]',
           'border border-[var(--color-border)]',
-          'hover:bg-[var(--color-surface-muted)]',
+          'hover:bg-[var(--color-surface-muted)] hover:border-[var(--color-border-strong)]',
         ],
         ghost: [
           'bg-transparent text-[var(--color-ink)]',
-          'hover:bg-[var(--color-surface-muted)]',
+          'hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]',
         ],
         danger: [
           'bg-[var(--color-danger-subtle)] text-[var(--color-danger)]',

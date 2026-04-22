@@ -1575,7 +1575,33 @@ export default function DashboardPage() {
           </div>
         ) : (
           /* ── Logged-in workspace ──────────────────────────────────────── */
-          <div className="workspace stagger-children">
+          <div className="flex flex-col gap-4">
+            <div className="headline animate-fade-in">
+              <div>
+                <span className="hero-kicker">Smart Matching Workspace</span>
+                <h1>Подбор вакансий с прозрачным объяснением совпадений</h1>
+                <p>
+                  Система сравнивает профиль резюме с вакансиями, показывает процент совпадения,
+                  проблемные требования и помогает вести воронку откликов без ручной рутины.
+                </p>
+              </div>
+              <div className="hero-tags">
+                <span>
+                  Профиль: {selectedResumeId
+                    ? (() => {
+                        const selectedResume = resumes.find((resume) => resume.id === selectedResumeId);
+                        return selectedResume ? resumeDisplayName(selectedResume) : 'не выбран';
+                      })()
+                    : 'не выбран'}
+                </span>
+                <span>Кандидатов: {visibleMatches.length}</span>
+                <span>
+                  Warmup: {warmupStatus?.running ? 'выполняется' : warmupStatus?.enabled ? 'активен' : 'выключен'}
+                </span>
+              </div>
+            </div>
+
+            <div className="workspace stagger-children">
             {/* ── Sidebar ─────────────────────────────────────────────── */}
             <aside className="flex flex-col gap-4 animate-fade-in">
               {/* Upload card */}
@@ -2482,6 +2508,7 @@ export default function DashboardPage() {
 
               {/* Applications section moved to /applications route — slice 2.8.4 */}
             </div>
+          </div>
           </div>
         )}
       </section>
