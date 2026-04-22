@@ -107,35 +107,55 @@ def load_gold_set(path: Path | str) -> list[GoldEntry]:
     return entries
 
 
-def ndcg_at_k(ranked_relevances: Iterable[int], k: int = 10) -> float:
+def ndcg_at_k(
+    ranked_relevances: Iterable[int],
+    k: int = 10,
+    *,
+    ideal_relevances: Iterable[int] | None = None,
+) -> float:
     """Normalized DCG at cutoff k.
 
     Gain is ``2**rel - 1`` so a relevance-2 item contributes 3× more than a
-    relevance-1. Ideal DCG is computed from the same multiset sorted
-    descending. Returns 0 when no graded item is present in the ranking
-    (nothing to rank against) — this avoids a false 1.0 for an empty list.
+    relevance-1. Returns 0 when the ideal DCG is zero (nothing graded to
+    rank against) — avoids a false 1.0 on empty input.
+
+    ``ideal_relevances`` is the multiset used to build the denominator. If
+    omitted, falls back to ``sorted(ranked_relevances)`` — which measures
+    *ordering quality* of the returned list only (legacy per-query form).
+    For **full-corpus NDCG** (recall-aware), pass the top-k relevances
+    from the complete gold set for this query — that's what
+    ``score_resume`` does.
     """
     if k <= 0:
         raise ValueError("k must be positive")
     ranked = list(ranked_relevances)
+    ideal = list(ideal_relevances) if ideal_relevances is not None else sorted(ranked, reverse=True)
 
     def dcg(rels: list[int]) -> float:
         return sum((2**rel - 1) / math.log2(position + 2) for position, rel in enumerate(rels[:k]))
 
-    ideal = dcg(sorted(ranked, reverse=True))
-    if ideal <= 0.0:
+    ideal_dcg = dcg(ideal)
+    if ideal_dcg <= 0.0:
         return 0.0
-    return dcg(ranked) / ideal
+    return dcg(ranked) / ideal_dcg
 
 
-def average_precision(ranked_relevances: Iterable[int]) -> float:
+def average_precision(
+    ranked_relevances: Iterable[int],
+    *,
+    num_relevant_total: int | None = None,
+) -> float:
     """AP treats ``relevance >= 1`` as relevant.
 
-    Returns the mean of precisions at each relevant hit, or 0 if nothing in
-    the list is labeled relevant. Note: this is AP against the labels we've
-    seen — if a resume has 5 labeled-relevant vacancies but only 2 of them
-    appear in the matcher output, the sum divides by 2, not 5. Callers
-    looking for recall-aware MAP should pass the full labeled set.
+    Returns the mean of precisions at each relevant hit. ``num_relevant_total``
+    is the count of relevant items in the **full** labeled set for this
+    query — when provided, AP is recall-aware (sum of precisions ÷ total
+    relevant, so missing relevant items cost MAP). When omitted (legacy
+    form), AP divides by the number of hits in the returned list — a
+    precision-only average that ignores what the matcher missed.
+
+    ``score_resume`` uses the recall-aware form; standalone callers who
+    want the old behavior can omit the argument.
     """
     hits = 0
     total = 0.0
@@ -143,6 +163,10 @@ def average_precision(ranked_relevances: Iterable[int]) -> float:
         if relevance >= 1:
             hits += 1
             total += hits / (position + 1)
+    if num_relevant_total is not None:
+        if num_relevant_total <= 0:
+            return 0.0
+        return total / num_relevant_total
     if hits == 0:
         return 0.0
     return total / hits
@@ -169,13 +193,20 @@ def score_resume(
     (position 0 = top). Unlabeled items in the ranking contribute ``0`` to
     every metric — they are neither penalized nor rewarded. This matches the
     "partial labels, not ground-truth complete" reality of small gold sets.
+
+    NDCG here is **recall-aware**: the ideal DCG is computed from the
+    top-k most-relevant items in the *full* labeled set, not from the
+    matcher's output. A matcher that misses a relevance-2 vacancy pays
+    for it even when its ordering of what it did return is perfect.
     """
     ranked_relevances: list[int] = [labels_for_resume.get(vid, 0) for vid in returned_vacancy_ids]
     n_unlabeled = sum(1 for vid in returned_vacancy_ids if vid not in labels_for_resume)
+    ideal_relevances = sorted(labels_for_resume.values(), reverse=True)
+    num_relevant_total = sum(1 for rel in labels_for_resume.values() if rel >= 1)
     return ResumeEvalResult(
         resume_id=resume_id,
-        ndcg_at_10=ndcg_at_k(ranked_relevances, k=k),
-        map_score=average_precision(ranked_relevances),
+        ndcg_at_10=ndcg_at_k(ranked_relevances, k=k, ideal_relevances=ideal_relevances),
+        map_score=average_precision(ranked_relevances, num_relevant_total=num_relevant_total),
         mrr=reciprocal_rank(ranked_relevances),
         n_labeled=len(labels_for_resume),
         n_returned=len(returned_vacancy_ids),
