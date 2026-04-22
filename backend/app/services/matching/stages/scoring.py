@@ -29,6 +29,7 @@ class ScoringStage(BaseStage):
             DOMAIN_MISMATCH_PENALTY,
             LEADERSHIP_BONUS,
             LEADERSHIP_MISSING_PENALTY,
+            ROLE_FAMILY_MISMATCH_PENALTY,
             TITLE_BOOST,
             TITLE_BOOST_SCORE_CAP,
             _build_vacancy_skill_set,
@@ -53,6 +54,9 @@ class ScoringStage(BaseStage):
             hybrid = _hybrid_score(cand.vector_score, overlap) + (0.05 * role_overlap)
             if cand.annotations.get("domain_compatible") is False:
                 hybrid -= DOMAIN_MISMATCH_PENALTY
+            role_distance = float(cand.annotations.get("role_family_distance") or 0.0)
+            if role_distance > 0.0:
+                hybrid -= ROLE_FAMILY_MISMATCH_PENALTY * role_distance
             has_leadership_hint = _title_has_leadership_hint(vacancy.title or "", cand.payload)
             if ctx.leadership_preferred:
                 if has_leadership_hint:

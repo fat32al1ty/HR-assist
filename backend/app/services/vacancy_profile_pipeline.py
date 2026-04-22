@@ -50,6 +50,9 @@ def build_vacancy_vector_payload(
         "domains": profile.get("domains") or [],
         "matching_keywords": profile.get("matching_keywords") or [],
         "summary": profile.get("summary") or "",
+        "role_family": profile.get("role_family"),
+        "role_is_technical": profile.get("role_is_technical"),
+        "esco_occupation_uri": profile.get("esco_occupation_uri"),
     }
 
 

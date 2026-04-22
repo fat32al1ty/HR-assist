@@ -102,6 +102,11 @@ LEADERSHIP_MISSING_PENALTY = 0.02
 POSITIVE_PROFILE_WEIGHT = 0.25
 NEGATIVE_PROFILE_WEIGHT = 0.18
 DOMAIN_MISMATCH_PENALTY = 0.10
+# Phase 2.4b: scaled by role-family distance (0..1); a far cross-family
+# pairing at distance 0.75 shaves ~0.09 off hybrid, enough to push most
+# vector-lucky false positives below MIN_RELEVANCE_SCORE without
+# disqualifying legitimate adjacent-family matches like PM↔SWE.
+ROLE_FAMILY_MISMATCH_PENALTY = 0.12
 # Phase 2.1: if the vector-space signal is very strong (0.85+) we trust the
 # embedding enough to keep a cross-domain vacancy with a penalty — that's
 # how legitimate edge cases like ML → hardware-ML survive. Below this
@@ -2062,12 +2067,14 @@ def _default_matching_stages(db: Session, vector_store, *, search_limit: int) ->
     from .matching.stages.domain_gate import DomainGateStage
     from .matching.stages.filter import HardFilterStage
     from .matching.stages.recall import VectorRecallStage
+    from .matching.stages.role_family_gate import RoleFamilyGateStage
     from .matching.stages.scoring import ScoringStage
     from .matching.stages.tier import TierStage
 
     return [
         VectorRecallStage(db=db, vector_store=vector_store, limit=search_limit),
         HardFilterStage(db=db, vector_store=vector_store),
+        RoleFamilyGateStage(),
         DomainGateStage(),
         ScoringStage(),
         DedupeStage(),

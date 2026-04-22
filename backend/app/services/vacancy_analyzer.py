@@ -34,6 +34,17 @@ Field discipline — this is load-bearing for downstream matching:
   vacancy ("senior python", "SRE", "энергосбыт"). NEVER full sentences.
 - domains: industry / sub-industry labels ("IT", "энергетика", "строительство",
   "медиа", "финтех"). Two to five items max.
+
+Role classification — load-bearing for matching:
+- role_family: pick ONE of: software_engineering, data_ml, infrastructure_devops, cybersecurity,
+  hardware_embedded, product_management, design, analytics_bi, research_science, marketing_growth,
+  sales_bd, customer_support, finance_accounting, legal_compliance, hr_talent, operations_admin.
+  Use null when the posting is too vague to classify.
+- role_is_technical: true when the vacancy requires hands-on engineering/coding/infrastructure
+  skills (software_engineering, data_ml, infrastructure_devops, cybersecurity, hardware_embedded).
+  False for PM, design, business, ops, HR, finance, legal, sales, marketing, support.
+  Use null when unclear — the matcher treats null as "unknown", not "non-technical".
+- esco_occupation_uri: leave null — the matcher resolves this from ESCO lookup post-analysis.
 """
 
 
@@ -87,6 +98,9 @@ def analyze_vacancy_text(text: str) -> dict[str, Any]:
                             "requirements": {"type": "array", "items": {"type": "string"}},
                             "red_flags": {"type": "array", "items": {"type": "string"}},
                             "matching_keywords": {"type": "array", "items": {"type": "string"}},
+                            "role_family": {"type": ["string", "null"]},
+                            "role_is_technical": {"type": ["boolean", "null"]},
+                            "esco_occupation_uri": {"type": ["string", "null"]},
                         },
                         "required": [
                             "role",
@@ -106,6 +120,9 @@ def analyze_vacancy_text(text: str) -> dict[str, Any]:
                             "requirements",
                             "red_flags",
                             "matching_keywords",
+                            "role_family",
+                            "role_is_technical",
+                            "esco_occupation_uri",
                         ],
                     },
                     "strict": True,
