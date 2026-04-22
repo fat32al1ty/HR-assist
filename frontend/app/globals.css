@@ -1,14 +1,9 @@
 /* ─────────────────────────────────────────────────────────────────────────
    HR-Assist · globals.css
    Tailwind v4 · inline @theme token layer
-   Aesthetic: refined editorial — warm ink on cream, Fraunces + Source Sans 3
+   Aesthetic: classic IT-product — soft-blue canvas, bright-blue CTA,
+   cardinal red for danger / decline, system sans.
    ───────────────────────────────────────────────────────────────────────── */
-
-/* ── Google Fonts — must precede @import "tailwindcss" ───────────────────
-   Fraunces: optical-size variable serif (display, headings)
-   Source Sans 3: humanist sans (body, UI copy)
-   ──────────────────────────────────────────────────────────────────────── */
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Source+Sans+3:ital,wght@0,300..900;1,300..900&display=swap");
 
 @import "tailwindcss";
 
@@ -17,51 +12,51 @@
    or Tailwind theme classes (theme(…)).
    ──────────────────────────────────────────────────────────────────────── */
 :root {
-  /* Fonts */
-  --font-display: "Fraunces", Georgia, serif;
-  --font-body: "Source Sans 3", "Gill Sans", sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Mono", ui-monospace, monospace;
+  /* Fonts — system sans across the board; mono for numerics / code */
+  --font-display: "Trebuchet MS", Verdana, Tahoma, "Helvetica Neue", Arial, sans-serif;
+  --font-body:    "Trebuchet MS", Verdana, Tahoma, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:    "JetBrains Mono", "Fira Mono", ui-monospace, Consolas, monospace;
 
   /* ── Surfaces ─────────────────────────────────────────────────────────── */
-  /* Page canvas — warm cream, not pure white */
-  --color-canvas:        #f5f2ec;
-  /* Raised panel surface */
-  --color-surface:       #fdfcf9;
+  /* Page canvas — soft blue-tinted neutral */
+  --color-canvas:        #f3f6fb;
+  /* Raised panel surface — pure white */
+  --color-surface:       #ffffff;
   /* Slightly elevated card hover / secondary fill */
   --color-surface-raised:#ffffff;
   /* Subtle muted fills (input backgrounds, table rows) */
-  --color-surface-muted: #efece4;
+  --color-surface-muted: #f7f9fc;
 
   /* ── Text ─────────────────────────────────────────────────────────────── */
-  /* Primary ink — deep charcoal, warm undertone */
-  --color-ink:           #1c1915;
+  /* Primary ink — deep blue-black */
+  --color-ink:           #17212f;
   /* Secondary / supporting copy */
-  --color-ink-secondary: #5c5650;
+  --color-ink-secondary: #525f75;
   /* Placeholder / disabled */
-  --color-ink-muted:     #9b9590;
+  --color-ink-muted:     #667085;
 
   /* ── Accent ───────────────────────────────────────────────────────────── */
-  /* Cardinal red — single sharp accent. Contrast on --color-canvas: 5.8:1 ✓ AA */
-  --color-accent:        #c0392b;
-  --color-accent-hover:  #a52d21;
+  /* Bright blue — primary action. Contrast #ffffff on it: 4.6:1 ✓ AA large */
+  --color-accent:        #1677ff;
+  --color-accent-hover:  #0f5fd6;
   /* Very light tint for accent chip backgrounds */
-  --color-accent-subtle: #fdf0ee;
-  /* Ink-on-accent (white text on accent bg) — contrast 7.2:1 ✓ AAA */
+  --color-accent-subtle: #e8f2ff;
+  /* Ink-on-accent (white text on accent bg) */
   --color-on-accent:     #ffffff;
 
   /* ── Borders ──────────────────────────────────────────────────────────── */
-  --color-border:        #ddd8cf;
-  --color-border-strong: #bbb5ac;
-  /* Focus ring - visible, non-accent blue-grey */
-  --color-focus-ring:    #c0392b;
+  --color-border:        #dde5f0;
+  --color-border-strong: #c5d0e0;
+  /* Focus ring — visible, matches accent */
+  --color-focus-ring:    #1677ff;
 
   /* ── Semantic state colours ───────────────────────────────────────────── */
-  --color-success:       #1a6b3c;
-  --color-success-subtle:#edf6f1;
+  --color-success:       #15803d;
+  --color-success-subtle:#e6f4ea;
   --color-warning:       #8a5700;
   --color-warning-subtle:#fef8ec;
-  --color-danger:        #c0392b;
-  --color-danger-subtle: #fdf0ee;
+  --color-danger:        #d91f3c;
+  --color-danger-subtle: #fff0f3;
   --color-info:          #1b5fa8;
   --color-info-subtle:   #eef3fc;
 
@@ -97,17 +92,17 @@
   --space-20: 5rem;
 
   /* ── Radii ────────────────────────────────────────────────────────────── */
-  --radius-sm:   4px;
-  --radius-md:   8px;
-  --radius-lg:   14px;
-  --radius-xl:   20px;
+  --radius-sm:   6px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   22px;
   --radius-full: 9999px;
 
-  /* ── Shadows ──────────────────────────────────────────────────────────── */
-  --shadow-sm:  0 1px 3px rgba(28, 25, 21, 0.08), 0 1px 2px rgba(28, 25, 21, 0.04);
-  --shadow-md:  0 4px 16px rgba(28, 25, 21, 0.09), 0 2px 6px rgba(28, 25, 21, 0.05);
-  --shadow-lg:  0 16px 48px rgba(28, 25, 21, 0.10), 0 4px 16px rgba(28, 25, 21, 0.06);
-  --shadow-focus: 0 0 0 3px color-mix(in srgb, var(--color-focus-ring) 28%, transparent);
+  /* ── Shadows — soft, long, blue-tinted (matches IT-product feel) ─────── */
+  --shadow-sm:  0 4px 12px rgba(16, 30, 54, 0.06);
+  --shadow-md:  0 18px 50px rgba(16, 30, 54, 0.09);
+  --shadow-lg:  0 28px 70px rgba(16, 30, 54, 0.12);
+  --shadow-focus: 0 0 0 4px color-mix(in srgb, var(--color-focus-ring) 22%, transparent);
 
   /* ── Motion ───────────────────────────────────────────────────────────── */
   --duration-fast:   120ms;
@@ -190,15 +185,20 @@
     line-height: var(--leading-normal);
     color: var(--color-ink);
     background-color: var(--color-canvas);
+    background-image:
+      radial-gradient(circle at 18% 6%, rgba(22, 119, 255, 0.12), transparent 26%),
+      radial-gradient(circle at 82% 2%, rgba(217, 31, 60, 0.08), transparent 22%),
+      linear-gradient(180deg, #f8fbff 0%, var(--color-canvas) 42%, #eef3fa 100%);
+    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Display headings use the serif face */
+  /* Headings use the body (system sans) family — no serif */
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-display);
+    font-family: var(--font-body);
     line-height: var(--leading-tight);
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.02em;
     color: var(--color-ink);
     margin: 0;
