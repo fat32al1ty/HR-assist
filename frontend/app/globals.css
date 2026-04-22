@@ -638,6 +638,18 @@ select:focus {
   font-weight: 700;
 }
 
+.match-reason {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.match-reason-label {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .missing-box {
   margin-top: 10px;
   border: 1px solid #fde68a;

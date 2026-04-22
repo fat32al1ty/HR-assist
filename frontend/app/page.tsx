@@ -330,6 +330,14 @@ function matchedRequirementsFromMatch(match: VacancyMatch): string[] {
   return asStringArray(match.profile.matched_requirements).slice(0, 10);
 }
 
+function reasonFromMatch(match: VacancyMatch): string | null {
+  if (!match.profile || typeof match.profile !== 'object') {
+    return null;
+  }
+  const raw = match.profile.reason_ru;
+  return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : null;
+}
+
 function scoreToPercent(score: number): string {
   return `${Math.round(score * 100)}%`;
 }
@@ -2378,6 +2386,12 @@ export default function DashboardPage() {
                         {match.location || 'Локация не указана'}
                       </p>
                       <p className="match-score">Релевантность: {scoreToPercent(match.similarity_score)}</p>
+                      {reasonFromMatch(match) ? (
+                        <p className="match-reason">
+                          <span className="match-reason-label">Почему показали:</span>{' '}
+                          {reasonFromMatch(match)}
+                        </p>
+                      ) : null}
                       <div className="fit-grid">
                         <div className="fit-box fit-matched">
                           <p className="fit-title">Ты подходишь</p>
