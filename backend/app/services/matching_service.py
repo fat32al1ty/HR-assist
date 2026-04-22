@@ -2048,6 +2048,15 @@ def _candidate_to_match_dict(cand, *, tier: str, tier_reason: str | None = None)
     confidence = annotations.get("llm_confidence")
     if isinstance(confidence, (int, float)):
         profile["llm_confidence"] = float(confidence)
+    # Telemetry-useful signals — kept inside ``profile`` so the match
+    # dict shape stays flat and clients can ignore them.
+    profile["vector_score"] = round(float(cand.vector_score), 5)
+    rerank_score = annotations.get("rerank_score")
+    if isinstance(rerank_score, (int, float)):
+        profile["rerank_score"] = float(rerank_score)
+    payload = cand.payload if isinstance(cand.payload, dict) else {}
+    if isinstance(payload.get("role_family"), str):
+        profile["role_family"] = payload["role_family"]
     return {
         "vacancy_id": vacancy.id,
         "title": vacancy.title,
@@ -2225,9 +2234,14 @@ def match_vacancies_for_resume(
 
     top_matches = _slice_tiered_matches(state.candidates, limit=limit)
     if len(top_matches) >= limit or (ctx.leadership_preferred and top_matches):
-        return top_matches[:limit]
+        return _stamp_and_log_impressions(
+            db,
+            user_id=user_id,
+            resume_id=resume_id,
+            matches=top_matches[:limit],
+        )
 
-    return _merge_lexical_fallback(
+    merged = _merge_lexical_fallback(
         db,
         ctx=ctx,
         prefs=prefs,
@@ -2236,3 +2250,42 @@ def match_vacancies_for_resume(
         limit=limit,
         metrics=metrics,
     )
+    return _stamp_and_log_impressions(db, user_id=user_id, resume_id=resume_id, matches=merged)
+
+
+def _stamp_and_log_impressions(
+    db: Session,
+    *,
+    user_id: int,
+    resume_id: int,
+    matches: list[dict],
+) -> list[dict]:
+    """Stamp each match with a shared ``match_run_id`` and persist impressions.
+
+    Run-id generation lives here so the eval harness (which calls
+    ``_slice_tiered_matches`` directly and shouldn't hit the telemetry
+    tables) can skip it naturally.
+    """
+    import uuid as _uuid  # noqa: PLC0415
+
+    from app.services.match_telemetry import log_impressions  # noqa: PLC0415
+
+    if not matches:
+        return matches
+    run_id = _uuid.uuid4()
+    for match in matches:
+        match["match_run_id"] = str(run_id)
+    try:
+        log_impressions(
+            db,
+            user_id=user_id,
+            resume_id=resume_id,
+            match_run_id=run_id,
+            matches=matches,
+        )
+    except Exception as error:  # noqa: BLE001
+        # Telemetry failures must never tank a match response — tests
+        # pass a mock ``db`` that raises on rollback, and prod can hit
+        # transient DB issues. Swallow and keep the user happy.
+        logger.warning("impression telemetry skipped (run=%s): %s", run_id, error)
+    return matches

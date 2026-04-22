@@ -6,6 +6,7 @@ from app.models.esco import (
     EscoSkill,
     EscoSkillRelation,
 )
+from app.models.match_telemetry import MatchClick, MatchDwell, MatchImpression
 from app.models.recommendation_job import RecommendationJob
 from app.models.resume import Resume
 from app.models.resume_profile import ResumeProfile
@@ -23,6 +24,9 @@ __all__ = [
     "EscoOccupationSkill",
     "EscoSkill",
     "EscoSkillRelation",
+    "MatchClick",
+    "MatchDwell",
+    "MatchImpression",
     "RecommendationJob",
     "Resume",
     "ResumeProfile",
