@@ -1,84 +1,78 @@
 /* ─────────────────────────────────────────────────────────────────────────
    HR-Assist · globals.css
-   Tailwind v4 · inline @theme token layer
-   Aesthetic: classic IT-product — soft-blue canvas, bright-blue CTA,
-   cardinal red for danger / decline, system sans.
+   Tailwind v4 · 10-theme shim via Kiranism/next-shadcn-dashboard-starter
+   Our custom tokens (--color-canvas, --color-ink, etc.) are aliases of the
+   standard shadcn tokens (--background, --foreground, etc.) that each theme
+   file provides on [data-theme='<name>']. Zero changes to component files.
    ───────────────────────────────────────────────────────────────────────── */
 
 @import "tailwindcss";
+@import "tw-animate-css";
 
-/* ── CSS Custom Properties — semantic token layer ────────────────────────
-   All colour values are defined here. Components use var(--token-name)
-   or Tailwind theme classes (theme(…)).
+@custom-variant dark (&:is(.dark *));
+
+@import "../../styles/theme.css";
+
+/* ── CSS Custom Properties — semantic token shim ─────────────────────────
+   Our custom tokens now reference the standard shadcn tokens that the
+   theme files define on [data-theme='<name>']. No hex literals here.
    ──────────────────────────────────────────────────────────────────────── */
 :root {
-  /* Fonts — system sans across the board; mono for numerics / code */
-  --font-display: "Trebuchet MS", Verdana, Tahoma, "Helvetica Neue", Arial, sans-serif;
-  --font-body:    "Trebuchet MS", Verdana, Tahoma, "Helvetica Neue", Arial, sans-serif;
-  --font-mono:    "JetBrains Mono", "Fira Mono", ui-monospace, Consolas, monospace;
+  /* Fonts — driven by theme's --font-sans / --font-mono */
+  --font-display: var(--font-sans);
+  --font-body:    var(--font-sans);
+  --font-mono:    var(--font-mono);
 
-  /* ── Surfaces ─────────────────────────────────────────────────────────── */
-  /* Page canvas — soft blue-tinted neutral */
-  --color-canvas:        #f3f6fb;
-  /* Raised panel surface — pure white */
-  --color-surface:       #ffffff;
-  /* Slightly elevated card hover / secondary fill */
-  --color-surface-raised:#ffffff;
-  /* Subtle muted fills (input backgrounds, table rows) */
-  --color-surface-muted: #f7f9fc;
+  /* Surfaces */
+  --color-canvas:          var(--background);
+  --color-surface:         var(--card);
+  --color-surface-raised:  var(--card);
+  --color-surface-muted:   var(--muted);
 
-  /* ── Text ─────────────────────────────────────────────────────────────── */
-  /* Primary ink — deep blue-black */
-  --color-ink:           #17212f;
-  /* Secondary / supporting copy */
-  --color-ink-secondary: #525f75;
-  /* Placeholder / disabled */
-  --color-ink-muted:     #667085;
+  /* Text */
+  --color-ink:             var(--foreground);
+  --color-ink-secondary:   var(--muted-foreground);
+  --color-ink-muted:       var(--muted-foreground);
 
-  /* ── Accent ───────────────────────────────────────────────────────────── */
-  /* Bright blue — primary action. Contrast #ffffff on it: 4.6:1 ✓ AA large */
-  --color-accent:        #1677ff;
-  --color-accent-hover:  #0f5fd6;
-  /* Very light tint for accent chip backgrounds */
-  --color-accent-subtle: #e8f2ff;
-  /* Ink-on-accent (white text on accent bg) */
-  --color-on-accent:     #ffffff;
+  /* Accent (primary CTA) */
+  --color-accent:          var(--primary);
+  --color-accent-hover:    color-mix(in oklch, var(--primary) 88%, black);
+  --color-accent-subtle:   var(--accent);
+  --color-on-accent:       var(--primary-foreground);
 
-  /* ── Borders ──────────────────────────────────────────────────────────── */
-  --color-border:        #dde5f0;
-  --color-border-strong: #c5d0e0;
-  /* Focus ring — visible, matches accent */
-  --color-focus-ring:    #1677ff;
+  /* Borders */
+  --color-border:          var(--border);
+  --color-border-strong:   var(--input);
+  --color-focus-ring:      var(--ring);
 
-  /* ── Semantic state colours ───────────────────────────────────────────── */
-  --color-success:       #15803d;
-  --color-success-subtle:#e6f4ea;
-  --color-warning:       #8a5700;
-  --color-warning-subtle:#fef8ec;
-  --color-danger:        #d91f3c;
-  --color-danger-subtle: #fff0f3;
-  --color-info:          #1b5fa8;
-  --color-info-subtle:   #eef3fc;
+  /* Semantic states — keep literal for now; themes don't all ship state colors */
+  --color-success:         oklch(0.55 0.15 145);
+  --color-success-subtle:  oklch(0.96 0.03 145);
+  --color-warning:         oklch(0.60 0.14 70);
+  --color-warning-subtle:  oklch(0.97 0.04 70);
+  --color-danger:          var(--destructive);
+  --color-danger-subtle:   color-mix(in oklch, var(--destructive) 12%, transparent);
+  --color-info:            var(--primary);
+  --color-info-subtle:     var(--accent);
 
-  /* ── Typography scale (rem) ───────────────────────────────────────────── */
-  --text-xs:   0.75rem;    /* 12px */
-  --text-sm:   0.875rem;   /* 14px */
-  --text-base: 1rem;       /* 16px */
-  --text-lg:   1.125rem;   /* 18px */
-  --text-xl:   1.25rem;    /* 20px */
-  --text-2xl:  1.5rem;     /* 24px */
-  --text-3xl:  1.875rem;   /* 30px */
-  --text-4xl:  2.25rem;    /* 36px */
-  --text-5xl:  3rem;       /* 48px */
+  /* Typography scale — keep as we had */
+  --text-xs:   0.75rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.25rem;
+  --text-2xl:  1.5rem;
+  --text-3xl:  1.875rem;
+  --text-4xl:  2.25rem;
+  --text-5xl:  3rem;
   --text-display: clamp(2.5rem, 5.5vw, 4.5rem);
 
-  /* Leading */
   --leading-tight:  1.1;
   --leading-snug:   1.3;
   --leading-normal: 1.55;
   --leading-relaxed:1.7;
 
-  /* ── Spacing rhythm (4px base) ────────────────────────────────────────── */
+  /* Spacing rhythm (keep) */
   --space-1:  0.25rem;
   --space-2:  0.5rem;
   --space-3:  0.75rem;
@@ -91,27 +85,27 @@
   --space-16: 4rem;
   --space-20: 5rem;
 
-  /* ── Radii ────────────────────────────────────────────────────────────── */
-  --radius-sm:   6px;
-  --radius-md:   12px;
-  --radius-lg:   16px;
-  --radius-xl:   22px;
+  /* Radii — defer to theme's --radius when possible; keep our extended scale */
+  --radius-sm:   calc(var(--radius, 0.5rem) - 4px);
+  --radius-md:   var(--radius, 0.5rem);
+  --radius-lg:   calc(var(--radius, 0.5rem) + 4px);
+  --radius-xl:   calc(var(--radius, 0.5rem) + 10px);
   --radius-full: 9999px;
 
-  /* ── Shadows — soft, long, blue-tinted (matches IT-product feel) ─────── */
-  --shadow-sm:  0 4px 12px rgba(16, 30, 54, 0.06);
-  --shadow-md:  0 18px 50px rgba(16, 30, 54, 0.09);
-  --shadow-lg:  0 28px 70px rgba(16, 30, 54, 0.12);
-  --shadow-focus: 0 0 0 4px color-mix(in srgb, var(--color-focus-ring) 22%, transparent);
+  /* Shadows — prefer theme's, fall back */
+  --shadow-sm:    var(--shadow-sm);
+  --shadow-md:    var(--shadow-md);
+  --shadow-lg:    var(--shadow-lg);
+  --shadow-focus: 0 0 0 4px color-mix(in oklch, var(--ring) 20%, transparent);
 
-  /* ── Motion ───────────────────────────────────────────────────────────── */
+  /* Motion (keep) */
   --duration-fast:   120ms;
   --duration-normal: 220ms;
   --duration-slow:   380ms;
   --ease-out:        cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out:     cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* ── Z-index layers ───────────────────────────────────────────────────── */
+  /* Z (keep) */
   --z-base:    0;
   --z-raised:  10;
   --z-sticky:  20;
@@ -119,7 +113,6 @@
   --z-dialog:  40;
   --z-toast:   50;
 
-  /* ── Layout ───────────────────────────────────────────────────────────── */
   --content-width: min(1180px, calc(100vw - 2rem));
 }
 
@@ -185,11 +178,6 @@
     line-height: var(--leading-normal);
     color: var(--color-ink);
     background-color: var(--color-canvas);
-    background-image:
-      radial-gradient(circle at 18% 6%, rgba(22, 119, 255, 0.12), transparent 26%),
-      radial-gradient(circle at 82% 2%, rgba(217, 31, 60, 0.08), transparent 22%),
-      linear-gradient(180deg, #f8fbff 0%, var(--color-canvas) 42%, #eef3fa 100%);
-    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
