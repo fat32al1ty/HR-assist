@@ -3,10 +3,16 @@
 import { useEffect, useState } from 'react';
 import { useSession } from '@/lib/session';
 import { apiFetch } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Types (verbatim from page.tsx)
-// ──────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 type ApplicationStatus =
   | 'draft'
   | 'applied'
@@ -42,9 +48,38 @@ type CoverLetterResponse = {
   cached: boolean;
 };
 
-type ApplicationFilter = 'all' | 'active' | 'archived' | ApplicationStatus;
+// ─────────────────────────────────────────────────────────────────────────────
+// Column definitions
+// ─────────────────────────────────────────────────────────────────────────────
+type ColumnId = 'draft' | 'applied' | 'viewed' | 'interview+offer';
 
-const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
+const COLUMNS: { id: ColumnId; label: string; emptyText: string }[] = [
+  {
+    id: 'draft',
+    label: 'Черновик',
+    emptyText: "Пусто. Когда найдёшь что-то интересное, нажми «Откликнуться» на карточке вакансии.",
+  },
+  {
+    id: 'applied',
+    label: 'Откликнулся',
+    emptyText: 'Отклики появятся здесь после отправки.',
+  },
+  {
+    id: 'viewed',
+    label: 'Прочитали',
+    emptyText: 'Сюда попадают отклики, которые работодатель прочитал.',
+  },
+  {
+    id: 'interview+offer',
+    label: 'Собеседование / Оффер',
+    emptyText: 'Когда тебя позовут на интервью или дадут оффер — появится здесь.',
+  },
+];
+
+// Statuses that go into the archive
+const ARCHIVED_STATUSES: ApplicationStatus[] = ['rejected', 'declined'];
+
+const STATUS_LABELS: Record<ApplicationStatus, string> = {
   draft: 'Черновик',
   applied: 'Откликнулся',
   viewed: 'Просмотрено',
@@ -55,18 +90,7 @@ const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
   declined: 'Отклонил сам',
 };
 
-const APPLICATION_ACTIVE_STATUSES: ApplicationStatus[] = [
-  'draft',
-  'applied',
-  'viewed',
-  'replied',
-  'interview',
-  'offer',
-];
-
-const APPLICATION_ARCHIVED_STATUSES: ApplicationStatus[] = ['rejected', 'declined'];
-
-const APPLICATION_STATUS_ORDER: ApplicationStatus[] = [
+const ALL_STATUS_ORDER: ApplicationStatus[] = [
   'draft',
   'applied',
   'viewed',
@@ -77,43 +101,316 @@ const APPLICATION_STATUS_ORDER: ApplicationStatus[] = [
   'declined',
 ];
 
-const APPLICATION_FILTER_TABS: { value: ApplicationFilter; label: string }[] = [
-  { value: 'all', label: 'Все' },
-  { value: 'active', label: 'В работе' },
-  { value: 'draft', label: 'Черновики' },
-  { value: 'applied', label: 'Откликнулся' },
-  { value: 'interview', label: 'Интервью' },
-  { value: 'offer', label: 'Оффер' },
-  { value: 'archived', label: 'Архив' },
-];
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Helper
-// ──────────────────────────────────────────────────────────────────────────────
-function formatApplicationDate(value: string | null): string {
-  if (!value) {
-    return '';
+function columnForStatus(status: ApplicationStatus): ColumnId {
+  switch (status) {
+    case 'draft':
+      return 'draft';
+    case 'applied':
+      return 'applied';
+    case 'viewed':
+    case 'replied':
+      return 'viewed';
+    case 'interview':
+    case 'offer':
+      return 'interview+offer';
+    default:
+      return 'draft';
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-  return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Date helper
+// ─────────────────────────────────────────────────────────────────────────────
+function formatFriendlyDate(value: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  if (d.getTime() === today.getTime()) return 'сегодня';
+  if (d.getTime() === yesterday.getTime()) return 'вчера';
+  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }).replace(/\.$/, '');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Application Card
+// ─────────────────────────────────────────────────────────────────────────────
+type CardProps = {
+  row: Application;
+  isBusy: boolean;
+  coverLetterOpen: boolean;
+  coverLetterDraft: string;
+  notesDraft: string;
+  onStatusChange: (id: number, status: ApplicationStatus) => void;
+  onToggleCoverLetter: (id: number) => void;
+  onGenerateCoverLetter: (id: number, force: boolean) => void;
+  onSaveCoverLetter: (id: number) => void;
+  onCopyCoverLetter: (id: number) => void;
+  onCoverLetterChange: (id: number, text: string) => void;
+  onNotesChange: (id: number, text: string) => void;
+  onSaveNotes: (id: number) => void;
+};
+
+function ApplicationCard({
+  row,
+  isBusy,
+  coverLetterOpen,
+  coverLetterDraft,
+  notesDraft,
+  onStatusChange,
+  onToggleCoverLetter,
+  onGenerateCoverLetter,
+  onSaveCoverLetter,
+  onCopyCoverLetter,
+  onCoverLetterChange,
+  onNotesChange,
+  onSaveNotes,
+}: CardProps) {
+  const hasLetter = Boolean(row.cover_letter_text);
+  const coverLetterChanged = coverLetterDraft.trim() !== (row.cover_letter_text ?? '').trim();
+  const hasNotes = Boolean(row.notes);
+  const notesChanged = notesDraft.trim() !== (row.notes ?? '').trim();
+  const titleTruncated =
+    row.vacancy_title.length > 60 ? row.vacancy_title.slice(0, 57) + '…' : row.vacancy_title;
+
+  return (
+    <article
+      className={cn(
+        'bg-[var(--color-surface)] border border-[var(--color-border)]',
+        'rounded-[var(--radius-lg)] shadow-[var(--shadow-sm)]',
+        'p-4 flex flex-col gap-3',
+        'transition-opacity duration-[var(--duration-normal)]',
+        'animate-fade-in'
+      )}
+    >
+      {/* Title + company */}
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <span
+          className="font-[var(--font-display)] text-[var(--text-base)] font-semibold text-[var(--color-ink)] leading-[var(--leading-tight)] truncate"
+          title={row.vacancy_title || 'Без названия'}
+        >
+          {titleTruncated || 'Без названия'}
+        </span>
+        <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)] truncate">
+          {row.vacancy_company ?? 'Компания не указана'}
+        </span>
+      </div>
+
+      {/* Badges row */}
+      <div className="flex flex-wrap items-center gap-2">
+        {row.resume_label ? (
+          <Badge variant="info" className="max-w-[140px] truncate" title={row.resume_label}>
+            {row.resume_label}
+          </Badge>
+        ) : null}
+        <span className="text-[var(--text-xs)] text-[var(--color-ink-muted)] ml-auto">
+          {formatFriendlyDate(row.last_status_change_at)}
+        </span>
+      </div>
+
+      {/* Status dropdown */}
+      <div>
+        <select
+          value={row.status}
+          disabled={isBusy}
+          aria-label="Изменить статус"
+          className={cn(
+            'w-full text-[var(--text-sm)] font-semibold',
+            'border border-[var(--color-border)] rounded-[var(--radius-md)]',
+            'bg-[var(--color-surface-muted)] text-[var(--color-ink)]',
+            'px-3 py-2 cursor-pointer',
+            'transition-colors duration-[var(--duration-fast)]',
+            isBusy && 'opacity-55 cursor-not-allowed'
+          )}
+          onChange={(e) => onStatusChange(row.id, e.target.value as ApplicationStatus)}
+        >
+          {ALL_STATUS_ORDER.map((s) => (
+            <option key={s} value={s}>
+              {STATUS_LABELS[s]}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Cover letter section */}
+      <div className="border-t border-dashed border-[var(--color-border)] pt-3 flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={isBusy}
+            onClick={() => onToggleCoverLetter(row.id)}
+          >
+            {coverLetterOpen
+              ? 'Скрыть сопроводительное'
+              : hasLetter
+              ? 'Открыть сопроводительное'
+              : 'Сопроводительное'}
+          </Button>
+          {!coverLetterOpen && !hasLetter ? (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={isBusy}
+              onClick={() => onGenerateCoverLetter(row.id, false)}
+            >
+              Сгенерировать
+            </Button>
+          ) : null}
+          {row.cover_letter_generated_at ? (
+            <span className="text-[var(--text-xs)] text-[var(--color-ink-muted)] italic">
+              {formatFriendlyDate(row.cover_letter_generated_at)}
+            </span>
+          ) : null}
+        </div>
+
+        {coverLetterOpen ? (
+          <div className="flex flex-col gap-2">
+            <textarea
+              rows={7}
+              maxLength={6000}
+              value={coverLetterDraft}
+              disabled={isBusy}
+              className={cn(
+                'w-full resize-vertical min-h-[140px]',
+                'border border-[var(--color-border)] rounded-[var(--radius-md)]',
+                'bg-[var(--color-surface-muted)] text-[var(--color-ink)]',
+                'text-[var(--text-sm)] leading-[var(--leading-normal)]',
+                'p-3 font-[var(--font-body)]'
+              )}
+              placeholder={
+                hasLetter
+                  ? ''
+                  : 'Нажмите «Сгенерировать», чтобы получить черновик от GPT, или введите свой текст.'
+              }
+              onChange={(e) => onCoverLetterChange(row.id, e.target.value)}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={isBusy}
+                onClick={() => onGenerateCoverLetter(row.id, hasLetter)}
+              >
+                {hasLetter ? 'Сгенерировать заново' : 'Сгенерировать'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={isBusy || !coverLetterChanged}
+                onClick={() => onSaveCoverLetter(row.id)}
+              >
+                Сохранить правки
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={isBusy || !coverLetterDraft.trim()}
+                onClick={() => onCopyCoverLetter(row.id)}
+              >
+                Копировать
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Notes section */}
+      <Collapsible>
+        <CollapsibleTrigger
+          className={cn(
+            'w-full flex items-center justify-between',
+            'text-[var(--text-sm)] font-semibold text-[var(--color-ink-secondary)]',
+            'hover:text-[var(--color-ink)] transition-colors duration-[var(--duration-fast)]',
+            'cursor-pointer py-1'
+          )}
+        >
+          <span>Заметки</span>
+          {hasNotes ? (
+            <span className="text-[var(--text-xs)] text-[var(--color-ink-muted)] font-normal">
+              (есть)
+            </span>
+          ) : null}
+        </CollapsibleTrigger>
+        <CollapsibleContent className="flex flex-col gap-2 pt-2">
+          <Textarea
+            rows={4}
+            maxLength={4000}
+            value={notesDraft}
+            disabled={isBusy}
+            placeholder="Заметки к отклику…"
+            onChange={(e) => onNotesChange(row.id, e.target.value)}
+          />
+          <div className="flex justify-end">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={isBusy || !notesChanged}
+              onClick={() => onSaveNotes(row.id)}
+            >
+              Сохранить
+            </Button>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+
+      {/* Source link */}
+      {row.source_url ? (
+        <a
+          href={row.source_url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[var(--text-sm)] font-semibold text-[var(--color-accent)] self-start"
+        >
+          Открыть вакансию ↗
+        </a>
+      ) : null}
+    </article>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Column header badge
+// ─────────────────────────────────────────────────────────────────────────────
+function ColumnHeader({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-[var(--font-display)] text-[var(--text-base)] font-semibold text-[var(--color-ink)] tracking-[-0.02em]">
+        {label}
+      </span>
+      <span
+        className={cn(
+          'inline-flex items-center justify-center',
+          'min-w-[22px] h-[22px] px-1.5',
+          'rounded-[var(--radius-full)]',
+          'text-[11px] font-bold',
+          'bg-[var(--color-surface-muted)] text-[var(--color-ink-secondary)]',
+          'border border-[var(--color-border)]'
+        )}
+      >
+        {count}
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Page component
-// ──────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 export default function ApplicationsPage() {
   const { token } = useSession();
 
   const [applications, setApplications] = useState<Application[]>([]);
-  const [applicationsMessage, setApplicationsMessage] = useState('');
-  const [applicationFilter, setApplicationFilter] = useState<ApplicationFilter>('active');
-  const [applicationNotesDraft, setApplicationNotesDraft] = useState<Record<number, string>>({});
-  const [applicationBusyIds, setApplicationBusyIds] = useState<Record<number, boolean>>({});
-  const [expandedCoverLetterIds, setExpandedCoverLetterIds] = useState<Record<number, boolean>>({});
+  const [statusMessage, setStatusMessage] = useState('');
+  const [busyIds, setBusyIds] = useState<Record<number, boolean>>({});
+  const [coverLetterOpenIds, setCoverLetterOpenIds] = useState<Record<number, boolean>>({});
   const [coverLetterDrafts, setCoverLetterDrafts] = useState<Record<number, string>>({});
+  const [notesDrafts, setNotesDrafts] = useState<Record<number, string>>({});
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  // Mobile: which column accordion is open (null = none)
+  const [mobileOpenCol, setMobileOpenCol] = useState<ColumnId | null>('applied');
 
   useEffect(() => {
     if (!token) return;
@@ -125,41 +422,28 @@ export default function ApplicationsPage() {
     try {
       const data = await apiFetch<Application[]>('/api/applications', { token });
       setApplications(data);
-      setApplicationNotesDraft((current) => {
-        const next: Record<number, string> = { ...current };
-        for (const row of data) {
-          if (next[row.id] === undefined) {
-            next[row.id] = row.notes ?? '';
-          }
-        }
-        return next;
-      });
     } catch (error) {
-      setApplications([]);
-      setApplicationsMessage(
-        error instanceof Error ? `Не удалось загрузить отклики: ${error.message}` : 'Не удалось загрузить отклики.'
+      setStatusMessage(
+        error instanceof Error
+          ? `Не удалось загрузить отклики: ${error.message}`
+          : 'Не удалось загрузить отклики.'
       );
     }
   }
 
-  function setApplicationBusy(id: number, busyFlag: boolean) {
-    setApplicationBusyIds((current) => {
-      const next = { ...current };
-      if (busyFlag) {
-        next[id] = true;
-      } else {
-        delete next[id];
-      }
+  function setBusy(id: number, busy: boolean) {
+    setBusyIds((prev) => {
+      const next = { ...prev };
+      if (busy) next[id] = true;
+      else delete next[id];
       return next;
     });
   }
 
   async function changeApplicationStatus(applicationId: number, nextStatus: ApplicationStatus) {
-    const existing = applications.find((row) => row.id === applicationId);
-    if (!existing || existing.status === nextStatus) {
-      return;
-    }
-    setApplicationBusy(applicationId, true);
+    const existing = applications.find((r) => r.id === applicationId);
+    if (!existing || existing.status === nextStatus) return;
+    setBusy(applicationId, true);
     try {
       const updated = await apiFetch<Application>(`/api/applications/${applicationId}`, {
         token,
@@ -167,135 +451,75 @@ export default function ApplicationsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus }),
       });
-      setApplications((current) => current.map((row) => (row.id === applicationId ? updated : row)));
-      setApplicationsMessage('');
+      setApplications((prev) => prev.map((r) => (r.id === applicationId ? updated : r)));
+      setStatusMessage('');
     } catch (error) {
-      setApplicationsMessage(
-        error instanceof Error ? `Не удалось обновить статус: ${error.message}` : 'Не удалось обновить статус.'
+      setStatusMessage(
+        error instanceof Error
+          ? `Не удалось обновить статус: ${error.message}`
+          : 'Не удалось обновить статус.'
       );
     } finally {
-      setApplicationBusy(applicationId, false);
-    }
-  }
-
-  async function saveApplicationNotes(applicationId: number) {
-    const draft = applicationNotesDraft[applicationId] ?? '';
-    const existing = applications.find((row) => row.id === applicationId);
-    if (!existing) {
-      return;
-    }
-    const trimmed = draft.trim();
-    const currentValue = existing.notes ?? '';
-    if (trimmed === currentValue.trim()) {
-      return;
-    }
-    setApplicationBusy(applicationId, true);
-    try {
-      const payload: Record<string, unknown> = trimmed ? { notes: trimmed } : { clear_notes: true };
-      const updated = await apiFetch<Application>(`/api/applications/${applicationId}`, {
-        token,
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      setApplications((current) => current.map((row) => (row.id === applicationId ? updated : row)));
-      setApplicationNotesDraft((current) => ({ ...current, [applicationId]: updated.notes ?? '' }));
-      setApplicationsMessage('');
-    } catch (error) {
-      setApplicationsMessage(
-        error instanceof Error ? `Не удалось сохранить заметку: ${error.message}` : 'Не удалось сохранить заметку.'
-      );
-    } finally {
-      setApplicationBusy(applicationId, false);
-    }
-  }
-
-  async function deleteApplicationRow(applicationId: number) {
-    if (!window.confirm('Удалить отклик? Действие нельзя отменить.')) {
-      return;
-    }
-    setApplicationBusy(applicationId, true);
-    try {
-      await apiFetch<void>(`/api/applications/${applicationId}`, { token, method: 'DELETE' });
-      setApplications((current) => current.filter((row) => row.id !== applicationId));
-      setApplicationNotesDraft((current) => {
-        const next = { ...current };
-        delete next[applicationId];
-        return next;
-      });
-    } catch (error) {
-      setApplicationsMessage(
-        error instanceof Error ? `Не удалось удалить отклик: ${error.message}` : 'Не удалось удалить отклик.'
-      );
-    } finally {
-      setApplicationBusy(applicationId, false);
+      setBusy(applicationId, false);
     }
   }
 
   function toggleCoverLetter(applicationId: number) {
-    setExpandedCoverLetterIds((current) => {
-      const next = { ...current };
-      if (next[applicationId]) {
-        delete next[applicationId];
-      } else {
-        next[applicationId] = true;
-      }
+    setCoverLetterOpenIds((prev) => {
+      const next = { ...prev };
+      if (next[applicationId]) delete next[applicationId];
+      else next[applicationId] = true;
       return next;
     });
-    const row = applications.find((app) => app.id === applicationId);
+    const row = applications.find((a) => a.id === applicationId);
     if (row && coverLetterDrafts[applicationId] === undefined) {
-      setCoverLetterDrafts((current) => ({ ...current, [applicationId]: row.cover_letter_text ?? '' }));
+      setCoverLetterDrafts((prev) => ({ ...prev, [applicationId]: row.cover_letter_text ?? '' }));
     }
   }
 
   async function generateCoverLetter(applicationId: number, force: boolean) {
-    setApplicationBusy(applicationId, true);
+    setBusy(applicationId, true);
     try {
       const response = await apiFetch<CoverLetterResponse>(
         `/api/applications/${applicationId}/cover-letter${force ? '?force=true' : ''}`,
         { token, method: 'POST' }
       );
-      setApplications((current) =>
-        current.map((row) =>
-          row.id === applicationId
+      setApplications((prev) =>
+        prev.map((r) =>
+          r.id === applicationId
             ? {
-                ...row,
+                ...r,
                 cover_letter_text: response.cover_letter_text,
                 cover_letter_generated_at: response.cover_letter_generated_at,
               }
-            : row
+            : r
         )
       );
-      setCoverLetterDrafts((current) => ({ ...current, [applicationId]: response.cover_letter_text }));
-      setExpandedCoverLetterIds((current) => ({ ...current, [applicationId]: true }));
-      setApplicationsMessage(
+      setCoverLetterDrafts((prev) => ({ ...prev, [applicationId]: response.cover_letter_text }));
+      setCoverLetterOpenIds((prev) => ({ ...prev, [applicationId]: true }));
+      setStatusMessage(
         response.cached
           ? 'Показываем сохранённое письмо (свежая генерация была менее суток назад).'
           : 'Сопроводительное сгенерировано. Проверьте и при необходимости отредактируйте.'
       );
     } catch (error) {
-      setApplicationsMessage(
+      setStatusMessage(
         error instanceof Error
           ? `Не удалось сгенерировать письмо: ${error.message}`
           : 'Не удалось сгенерировать письмо.'
       );
     } finally {
-      setApplicationBusy(applicationId, false);
+      setBusy(applicationId, false);
     }
   }
 
   async function saveCoverLetterEdits(applicationId: number) {
     const draft = coverLetterDrafts[applicationId] ?? '';
-    const existing = applications.find((row) => row.id === applicationId);
-    if (!existing) {
-      return;
-    }
+    const existing = applications.find((r) => r.id === applicationId);
+    if (!existing) return;
     const trimmed = draft.trim();
-    const currentValue = (existing.cover_letter_text ?? '').trim();
-    if (trimmed === currentValue) {
-      return;
-    }
-    setApplicationBusy(applicationId, true);
+    if (trimmed === (existing.cover_letter_text ?? '').trim()) return;
+    setBusy(applicationId, true);
     try {
       const payload: Record<string, unknown> = trimmed
         ? { cover_letter_text: trimmed }
@@ -306,248 +530,303 @@ export default function ApplicationsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      setApplications((current) => current.map((row) => (row.id === applicationId ? updated : row)));
-      setCoverLetterDrafts((current) => ({ ...current, [applicationId]: updated.cover_letter_text ?? '' }));
-      setApplicationsMessage('Правки сопроводительного сохранены.');
+      setApplications((prev) => prev.map((r) => (r.id === applicationId ? updated : r)));
+      setCoverLetterDrafts((prev) => ({ ...prev, [applicationId]: updated.cover_letter_text ?? '' }));
+      setStatusMessage('Правки сопроводительного сохранены.');
     } catch (error) {
-      setApplicationsMessage(
+      setStatusMessage(
         error instanceof Error
           ? `Не удалось сохранить письмо: ${error.message}`
           : 'Не удалось сохранить письмо.'
       );
     } finally {
-      setApplicationBusy(applicationId, false);
+      setBusy(applicationId, false);
+    }
+  }
+
+  async function saveApplicationNotes(applicationId: number) {
+    const draft = notesDrafts[applicationId] ?? '';
+    const existing = applications.find((r) => r.id === applicationId);
+    if (!existing) return;
+    const trimmed = draft.trim();
+    if (trimmed === (existing.notes ?? '').trim()) return;
+    setBusy(applicationId, true);
+    try {
+      const payload: Record<string, unknown> = trimmed
+        ? { notes: trimmed }
+        : { clear_notes: true };
+      const updated = await apiFetch<Application>(`/api/applications/${applicationId}`, {
+        token,
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      setApplications((prev) => prev.map((r) => (r.id === applicationId ? updated : r)));
+      setNotesDrafts((prev) => ({ ...prev, [applicationId]: updated.notes ?? '' }));
+      setStatusMessage('Заметка сохранена.');
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? `Не удалось сохранить заметку: ${error.message}`
+          : 'Не удалось сохранить заметку.'
+      );
+    } finally {
+      setBusy(applicationId, false);
     }
   }
 
   async function copyCoverLetterToClipboard(applicationId: number) {
     const text = coverLetterDrafts[applicationId];
-    if (!text) {
-      return;
-    }
+    if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
-      setApplicationsMessage('Текст сопроводительного скопирован в буфер.');
+      setStatusMessage('Текст сопроводительного скопирован в буфер.');
     } catch {
-      setApplicationsMessage('Не удалось скопировать. Выделите текст вручную.');
+      setStatusMessage('Не удалось скопировать. Выделите текст вручную.');
     }
   }
 
-  function filteredApplications(): Application[] {
-    const sorted = [...applications].sort((a, b) => {
-      const aIdx = APPLICATION_STATUS_ORDER.indexOf(a.status);
-      const bIdx = APPLICATION_STATUS_ORDER.indexOf(b.status);
-      if (aIdx !== bIdx) {
-        return aIdx - bIdx;
-      }
-      return new Date(b.last_status_change_at).getTime() - new Date(a.last_status_change_at).getTime();
-    });
-    if (applicationFilter === 'all') {
-      return sorted;
-    }
-    if (applicationFilter === 'active') {
-      return sorted.filter((row) => APPLICATION_ACTIVE_STATUSES.includes(row.status));
-    }
-    if (applicationFilter === 'archived') {
-      return sorted.filter((row) => APPLICATION_ARCHIVED_STATUSES.includes(row.status));
-    }
-    return sorted.filter((row) => row.status === applicationFilter);
+  if (!token) return null;
+
+  const activeApps = applications.filter((r) => !ARCHIVED_STATUSES.includes(r.status));
+  const archivedApps = applications.filter((r) => ARCHIVED_STATUSES.includes(r.status));
+  const archiveCount = archivedApps.length;
+
+  function cardsForColumn(colId: ColumnId): Application[] {
+    return activeApps
+      .filter((r) => columnForStatus(r.status) === colId)
+      .sort(
+        (a, b) =>
+          new Date(b.last_status_change_at).getTime() - new Date(a.last_status_change_at).getTime()
+      );
   }
 
-  if (!token) {
-    return null;
+  function renderCard(row: Application) {
+    return (
+      <ApplicationCard
+        key={row.id}
+        row={row}
+        isBusy={Boolean(busyIds[row.id])}
+        coverLetterOpen={Boolean(coverLetterOpenIds[row.id])}
+        coverLetterDraft={coverLetterDrafts[row.id] ?? row.cover_letter_text ?? ''}
+        notesDraft={notesDrafts[row.id] ?? row.notes ?? ''}
+        onStatusChange={changeApplicationStatus}
+        onToggleCoverLetter={toggleCoverLetter}
+        onGenerateCoverLetter={generateCoverLetter}
+        onSaveCoverLetter={saveCoverLetterEdits}
+        onCopyCoverLetter={copyCoverLetterToClipboard}
+        onCoverLetterChange={(id, text) =>
+          setCoverLetterDrafts((prev) => ({ ...prev, [id]: text }))
+        }
+        onNotesChange={(id, text) =>
+          setNotesDrafts((prev) => ({ ...prev, [id]: text }))
+        }
+        onSaveNotes={saveApplicationNotes}
+      />
+    );
+  }
+
+  function renderColumnBody(colId: ColumnId) {
+    const cards = cardsForColumn(colId);
+    if (colId === 'interview+offer') {
+      const interviewCards = cards.filter((r) => r.status === 'interview');
+      const offerCards = cards.filter((r) => r.status === 'offer');
+      const empty = cards.length === 0;
+      const col = COLUMNS.find((c) => c.id === colId)!;
+      return (
+        <div className="flex flex-col gap-3">
+          {empty ? (
+            <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] italic">
+              {col.emptyText}
+            </p>
+          ) : null}
+          {interviewCards.map(renderCard)}
+          {interviewCards.length > 0 && offerCards.length > 0 ? (
+            <Separator className="my-1" />
+          ) : null}
+          {offerCards.map(renderCard)}
+        </div>
+      );
+    }
+    const cards2 = cardsForColumn(colId);
+    const col = COLUMNS.find((c) => c.id === colId)!;
+    return (
+      <div className="flex flex-col gap-3">
+        {cards2.length === 0 ? (
+          <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] italic">
+            {col.emptyText}
+          </p>
+        ) : null}
+        {cards2.map(renderCard)}
+      </div>
+    );
   }
 
   return (
-    <section className="panel applications-panel">
-      <div className="applications-header">
-        <h2>Мои отклики</h2>
-        <p className="panel-note">
-          Статусный трекер откликов: черновики, отклик отправлен, интервью, оффер. Отражает только ваши записи.
+    <div className="w-full max-w-[var(--content-width)] mx-auto px-4 py-10 flex flex-col gap-6">
+      {/* Page title */}
+      <div className="flex flex-col gap-1">
+        <h1
+          className="font-[var(--font-display)] text-[var(--text-3xl)] font-semibold text-[var(--color-ink)] tracking-[-0.03em] leading-[var(--leading-tight)]"
+        >
+          Мои отклики
+        </h1>
+        <p className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+          Статусный трекер откликов. Смени статус через выпадающий список на карточке.
         </p>
       </div>
-      <div className="applications-filters" role="tablist">
-        {APPLICATION_FILTER_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            role="tab"
-            className={`filter-chip${applicationFilter === tab.value ? ' active' : ''}`}
-            onClick={() => setApplicationFilter(tab.value)}
-          >
-            {tab.label}
-          </button>
+
+      {/* Status message */}
+      {statusMessage ? (
+        <div
+          className={cn(
+            'rounded-[var(--radius-md)] px-4 py-3 text-[var(--text-sm)]',
+            'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]',
+            'border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)]'
+          )}
+        >
+          {statusMessage}
+        </div>
+      ) : null}
+
+      {/* ── Desktop board (≥900px): 4 equal columns ─────────────────────────── */}
+      <div className="hidden min-[900px]:grid grid-cols-4 gap-6">
+        {COLUMNS.map((col) => (
+          <div key={col.id} className="flex flex-col gap-3">
+            {/* Sticky column header */}
+            <div
+              className={cn(
+                'sticky top-0 z-10 py-3 px-1',
+                'bg-[var(--color-canvas)]',
+                'border-b border-[var(--color-border)]'
+              )}
+            >
+              <ColumnHeader label={col.label} count={cardsForColumn(col.id).length} />
+            </div>
+            {renderColumnBody(col.id)}
+          </div>
         ))}
       </div>
-      {applicationsMessage ? <p className="panel-note">{applicationsMessage}</p> : null}
-      <div className="applications-list">
-        {applications.length === 0 ? (
-          <p className="empty-state">
-            Пока нет откликов. Нажмите «Откликнуться» в подборке или создайте отклик вручную.
-          </p>
-        ) : null}
-        {applications.length > 0 && filteredApplications().length === 0 ? (
-          <p className="empty-state">В этой категории пока пусто.</p>
-        ) : null}
-        {filteredApplications().map((row) => {
-          const isBusy = Boolean(applicationBusyIds[row.id]);
-          const draft = applicationNotesDraft[row.id] ?? row.notes ?? '';
-          const notesChanged = draft.trim() !== (row.notes ?? '').trim();
-          const coverLetterOpen = Boolean(expandedCoverLetterIds[row.id]);
-          const coverLetterDraft = coverLetterDrafts[row.id] ?? row.cover_letter_text ?? '';
-          const coverLetterChanged =
-            coverLetterDraft.trim() !== (row.cover_letter_text ?? '').trim();
-          const hasLetter = Boolean(row.cover_letter_text);
+
+      {/* ── Mobile board (<900px): 4 accordions ─────────────────────────────── */}
+      <div className="flex flex-col gap-3 min-[900px]:hidden">
+        {COLUMNS.map((col) => {
+          const isOpen = mobileOpenCol === col.id;
+          const count = cardsForColumn(col.id).length;
           return (
-            <article className="application-card" key={`application-${row.id}`}>
-              <header className="application-card-head">
-                <div>
-                  <h3>{row.vacancy_title || 'Без названия'}</h3>
-                  <p className="meta">
-                    {row.vacancy_company || 'Компания не указана'}
-                    {row.applied_at ? ` • отклик от ${formatApplicationDate(row.applied_at)}` : ''}
-                  </p>
-                </div>
-                <div className="application-card-tags">
-                  {row.resume_id ? (
-                    <span className="resume-badge" title="Профиль, из которого создан отклик">
-                      {row.resume_label ?? 'Профиль'}
-                    </span>
-                  ) : null}
-                  <span className={`status-pill status-${row.status}`}>
-                    {APPLICATION_STATUS_LABELS[row.status]}
-                  </span>
-                </div>
-              </header>
-              <div className="application-card-controls">
-                <label className="field">
-                  <span>Статус</span>
-                  <select
-                    value={row.status}
-                    disabled={isBusy}
-                    onChange={(event) =>
-                      void changeApplicationStatus(row.id, event.target.value as ApplicationStatus)
-                    }
-                  >
-                    {APPLICATION_STATUS_ORDER.map((status) => (
-                      <option key={status} value={status}>
-                        {APPLICATION_STATUS_LABELS[status]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {row.source_url ? (
-                  <a href={row.source_url} target="_blank" rel="noreferrer" className="application-link">
-                    Открыть вакансию
-                  </a>
-                ) : null}
-              </div>
-              <label className="field application-notes">
-                <span>Заметки</span>
-                <textarea
-                  rows={2}
-                  maxLength={2000}
-                  value={draft}
-                  disabled={isBusy}
-                  onChange={(event) =>
-                    setApplicationNotesDraft((current) => ({ ...current, [row.id]: event.target.value }))
-                  }
-                  placeholder="Напомните себе контекст: когда писать рекрутеру, что ответить на тест, к какому дню готовиться."
-                />
-              </label>
-              <div className="cover-letter-block">
-                <div className="cover-letter-head">
-                  <button
-                    className="secondary cover-letter-toggle"
-                    disabled={isBusy}
-                    onClick={() => toggleCoverLetter(row.id)}
-                  >
-                    {coverLetterOpen
-                      ? 'Скрыть сопроводительное'
-                      : hasLetter
-                      ? 'Открыть сопроводительное'
-                      : 'Сгенерировать сопроводительное'}
-                  </button>
-                  {!coverLetterOpen && !hasLetter ? (
-                    <button
-                      className="primary cover-letter-generate"
-                      disabled={isBusy}
-                      onClick={() => void generateCoverLetter(row.id, false)}
-                    >
-                      Сгенерировать
-                    </button>
-                  ) : null}
-                  {row.cover_letter_generated_at ? (
-                    <span className="cover-letter-stamp">
-                      Последняя генерация: {formatApplicationDate(row.cover_letter_generated_at)}
-                    </span>
-                  ) : null}
-                </div>
-                {coverLetterOpen ? (
-                  <>
-                    <textarea
-                      className="cover-letter-textarea"
-                      rows={8}
-                      maxLength={6000}
-                      value={coverLetterDraft}
-                      disabled={isBusy}
-                      onChange={(event) =>
-                        setCoverLetterDrafts((current) => ({
-                          ...current,
-                          [row.id]: event.target.value,
-                        }))
-                      }
-                      placeholder={
-                        hasLetter
-                          ? ''
-                          : 'Нажмите «Сгенерировать», чтобы получить черновик от GPT, или введите свой текст.'
-                      }
-                    />
-                    <div className="cover-letter-actions">
-                      <button
-                        className="primary"
-                        disabled={isBusy}
-                        onClick={() => void generateCoverLetter(row.id, hasLetter)}
-                      >
-                        {hasLetter ? 'Сгенерировать заново' : 'Сгенерировать'}
-                      </button>
-                      <button
-                        className="secondary"
-                        disabled={isBusy || !coverLetterChanged}
-                        onClick={() => void saveCoverLetterEdits(row.id)}
-                      >
-                        Сохранить правки
-                      </button>
-                      <button
-                        className="secondary"
-                        disabled={isBusy || !coverLetterDraft.trim()}
-                        onClick={() => void copyCoverLetterToClipboard(row.id)}
-                      >
-                        Копировать
-                      </button>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-              <div className="application-card-footer">
-                <button
-                  className="secondary"
-                  disabled={isBusy || !notesChanged}
-                  onClick={() => void saveApplicationNotes(row.id)}
+            <Collapsible
+              key={col.id}
+              open={isOpen}
+              onOpenChange={(open) => setMobileOpenCol(open ? col.id : null)}
+            >
+              <CollapsibleTrigger
+                className={cn(
+                  'w-full flex items-center justify-between',
+                  'bg-[var(--color-surface)] border border-[var(--color-border)]',
+                  'rounded-[var(--radius-md)] px-4 py-3',
+                  'shadow-[var(--shadow-sm)]',
+                  'cursor-pointer',
+                  'transition-colors duration-[var(--duration-fast)]',
+                  'hover:bg-[var(--color-surface-muted)]',
+                  isOpen && 'border-[var(--color-border-strong)]'
+                )}
+              >
+                <ColumnHeader label={col.label} count={count} />
+                <svg
+                  className={cn(
+                    'h-4 w-4 text-[var(--color-ink-muted)] transition-transform duration-[var(--duration-fast)]',
+                    isOpen && 'rotate-180'
+                  )}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
                 >
-                  Сохранить заметку
-                </button>
-                <button
-                  className="danger"
-                  disabled={isBusy}
-                  onClick={() => void deleteApplicationRow(row.id)}
-                >
-                  Удалить
-                </button>
-              </div>
-            </article>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="data-[state=open]:animate-slide-down data-[state=closed]:animate-slide-up pt-3">
+                {renderColumnBody(col.id)}
+              </CollapsibleContent>
+            </Collapsible>
           );
         })}
       </div>
-    </section>
+
+      {/* ── Archive toggle ────────────────────────────────────────────────────── */}
+      {archiveCount > 0 ? (
+        <div className="flex flex-col gap-4 mt-2">
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setArchiveOpen((v) => !v)}
+              className={cn(
+                'inline-flex items-center gap-2',
+                'text-[var(--text-sm)] font-semibold text-[var(--color-ink-secondary)]',
+                'hover:text-[var(--color-ink)]',
+                'transition-colors duration-[var(--duration-fast)]',
+                'cursor-pointer'
+              )}
+            >
+              <svg
+                className={cn(
+                  'h-4 w-4 transition-transform duration-[var(--duration-fast)]',
+                  archiveOpen && 'rotate-180'
+                )}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+              Архив ({archiveCount})
+            </button>
+          </div>
+
+          {archiveOpen ? (
+            <div className="flex flex-col gap-3 animate-fade-in">
+              <Separator />
+              <p className="text-[var(--text-xs)] text-[var(--color-ink-muted)] uppercase font-bold tracking-[0.08em]">
+                Архив
+              </p>
+              {archivedApps
+                .sort(
+                  (a, b) =>
+                    new Date(b.last_status_change_at).getTime() -
+                    new Date(a.last_status_change_at).getTime()
+                )
+                .map((row) => (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      'flex flex-col gap-1 px-4 py-3',
+                      'bg-[var(--color-surface-muted)] border border-[var(--color-border)]',
+                      'rounded-[var(--radius-md)]',
+                      'opacity-70'
+                    )}
+                  >
+                    <span
+                      className="text-[var(--text-sm)] font-semibold text-[var(--color-ink)] truncate"
+                      title={row.vacancy_title}
+                    >
+                      {row.vacancy_title || 'Без названия'}
+                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[var(--text-xs)] text-[var(--color-ink-muted)]">
+                        {row.vacancy_company ?? ''}
+                      </span>
+                      <Badge variant="danger">{STATUS_LABELS[row.status]}</Badge>
+                      <span className="text-[var(--text-xs)] text-[var(--color-ink-muted)] ml-auto">
+                        {formatFriendlyDate(row.last_status_change_at)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
