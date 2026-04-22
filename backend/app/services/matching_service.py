@@ -2048,9 +2048,17 @@ def _candidate_to_match_dict(cand, *, tier: str, tier_reason: str | None = None)
 
 def _default_matching_stages(db: Session, vector_store, *, search_limit: int) -> list:
     """Build the default stage list. Kept as a helper so eval runners can
-    swap stages (e.g. add MMR) without recreating the boilerplate."""
+    swap stages without recreating the boilerplate.
+
+    MMR sits between dedupe and tier at ``lambda_=0.9`` — relevance-dominant
+    but nudges cross-company duplicates (same role, different firm) out of
+    the top window. λ=0.7 was rejected because on the offline gold it
+    costs ~5 NDCG points with no counterweight signal; λ=0.9 costs ~0.02
+    and is the best tradeoff until real engagement signals arrive in 2.6.
+    """
     from .matching.stages.augment import AugmentStage
     from .matching.stages.dedupe import DedupeStage
+    from .matching.stages.diversify import MMRDiversifyStage
     from .matching.stages.domain_gate import DomainGateStage
     from .matching.stages.filter import HardFilterStage
     from .matching.stages.recall import VectorRecallStage
@@ -2063,6 +2071,7 @@ def _default_matching_stages(db: Session, vector_store, *, search_limit: int) ->
         DomainGateStage(),
         ScoringStage(),
         DedupeStage(),
+        MMRDiversifyStage(lambda_=0.9, top_n=30),
         TierStage(),
         AugmentStage(),
     ]

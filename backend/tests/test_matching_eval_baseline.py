@@ -21,8 +21,7 @@ import json
 import unittest
 
 from app.services.matching_eval import evaluate, load_gold_set
-
-from tests.eval.adapter import hybrid_matcher, vector_only_matcher
+from tests.eval.adapter import hybrid_matcher, mmr_matcher, vector_only_matcher
 from tests.eval.loader import gold_path
 
 
@@ -102,6 +101,52 @@ class HybridMatcherTest(unittest.TestCase):
             msg=(
                 f"hybrid MAP {self.hybrid_report.mean_map:.4f} regressed below "
                 f"vector-only {self.vector_report.mean_map:.4f}"
+            ),
+        )
+
+
+class MMRMatcherTest(unittest.TestCase):
+    """MMR reordering at the production λ must stay within a small
+    tolerance of the pure-hybrid ranking.
+
+    MMR deliberately trades a sliver of relevance for diversity. The
+    offline gold has no diversity signal — it can't *reward* MMR for
+    separating two listings of the same role at different companies,
+    only *punish* the rank-order change. Production wires λ=0.9 (very
+    mild, measured ~0.02 NDCG cost vs pure hybrid); the test caps the
+    regression at 0.02 absolute. MMR also stays above the vector-only
+    floor, which is the stricter guarantee.
+
+    If someone raises λ lower than 0.9, this test will fail loudly and
+    force a conversation about whether the diversity gain is worth the
+    offline metric hit.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.gold = load_gold_set(gold_path())
+        cls.hybrid_report = evaluate(cls.gold, matcher=hybrid_matcher(top_k=10))
+        # λ must match the default wired in _default_matching_stages.
+        cls.mmr_report = evaluate(cls.gold, matcher=mmr_matcher(top_k=10, lambda_=0.9, top_n=30))
+
+    def test_mmr_ndcg_within_tolerance_of_hybrid(self) -> None:
+        self.assertGreaterEqual(
+            self.mmr_report.mean_ndcg_at_10,
+            self.hybrid_report.mean_ndcg_at_10 - 0.02,
+            msg=(
+                f"mmr NDCG {self.mmr_report.mean_ndcg_at_10:.4f} regressed beyond "
+                f"0.02 below hybrid {self.hybrid_report.mean_ndcg_at_10:.4f}"
+            ),
+        )
+
+    def test_mmr_ndcg_not_worse_than_vector_only(self) -> None:
+        vector_report = evaluate(self.gold, matcher=vector_only_matcher(top_k=10))
+        self.assertGreaterEqual(
+            self.mmr_report.mean_ndcg_at_10,
+            vector_report.mean_ndcg_at_10 - 1e-6,
+            msg=(
+                f"mmr NDCG {self.mmr_report.mean_ndcg_at_10:.4f} regressed below "
+                f"vector-only {vector_report.mean_ndcg_at_10:.4f}"
             ),
         )
 
