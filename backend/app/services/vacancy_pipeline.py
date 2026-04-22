@@ -1,5 +1,7 @@
+import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlparse
@@ -15,6 +17,14 @@ from app.services.vacancy_sources import (
     search_vacancies,
     vacancy_parse_stats_scope,
 )
+
+logger = logging.getLogger(__name__)
+
+# Phase 2.0 PR A2: run LLM analyses concurrently so cold-start discovery
+# stops being dominated by 18-40 sequential OpenAI round-trips. Semaphore
+# is conservative — OpenAI tier limits + our daily budget guard are the
+# actual backpressure mechanism, we just want to hide latency.
+LLM_CONCURRENCY = 5
 
 ALLOWED_JOB_HOSTS = (
     "hh.ru",
@@ -222,9 +232,20 @@ def discover_and_index_vacancies(
     processed_source_urls: set[str] = set()
     stop_processing = False
 
-    def process_items(found_items: list[dict]) -> None:
-        nonlocal metrics, indexed, stop_processing
+    def _mark_filtered(vacancy, reason: str) -> None:
+        vacancy.status = "filtered"
+        vacancy.error_message = reason
+        db.add(vacancy)
+        db.commit()
+        db.refresh(vacancy)
+        metrics.prefiltered += 1
+        metrics.filtered += 1
 
+    def _collect_eligible(found_items: list[dict]) -> list[tuple]:
+        """Prefilter + upsert rows. Returns (vacancy, analysis_input) ready
+        for LLM parse. Stops collecting when the analyzed budget is full."""
+        nonlocal metrics, stop_processing
+        eligible: list[tuple] = []
         for item in found_items:
             if stop_processing:
                 break
@@ -276,71 +297,94 @@ def discover_and_index_vacancies(
                     continue
 
                 if not _host_allowed_for_matching(vacancy.source_url):
-                    vacancy.status = "filtered"
-                    vacancy.error_message = "Filtered as non-target source"
-                    db.add(vacancy)
-                    db.commit()
-                    db.refresh(vacancy)
-                    metrics.prefiltered += 1
-                    metrics.filtered += 1
+                    _mark_filtered(vacancy, "Filtered as non-target source")
                     continue
-
                 if rf_only and not _looks_like_rf_vacancy(
                     vacancy.source_url, vacancy.title, vacancy.raw_text, vacancy.location
                 ):
-                    vacancy.status = "filtered"
-                    vacancy.error_message = "Filtered as non-RF vacancy"
-                    db.add(vacancy)
-                    db.commit()
-                    db.refresh(vacancy)
-                    metrics.prefiltered += 1
-                    metrics.filtered += 1
+                    _mark_filtered(vacancy, "Filtered as non-RF vacancy")
                     continue
-
                 if _looks_non_vacancy_page(vacancy.source_url):
-                    vacancy.status = "filtered"
-                    vacancy.error_message = "Filtered as non-vacancy page"
-                    db.add(vacancy)
-                    db.commit()
-                    db.refresh(vacancy)
-                    metrics.prefiltered += 1
-                    metrics.filtered += 1
+                    _mark_filtered(vacancy, "Filtered as non-vacancy page")
                     continue
-
                 if _looks_archived_vacancy_strict(
                     vacancy.source_url, vacancy.title, vacancy.raw_text
                 ):
-                    vacancy.status = "filtered"
-                    vacancy.error_message = "Filtered as archived vacancy"
-                    db.add(vacancy)
-                    db.commit()
-                    db.refresh(vacancy)
-                    metrics.prefiltered += 1
-                    metrics.filtered += 1
+                    _mark_filtered(vacancy, "Filtered as archived vacancy")
                     continue
-
                 if _looks_like_listing_page(vacancy.source_url, vacancy.title):
-                    vacancy.status = "filtered"
-                    vacancy.error_message = "Filtered as listing/aggregator page"
-                    db.add(vacancy)
-                    db.commit()
-                    db.refresh(vacancy)
-                    metrics.prefiltered += 1
-                    metrics.filtered += 1
+                    _mark_filtered(vacancy, "Filtered as listing/aggregator page")
                     continue
 
-                if max_analyzed is not None and metrics.analyzed >= max_analyzed:
+                if max_analyzed is not None and metrics.analyzed + len(eligible) >= max_analyzed:
                     stop_processing = True
                     break
 
-                metrics.analyzed += 1
                 analysis_input = _build_vacancy_analysis_input(
                     title=vacancy.title,
                     source_url=vacancy.source_url,
                     raw_text=vacancy.raw_text,
                     company=vacancy.company,
                 )
-                profile = analyze_vacancy_text(analysis_input)
+                eligible.append((vacancy, analysis_input))
+            except Exception as error:
+                if vacancy is not None:
+                    vacancy.status = "failed"
+                    vacancy.error_message = str(error)
+                    db.add(vacancy)
+                    db.commit()
+                    db.refresh(vacancy)
+                metrics.failed += 1
+        return eligible
+
+    def _analyze_parallel(pending: list[tuple]) -> list[tuple]:
+        """Run analyze_vacancy_text across threads. DB is untouched inside
+        worker threads — only the pure OpenAI call runs there. Returns
+        (vacancy, profile_or_None, error_or_None) in original submission
+        order. Re-raises OpenAIBudgetExceeded after cancelling siblings."""
+        if not pending:
+            return []
+        results: dict[int, tuple] = {}
+        workers = min(LLM_CONCURRENCY, len(pending))
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="llm-parse") as pool:
+            future_to_idx = {
+                pool.submit(analyze_vacancy_text, inp): idx for idx, (_, inp) in enumerate(pending)
+            }
+            budget_error: OpenAIBudgetExceeded | None = None
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                vacancy, _ = pending[idx]
+                try:
+                    profile = future.result()
+                    results[idx] = (vacancy, profile, None)
+                except OpenAIBudgetExceeded as err:
+                    # Capture and cancel the rest; re-raise once the pool drains.
+                    budget_error = err
+                    for pending_future in future_to_idx:
+                        if not pending_future.done():
+                            pending_future.cancel()
+                    results[idx] = (vacancy, None, err)
+                except Exception as err:
+                    results[idx] = (vacancy, None, err)
+        if budget_error is not None:
+            raise budget_error
+        return [results[i] for i in sorted(results)]
+
+    def _persist_analysis(analyzed: list[tuple]) -> None:
+        """Serialized DB writes for the LLM results. Threads are done by now."""
+        nonlocal metrics, indexed
+        for vacancy, profile, error in analyzed:
+            metrics.analyzed += 1
+            if error is not None:
+                if vacancy is not None:
+                    vacancy.status = "failed"
+                    vacancy.error_message = str(error)
+                    db.add(vacancy)
+                    db.commit()
+                    db.refresh(vacancy)
+                metrics.failed += 1
+                continue
+            try:
                 is_vacancy = bool(profile.get("is_vacancy"))
                 confidence = float(profile.get("vacancy_confidence") or 0.0)
                 if not is_vacancy or confidence < 0.55:
@@ -354,7 +398,6 @@ def discover_and_index_vacancies(
                     db.refresh(vacancy)
                     metrics.filtered += 1
                     continue
-
                 persist_vacancy_profile(
                     db,
                     vacancy_id=vacancy.id,
@@ -370,16 +413,18 @@ def discover_and_index_vacancies(
                 db.refresh(vacancy)
                 indexed.append(vacancy)
                 metrics.indexed += 1
-            except OpenAIBudgetExceeded:
-                raise
-            except Exception as error:
-                if vacancy is not None:
-                    vacancy.status = "failed"
-                    vacancy.error_message = str(error)
-                    db.add(vacancy)
-                    db.commit()
-                    db.refresh(vacancy)
+            except Exception as persist_err:
+                vacancy.status = "failed"
+                vacancy.error_message = str(persist_err)
+                db.add(vacancy)
+                db.commit()
+                db.refresh(vacancy)
                 metrics.failed += 1
+
+    def process_items(found_items: list[dict]) -> None:
+        pending_analysis = _collect_eligible(found_items)
+        analyzed = _analyze_parallel(pending_analysis)
+        _persist_analysis(analyzed)
 
     parse_stats = VacancyParseStats()
     with vacancy_parse_stats_scope(parse_stats):
