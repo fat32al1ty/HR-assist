@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Fraunces, Source_Sans_3 } from 'next/font/google';
 import './globals.css';
+import { SessionProvider } from '@/lib/session';
+import Topbar from '@/components/Topbar';
 
 const fraunces = Fraunces({
   subsets: ['latin', 'latin-ext'],
@@ -25,8 +27,11 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ru">
-      <body className={`${fraunces.variable} ${sourceSans3.variable}`}>
-        {children}
+      <body className={`${fraunces.variable} ${sourceSans3.variable} font-body`}>
+        <SessionProvider>
+          <Topbar />
+          {children}
+        </SessionProvider>
       </body>
     </html>
   );
