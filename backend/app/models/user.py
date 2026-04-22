@@ -32,6 +32,8 @@ class User(Base):
         ARRAY(Text()), nullable=False, server_default="{}"
     )
 
+    last_hh_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     resumes = relationship("Resume", back_populates="user", cascade="all, delete-orphan")
     auth_otp_codes = relationship(
         "AuthOtpCode", back_populates="user", cascade="all, delete-orphan"

@@ -3,7 +3,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from app.services.vacancy_pipeline import VacancyDiscoveryMetrics
-from app.services.vacancy_recommendation import INTERACTIVE_MAX_DEEP_QUERIES, recommend_vacancies_for_resume
+from app.services.vacancy_recommendation import (
+    INTERACTIVE_MAX_DEEP_QUERIES,
+    recommend_vacancies_for_resume,
+)
 
 
 class RecommendationInteractiveLimitsTest(unittest.TestCase):
@@ -27,8 +30,13 @@ class RecommendationInteractiveLimitsTest(unittest.TestCase):
         mock_match.return_value = []
         mock_discover.return_value = SimpleNamespace(metrics=VacancyDiscoveryMetrics())
 
+        db = SimpleNamespace(
+            get=lambda *_args, **_kwargs: None,
+            add=lambda *_args, **_kwargs: None,
+            commit=lambda *_args, **_kwargs: None,
+        )
         query, metrics, matches = recommend_vacancies_for_resume(
-            db=SimpleNamespace(),
+            db=db,
             resume_id=1,
             user_id=1,
             discover_count=80,

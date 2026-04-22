@@ -1,6 +1,7 @@
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
@@ -214,6 +215,7 @@ def discover_and_index_vacancies(
     force_reindex: bool = False,
     use_brave_fallback: bool = False,
     max_analyzed: int | None = None,
+    date_from: datetime | None = None,
 ) -> VacancyDiscoveryResult:
     metrics = VacancyDiscoveryMetrics(fetched=0, sources=[])
     indexed = []
@@ -386,15 +388,16 @@ def discover_and_index_vacancies(
             count=count,
             use_brave_fallback=use_brave_fallback,
             page_offset=0,
+            date_from=date_from,
         )
         process_items(first_pass_items)
 
-        if (
-            not force_reindex
-            and metrics.indexed == 0
-            and metrics.analyzed == 0
-            and metrics.already_indexed_skipped > 0
-        ):
+        # Phase 1.9 PR A1: trigger retry whenever the first pass barely
+        # indexed anything fresh, not only when it indexed literally zero.
+        # The previous `indexed==0 AND analyzed==0` guard never fired when
+        # we pulled 2-3 new items but still missed the freshness target,
+        # so users saw the same ~40 top results repeatedly.
+        if not force_reindex and metrics.indexed < 5:
             expanded_count = min(max(count * 4, 120), 500)
             for attempt in range(1, 7):
                 second_pass_items = search_vacancies(
@@ -404,9 +407,10 @@ def discover_and_index_vacancies(
                     page_offset=_build_rotation_offset(
                         query=query, count=expanded_count, attempt=attempt
                     ),
+                    date_from=date_from,
                 )
                 process_items(second_pass_items)
-                if metrics.indexed > 0 or metrics.analyzed > 0:
+                if metrics.indexed >= 5:
                     break
 
     metrics.skipped_parse_errors = parse_stats.skipped_parse_errors

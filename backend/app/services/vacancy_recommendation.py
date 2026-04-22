@@ -2,16 +2,26 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import asdict
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.models.user import User
 from app.repositories.resumes import get_resume_for_user
 from app.services.matching_service import match_vacancies_for_resume
 from app.services.vacancy_pipeline import VacancyDiscoveryMetrics, discover_and_index_vacancies
 
 MAX_DEEP_SCAN_QUERIES = 6
 MAX_TOTAL_DISCOVERY_BUDGET = 140
-MAX_TOTAL_ANALYZED_BUDGET = 18
+# Phase 1.9 PR A1: split caps. HTTP scans to HH are free, LLM parses are
+# paid. Letting the scan run wider than the analyze budget lets us dig
+# past the already-indexed top page without blowing the OpenAI budget.
+MAX_SOURCES_SCANNED = 200
+MAX_OPENAI_ANALYZED = 18
+MAX_TOTAL_ANALYZED_BUDGET = MAX_OPENAI_ANALYZED
+# Overlap window to tolerate HH's eventual-consistency on new postings —
+# a vacancy posted right before our cursor might not be visible yet.
+HH_CURSOR_OVERLAP = timedelta(hours=6)
 INTERACTIVE_MAX_DEEP_QUERIES = 3
 HIGH_QUALITY_MATCH_THRESHOLD = 0.55
 
@@ -247,8 +257,26 @@ def recommend_vacancies_for_resume(
     if resume is None:
         return "", VacancyDiscoveryMetrics(), []
 
+    user = db.get(User, user_id)
+    cursor_from: datetime | None = None
+    if user is not None and user.last_hh_seen_at is not None:
+        cursor_from = user.last_hh_seen_at - HH_CURSOR_OVERLAP
+    fetch_started_at = datetime.now(UTC)
+
+    def _commit_cursor() -> None:
+        # Only advance the cursor when we actually hit HH on this call.
+        # Prefetched-index-only returns do not see newer data, so keeping
+        # the old cursor means the next call will still look backwards far
+        # enough to find anything posted since the last true fetch.
+        if not fetch_succeeded or user is None:
+            return
+        user.last_hh_seen_at = fetch_started_at
+        db.add(user)
+        db.commit()
+
     query = _build_discovery_query(resume.analysis)
     aggregate_metrics = _empty_metrics()
+    fetch_succeeded = False
     report("collecting", 5, aggregate_metrics)
 
     if use_prefetched_index:
@@ -309,7 +337,9 @@ def recommend_vacancies_for_resume(
                 force_reindex=False,
                 use_brave_fallback=use_brave_fallback,
                 max_analyzed=remaining_analyzed_budget,
+                date_from=cursor_from,
             )
+            fetch_succeeded = True
             aggregate_metrics = _merge_metrics(aggregate_metrics, result.metrics)
             report(
                 "collecting",
@@ -331,6 +361,7 @@ def recommend_vacancies_for_resume(
                 ):
                     report("matching", 85, aggregate_metrics)
                     report("finalizing", 95, aggregate_metrics)
+                    _commit_cursor()
                     return query, _absorb_matching_metrics(aggregate_metrics), interim_matches
             # Stop wasting time if repeated scans only revisit already-indexed links.
             if (
@@ -363,7 +394,9 @@ def recommend_vacancies_for_resume(
             force_reindex=False,
             use_brave_fallback=use_brave_fallback,
             max_analyzed=MAX_TOTAL_ANALYZED_BUDGET,
+            date_from=cursor_from,
         )
+        fetch_succeeded = True
         aggregate_metrics = _merge_metrics(aggregate_metrics, result.metrics)
         report("collecting", 70, aggregate_metrics)
 
@@ -377,4 +410,5 @@ def recommend_vacancies_for_resume(
         metrics=matching_metrics,
     )
     report("finalizing", 95, aggregate_metrics)
+    _commit_cursor()
     return query, _absorb_matching_metrics(aggregate_metrics), matches

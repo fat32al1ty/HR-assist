@@ -7,6 +7,7 @@ import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote_plus, urljoin, urlparse
 
@@ -468,8 +469,20 @@ def _search_superjob_api_vacancies(
     return vacancies
 
 
+def _format_hh_date_from(value: datetime) -> str:
+    # HH API expects ISO-8601 with timezone offset; naive timestamps are
+    # treated as UTC by convention across our pipeline.
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
 def _search_hh_public_api_vacancies(
-    *, query: str, count: int, start_page: int = 0
+    *,
+    query: str,
+    count: int,
+    start_page: int = 0,
+    date_from: datetime | None = None,
 ) -> list[dict[str, Any]]:
     vacancies: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
@@ -477,13 +490,15 @@ def _search_hh_public_api_vacancies(
     max_pages = max(MAX_API_SOURCE_PAGES, 8)
     first_page = max(0, start_page)
     for page in range(first_page, first_page + max_pages):
-        params = {
+        params: dict[str, Any] = {
             "text": query,
             "per_page": per_page,
             "page": page,
             "area": settings.hh_area,
             "search_field": ["name", "company_name", "description"],
         }
+        if date_from is not None:
+            params["date_from"] = _format_hh_date_from(date_from)
         response = _hh_get_with_fallback(params=params)
         response.raise_for_status()
         payload = response.json()
@@ -618,13 +633,17 @@ def search_vacancies(
     count: int,
     use_brave_fallback: bool = False,
     page_offset: int = 0,
+    date_from: datetime | None = None,
 ) -> list[dict[str, Any]]:
     # Temporary strategy: use only HH API as vacancy source.
     # Other sources (Habr/SuperJob/public pages/Brave) are intentionally disabled here.
     _ = use_brave_fallback
     try:
         aggregated = _search_hh_public_api_vacancies(
-            query=query, count=count, start_page=page_offset
+            query=query,
+            count=count,
+            start_page=page_offset,
+            date_from=date_from,
         )
     except Exception:
         aggregated = []
@@ -653,5 +672,6 @@ def search_vacancies(
             count=count,
             use_brave_fallback=False,
             page_offset=0,
+            date_from=date_from,
         )
     return deduplicated
