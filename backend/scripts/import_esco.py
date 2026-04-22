@@ -69,9 +69,7 @@ def _read_occupation_rows(path: Path) -> dict[str, dict]:
 def _import_occupations(db: Session, csv_dir: Path, languages: list[str]) -> None:
     english = _read_occupation_rows(csv_dir / "occupations_en.csv")
     if not english:
-        raise RuntimeError(
-            "occupations_en.csv is required — preferred_label_en is NOT NULL"
-        )
+        raise RuntimeError("occupations_en.csv is required — preferred_label_en is NOT NULL")
 
     alt_by_uri: dict[str, dict[str, list[str]]] = defaultdict(lambda: {"ru": [], "en": []})
     ru_label_by_uri: dict[str, str] = {}
@@ -174,9 +172,7 @@ def _import_occupation_skill_relations(db: Session, csv_dir: Path) -> None:
             skill_id = skill_id_by_uri.get(skill_uri)
             if occ_id is None or skill_id is None:
                 continue
-            payload.append(
-                {"occupation_id": occ_id, "skill_id": skill_id, "relation": relation}
-            )
+            payload.append({"occupation_id": occ_id, "skill_id": skill_id, "relation": relation})
 
     if payload:
         db.execute(
@@ -226,9 +222,7 @@ def _split_alt_labels(value: str) -> list[str]:
     return [p for p in parts if p]
 
 
-def _upsert_batch(
-    db: Session, table, rows: list[dict], *, key: str, batch_size: int = 1000
-) -> int:
+def _upsert_batch(db: Session, table, rows: list[dict], *, key: str, batch_size: int = 1000) -> int:
     if not rows:
         return 0
     existing_keys = {k for (k,) in db.execute(db.query(getattr(table.c, key)).statement)}
@@ -236,7 +230,11 @@ def _upsert_batch(
     for start in range(0, len(rows), batch_size):
         chunk = rows[start : start + batch_size]
         stmt = pg_insert(table).values(chunk)
-        update_cols = {col.name: stmt.excluded[col.name] for col in table.c if col.name != key and col.name != "id"}
+        update_cols = {
+            col.name: stmt.excluded[col.name]
+            for col in table.c
+            if col.name != key and col.name != "id"
+        }
         stmt = stmt.on_conflict_do_update(index_elements=[key], set_=update_cols)
         db.execute(stmt)
         for row in chunk:
