@@ -55,7 +55,7 @@ export default function AdminPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
-            <p className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+            <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
               Этот раздел доступен только администраторам.
             </p>
             <Button variant="ghost" size="sm" asChild>
@@ -69,7 +69,7 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <main className="px-8 py-10 text-[var(--color-ink-secondary)] text-[var(--text-sm)]">
+      <main className="px-8 py-10 text-[color:var(--color-ink-secondary)] text-[length:var(--text-sm)]">
         Загружаем данные...
       </main>
     );
@@ -77,7 +77,7 @@ export default function AdminPage() {
 
   if (error) {
     return (
-      <main className="px-8 py-10 text-[var(--color-danger)] text-[var(--text-sm)]">
+      <main className="px-8 py-10 text-[color:var(--color-danger)] text-[length:var(--text-sm)]">
         {error}
       </main>
     );
@@ -91,8 +91,8 @@ export default function AdminPage() {
     <main className="w-full max-w-[var(--content-width)] mx-auto px-4 py-10">
       <h1
         className={cn(
-          'font-[var(--font-display)] text-[var(--text-3xl)]',
-          'font-semibold text-[var(--color-ink)] tracking-[-0.03em]',
+          'font-[var(--font-display)] text-[length:var(--text-3xl)]',
+          'font-semibold text-[color:var(--color-ink)] tracking-[-0.03em]',
           'leading-[var(--leading-tight)] mb-8'
         )}
       >
@@ -152,7 +152,7 @@ export default function AdminPage() {
           </CardHeader>
           <CardContent>
             {lastJob == null ? (
-              <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] italic py-2">
+              <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] italic py-2">
                 Нет данных. Передайте ?resume_id=N в URL.
               </p>
             ) : (
@@ -246,7 +246,7 @@ export default function AdminPage() {
               <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
                 <dt
                   className={cn(
-                    'text-[var(--text-xs)] text-[var(--color-ink-secondary)]',
+                    'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
                     'uppercase tracking-[0.1em] font-bold mb-2'
                   )}
                 >
@@ -255,8 +255,8 @@ export default function AdminPage() {
                 <dd>
                   <pre
                     className={cn(
-                      'font-[var(--font-mono)] text-[var(--text-xs)]',
-                      'text-[var(--color-ink-secondary)]',
+                      'font-[var(--font-mono)] text-[length:var(--text-xs)]',
+                      'text-[color:var(--color-ink-secondary)]',
                       'bg-[var(--color-surface-muted)]',
                       'p-3 rounded-[var(--radius-sm)]',
                       'overflow-x-auto m-0'
@@ -293,7 +293,7 @@ export default function AdminPage() {
       {stats?.generated_at ? (
         <p
           className={cn(
-            'mt-8 text-[var(--text-xs)] text-[var(--color-ink-muted)]',
+            'mt-8 text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]',
             'font-[var(--font-mono)]'
           )}
         >
@@ -317,7 +317,7 @@ function StatRow({
     <div className="flex items-baseline justify-between gap-4 py-2">
       <dt
         className={cn(
-          'text-[var(--text-xs)] text-[var(--color-ink-secondary)]',
+          'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
           'uppercase tracking-[0.1em] font-bold shrink-0'
         )}
       >
@@ -325,7 +325,7 @@ function StatRow({
       </dt>
       <dd
         className={cn(
-          'text-[var(--text-sm)] text-[var(--color-ink)] text-right m-0',
+          'text-[length:var(--text-sm)] text-[color:var(--color-ink)] text-right m-0',
           mono && 'font-[var(--font-mono)]'
         )}
       >

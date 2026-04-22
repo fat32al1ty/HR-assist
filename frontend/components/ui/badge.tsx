@@ -12,12 +12,12 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        default:  'bg-[var(--color-surface-muted)] text-[var(--color-ink-secondary)] border-[var(--color-border)]',
-        accent:   'bg-[var(--color-accent-subtle)] text-[var(--color-accent)] border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)]',
-        success:  'bg-[var(--color-success-subtle)] text-[var(--color-success)] border-[color-mix(in_srgb,var(--color-success)_25%,transparent)]',
-        warning:  'bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)]',
-        danger:   'bg-[var(--color-danger-subtle)] text-[var(--color-danger)] border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)]',
-        info:     'bg-[var(--color-info-subtle)] text-[var(--color-info)] border-[color-mix(in_srgb,var(--color-info)_25%,transparent)]',
+        default:  'bg-[var(--color-surface-muted)] text-[color:var(--color-ink-secondary)] border-[var(--color-border)]',
+        accent:   'bg-[var(--color-accent-subtle)] text-[color:var(--color-accent)] border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)]',
+        success:  'bg-[var(--color-success-subtle)] text-[color:var(--color-success)] border-[color-mix(in_srgb,var(--color-success)_25%,transparent)]',
+        warning:  'bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)]',
+        danger:   'bg-[var(--color-danger-subtle)] text-[color:var(--color-danger)] border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)]',
+        info:     'bg-[var(--color-info-subtle)] text-[color:var(--color-info)] border-[color-mix(in_srgb,var(--color-info)_25%,transparent)]',
       },
     },
     defaultVariants: {

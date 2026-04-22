@@ -188,12 +188,12 @@ function ApplicationCard({
       {/* Title + company */}
       <div className="flex flex-col gap-0.5 min-w-0">
         <span
-          className="font-[var(--font-display)] text-[var(--text-xl)] font-[500] text-[var(--color-ink)] leading-[var(--leading-tight)] tracking-[-0.02em] truncate"
+          className="font-[var(--font-display)] text-[length:var(--text-xl)] font-[500] text-[color:var(--color-ink)] leading-[var(--leading-tight)] tracking-[-0.02em] truncate"
           title={row.vacancy_title || 'Без названия'}
         >
           {titleTruncated || 'Без названия'}
         </span>
-        <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)] truncate">
+        <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] truncate">
           {row.vacancy_company ?? 'Компания не указана'}
         </span>
       </div>
@@ -205,7 +205,7 @@ function ApplicationCard({
             {row.resume_label}
           </Badge>
         ) : null}
-        <span className="font-[var(--font-mono)] text-[var(--text-xs)] text-[var(--color-ink-secondary)] ml-auto">
+        <span className="font-[var(--font-mono)] text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] ml-auto">
           {formatFriendlyDate(row.last_status_change_at)}
         </span>
       </div>
@@ -217,9 +217,9 @@ function ApplicationCard({
           disabled={isBusy}
           aria-label="Изменить статус"
           className={cn(
-            'w-full text-[var(--text-sm)] font-semibold',
+            'w-full text-[length:var(--text-sm)] font-semibold',
             'border border-[var(--color-border)] rounded-[var(--radius-md)]',
-            'bg-[var(--color-surface-muted)] text-[var(--color-ink)]',
+            'bg-[var(--color-surface-muted)] text-[color:var(--color-ink)]',
             'px-3 py-2 cursor-pointer',
             'transition-colors duration-[var(--duration-fast)]',
             isBusy && 'opacity-55 cursor-not-allowed'
@@ -260,7 +260,7 @@ function ApplicationCard({
             </Button>
           ) : null}
           {row.cover_letter_generated_at ? (
-            <span className="text-[var(--text-xs)] text-[var(--color-ink-muted)] italic">
+            <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] italic">
               {formatFriendlyDate(row.cover_letter_generated_at)}
             </span>
           ) : null}
@@ -276,8 +276,8 @@ function ApplicationCard({
               className={cn(
                 'w-full resize-vertical min-h-[140px]',
                 'border border-[var(--color-border)] rounded-[var(--radius-md)]',
-                'bg-[var(--color-surface-muted)] text-[var(--color-ink)]',
-                'text-[var(--text-sm)] leading-[var(--leading-normal)]',
+                'bg-[var(--color-surface-muted)] text-[color:var(--color-ink)]',
+                'text-[length:var(--text-sm)] leading-[var(--leading-normal)]',
                 'p-3 font-[var(--font-body)]'
               )}
               placeholder={
@@ -322,14 +322,14 @@ function ApplicationCard({
         <CollapsibleTrigger
           className={cn(
             'w-full flex items-center justify-between',
-            'text-[var(--text-sm)] font-semibold text-[var(--color-ink-secondary)]',
-            'hover:text-[var(--color-ink)] transition-colors duration-[var(--duration-fast)]',
+            'text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink-secondary)]',
+            'hover:text-[color:var(--color-ink)] transition-colors duration-[var(--duration-fast)]',
             'cursor-pointer py-1'
           )}
         >
           <span>Заметки</span>
           {hasNotes ? (
-            <span className="text-[var(--text-xs)] text-[var(--color-ink-muted)] font-normal">
+            <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] font-normal">
               (есть)
             </span>
           ) : null}
@@ -362,7 +362,7 @@ function ApplicationCard({
           href={row.source_url}
           target="_blank"
           rel="noreferrer"
-          className="text-[var(--text-sm)] font-semibold text-[var(--color-accent)] self-start"
+          className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-accent)] self-start"
         >
           Открыть вакансию ↗
         </a>
@@ -377,7 +377,7 @@ function ApplicationCard({
 function ColumnHeader({ label, count }: { label: string; count: number }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="font-[var(--font-display)] text-[var(--text-2xl)] font-semibold text-[var(--color-ink)] tracking-[-0.03em] leading-[var(--leading-tight)]">
+      <span className="font-[var(--font-display)] text-[length:var(--text-2xl)] font-semibold text-[color:var(--color-ink)] tracking-[-0.03em] leading-[var(--leading-tight)]">
         {label}
       </span>
       <span
@@ -386,7 +386,7 @@ function ColumnHeader({ label, count }: { label: string; count: number }) {
           'min-w-[22px] h-[22px] px-1.5',
           'rounded-[var(--radius-full)]',
           'text-[11px] font-bold',
-          'bg-[var(--color-surface-muted)] text-[var(--color-ink-secondary)]',
+          'bg-[var(--color-surface-muted)] text-[color:var(--color-ink-secondary)]',
           'border border-[var(--color-border)]'
         )}
       >
@@ -636,7 +636,7 @@ export default function ApplicationsPage() {
       return (
         <div className="flex flex-col gap-3">
           {empty ? (
-            <p className="text-[var(--text-sm)] text-[var(--color-ink-secondary)] italic text-center py-6">
+            <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] italic text-center py-6">
               {col.emptyText}
             </p>
           ) : null}
@@ -653,7 +653,7 @@ export default function ApplicationsPage() {
     return (
       <div className="flex flex-col gap-3">
         {cards2.length === 0 ? (
-          <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] italic">
+          <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] italic">
             {col.emptyText}
           </p>
         ) : null}
@@ -667,11 +667,11 @@ export default function ApplicationsPage() {
       {/* Page title */}
       <div className="flex flex-col gap-1">
         <h1
-          className="font-[var(--font-display)] text-[var(--text-3xl)] font-semibold text-[var(--color-ink)] tracking-[-0.03em] leading-[var(--leading-tight)]"
+          className="font-[var(--font-display)] text-[length:var(--text-3xl)] font-semibold text-[color:var(--color-ink)] tracking-[-0.03em] leading-[var(--leading-tight)]"
         >
           Мои отклики
         </h1>
-        <p className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+        <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
           Статусный трекер откликов. Смени статус через выпадающий список на карточке.
         </p>
       </div>
@@ -680,8 +680,8 @@ export default function ApplicationsPage() {
       {statusMessage ? (
         <div
           className={cn(
-            'rounded-[var(--radius-md)] px-4 py-3 text-[var(--text-sm)]',
-            'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]',
+            'rounded-[var(--radius-md)] px-4 py-3 text-[length:var(--text-sm)]',
+            'bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)]',
             'border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)]'
           )}
         >
@@ -745,7 +745,7 @@ export default function ApplicationsPage() {
                 <ColumnHeader label={col.label} count={count} />
                 <svg
                   className={cn(
-                    'h-4 w-4 text-[var(--color-ink-muted)] transition-transform duration-[var(--duration-fast)]',
+                    'h-4 w-4 text-[color:var(--color-ink-muted)] transition-transform duration-[var(--duration-fast)]',
                     isOpen && 'rotate-180'
                   )}
                   fill="none"
@@ -779,8 +779,8 @@ export default function ApplicationsPage() {
             onClick={() => setArchiveOpen((v) => !v)}
             className={cn(
               'group inline-flex items-center gap-2 self-start',
-              'text-[var(--text-sm)] font-semibold text-[var(--color-ink-secondary)]',
-              'hover:text-[var(--color-ink)]',
+              'text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink-secondary)]',
+              'hover:text-[color:var(--color-ink)]',
               'transition-colors duration-[var(--duration-fast)]',
               'cursor-pointer'
             )}
@@ -803,7 +803,7 @@ export default function ApplicationsPage() {
           {archiveOpen ? (
             <div className="flex flex-col gap-2 animate-fade-in">
               <Separator />
-              <p className="text-[var(--text-xs)] text-[var(--color-ink-muted)] uppercase font-bold tracking-[0.08em] pt-1">
+              <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] uppercase font-bold tracking-[0.08em] pt-1">
                 Архив
               </p>
               {archivedApps
@@ -823,17 +823,17 @@ export default function ApplicationsPage() {
                     )}
                   >
                     <span
-                      className="font-[var(--font-display)] text-[var(--text-base)] font-[500] text-[var(--color-ink)] tracking-[-0.01em] truncate"
+                      className="font-[var(--font-display)] text-[length:var(--text-base)] font-[500] text-[color:var(--color-ink)] tracking-[-0.01em] truncate"
                       title={row.vacancy_title}
                     >
                       {row.vacancy_title || 'Без названия'}
                     </span>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[var(--text-xs)] text-[var(--color-ink-muted)]">
+                      <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]">
                         {row.vacancy_company ?? ''}
                       </span>
                       <Badge variant="danger">{STATUS_LABELS[row.status]}</Badge>
-                      <span className="font-[var(--font-mono)] text-[var(--text-xs)] text-[var(--color-ink-secondary)] ml-auto">
+                      <span className="font-[var(--font-mono)] text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] ml-auto">
                         {formatFriendlyDate(row.last_status_change_at)}
                       </span>
                     </div>

@@ -21,34 +21,34 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary: [
-          'bg-[var(--color-accent)] text-[var(--color-on-accent)]',
+          'bg-[var(--color-accent)] text-[color:var(--color-on-accent)]',
           'shadow-[var(--shadow-sm)]',
           'hover:bg-[var(--color-accent-hover)] hover:shadow-[var(--shadow-md)]',
         ],
         secondary: [
-          'bg-[var(--color-surface-raised)] text-[var(--color-ink)]',
+          'bg-[var(--color-surface-raised)] text-[color:var(--color-ink)]',
           'border border-[var(--color-border)]',
           'hover:bg-[var(--color-surface-muted)] hover:border-[var(--color-border-strong)]',
         ],
         ghost: [
-          'bg-transparent text-[var(--color-ink)]',
-          'hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-ink)]',
+          'bg-transparent text-[color:var(--color-ink)]',
+          'hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-ink)]',
         ],
         danger: [
-          'bg-[var(--color-danger-subtle)] text-[var(--color-danger)]',
+          'bg-[var(--color-danger-subtle)] text-[color:var(--color-danger)]',
           'border border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)]',
           'hover:bg-[color-mix(in_srgb,var(--color-danger)_12%,transparent)]',
         ],
         link: [
-          'bg-transparent text-[var(--color-accent)] underline underline-offset-[3px]',
-          'hover:text-[var(--color-accent-hover)]',
+          'bg-transparent text-[color:var(--color-accent)] underline underline-offset-[3px]',
+          'hover:text-[color:var(--color-accent-hover)]',
           'p-0 h-auto',
         ],
       },
       size: {
-        sm:  'h-8  px-3  text-[var(--text-sm)]',
-        md:  'h-11 px-4  text-[var(--text-base)]',
-        lg:  'h-13 px-6  text-[var(--text-lg)]',
+        sm:  'h-8  px-3  text-[length:var(--text-sm)]',
+        md:  'h-11 px-4  text-[length:var(--text-base)]',
+        lg:  'h-13 px-6  text-[length:var(--text-lg)]',
         icon:'h-9  w-9   p-0',
       },
     },

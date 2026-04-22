@@ -1566,7 +1566,7 @@ export default function DashboardPage() {
                   )}
                 </form>
                 {message ? (
-                  <p className="mt-3 rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[var(--text-sm)]">
+                  <p className="mt-3 rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
                     {message}
                   </p>
                 ) : null}
@@ -1607,7 +1607,7 @@ export default function DashboardPage() {
               {/* Upload card */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-[var(--text-2xl)]">Резюме</CardTitle>
+                  <CardTitle className="text-[length:var(--text-2xl)]">Резюме</CardTitle>
                   <CardDescription>
                     PDF или DOCX · до {RESUME_LIMIT} профилей
                   </CardDescription>
@@ -1632,7 +1632,7 @@ export default function DashboardPage() {
                       if (f) void uploadResume(f);
                     }}
                   >
-                    <span className="text-[var(--color-ink-muted)] text-[var(--text-sm)] font-[var(--font-body)] select-none">
+                    <span className="text-[color:var(--color-ink-muted)] text-[length:var(--text-sm)] font-[var(--font-body)] select-none">
                       {busy ? 'Анализируем…' : dragOver ? 'Отпустите файл' : 'Перетащите или нажмите'}
                     </span>
                     <input
@@ -1644,12 +1644,12 @@ export default function DashboardPage() {
                     />
                   </label>
                   {resumes.length >= RESUME_LIMIT ? (
-                    <p className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                    <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
                       Лимит {RESUME_LIMIT} профилей достигнут. Удалите один, чтобы загрузить новый.
                     </p>
                   ) : null}
                   {message ? (
-                    <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[var(--text-sm)]">
+                    <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
                       {message}
                     </p>
                   ) : null}
@@ -1659,7 +1659,7 @@ export default function DashboardPage() {
               {/* Funnel card */}
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-[var(--text-2xl)]">Моя воронка</CardTitle>
+                  <CardTitle className="text-[length:var(--text-2xl)]">Моя воронка</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
                   {(() => {
@@ -1675,36 +1675,36 @@ export default function DashboardPage() {
                     return (
                       <>
                         <div className="flex justify-between items-baseline">
-                          <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
                             Проанализировано
                           </span>
-                          <span className="text-[var(--text-sm)] font-semibold font-[var(--font-mono)] text-[var(--color-ink)]">
+                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
                             {funnel ? funnel.analyzed_count : '—'}
                           </span>
                         </div>
                         <div className="flex justify-between items-baseline">
-                          <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
                             Отобрано
                           </span>
-                          <span className="text-[var(--text-sm)] font-semibold font-[var(--font-mono)] text-[var(--color-ink)]">
+                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
                             {funnel && (funnel.selected_count > 0 || funnel.matched_count > 0)
                               ? `${funnel.selected_count} / ${funnel.matched_count}`
                               : '—'}
                           </span>
                         </div>
                         <div className="flex justify-between items-baseline">
-                          <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
                             Последний поиск
                           </span>
-                          <span className="text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                          <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
                             {funnel ? formatRelativeTimeRu(funnel.last_search_at) : '—'}
                           </span>
                         </div>
                         <div className="flex justify-between items-baseline">
-                          <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
                             Следующее обновление
                           </span>
-                          <span className="text-[var(--text-sm)] font-semibold font-[var(--font-mono)] text-[var(--color-ink)]">
+                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
                             {warmupStatus?.running
                               ? 'идёт сейчас'
                               : showCountdown
@@ -1716,7 +1716,7 @@ export default function DashboardPage() {
                           <div className="mt-1 pt-2 border-t border-[var(--color-border)]">
                             <Link
                               href="/admin"
-                              className="text-[var(--text-sm)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-secondary)] transition-colors"
+                              className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-ink-secondary)] transition-colors"
                             >
                               Админ-панель →
                             </Link>
@@ -1738,7 +1738,7 @@ export default function DashboardPage() {
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                   {resumes.length === 0 ? (
-                    <p className="text-[var(--color-ink-secondary)] text-[var(--text-sm)] italic">
+                    <p className="text-[color:var(--color-ink-secondary)] text-[length:var(--text-sm)] italic">
                       Пока нет загруженных резюме.
                     </p>
                   ) : null}
@@ -1754,7 +1754,7 @@ export default function DashboardPage() {
                     >
                       <div className="flex justify-between gap-4 items-start flex-wrap">
                         <div className="flex flex-col gap-1">
-                          <h3 className="text-[var(--text-2xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.03em] break-all">
+                          <h3 className="text-[length:var(--text-2xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.03em] break-all">
                             {resume.original_filename}
                             {resume.is_active ? (
                               <span className="resume-active-tag ml-2">активный</span>
@@ -1793,7 +1793,7 @@ export default function DashboardPage() {
                           </Button>
                         </div>
                       </div>
-                      <label className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                      <label className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
                         <span>Короткое имя профиля</span>
                         <input
                           type="text"
@@ -1805,7 +1805,7 @@ export default function DashboardPage() {
                         />
                       </label>
                       {resume.error_message ? (
-                        <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[var(--text-sm)]">
+                        <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
                           {resume.error_message}
                         </p>
                       ) : null}
@@ -1829,7 +1829,7 @@ export default function DashboardPage() {
                   </CardHeader>
                   <CardContent className="flex flex-col gap-5">
                     <div className="grid gap-4 border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface-muted)] p-5">
-                      <div className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                      <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
                         <span>Формат работы</span>
                         <div className="radio-row">
                           {WORK_FORMAT_OPTIONS.map((option) => (
@@ -1849,7 +1849,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
 
-                      <div className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                      <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
                         <span>Готовность к переезду</span>
                         <div className="radio-row">
                           <label className="radio-chip">
@@ -1876,7 +1876,7 @@ export default function DashboardPage() {
                       </div>
 
                       {profileDraft.relocation_mode === 'home_only' ? (
-                        <label className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                        <label className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
                           <span>Мой город</span>
                           <input
                             type="text"
@@ -1890,10 +1890,10 @@ export default function DashboardPage() {
                         </label>
                       ) : null}
 
-                      <label className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                      <label className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
                         <span>
                           Желаемые названия вакансий (до 10){' '}
-                          <em className="font-normal not-italic text-[var(--color-ink-muted)]">
+                          <em className="font-normal not-italic text-[color:var(--color-ink-muted)]">
                             — поднимают совпадающие в выдаче
                           </em>
                         </span>
@@ -1912,10 +1912,10 @@ export default function DashboardPage() {
                         />
                       </label>
 
-                      <div className="grid gap-1.5 text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">
+                      <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
                         <span>
                           Ожидаемая зарплата, ₽/мес.{' '}
-                          <em className="font-normal not-italic text-[var(--color-ink-muted)]">
+                          <em className="font-normal not-italic text-[color:var(--color-ink-muted)]">
                             — варианты ниже не скрываем, просто опускаем
                           </em>
                         </span>
@@ -1957,17 +1957,17 @@ export default function DashboardPage() {
                       {profileSaving ? 'Сохраняем…' : matchingBusy ? 'Ищем…' : 'Искать вакансии'}
                     </Button>
                     {profileMessage ? (
-                      <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[var(--text-sm)]">
+                      <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
                         {profileMessage}
                       </p>
                     ) : null}
 
                     {curatedSkills.length > 0 ? (
                       <Collapsible>
-                        <CollapsibleTrigger className="group flex items-center justify-between w-full text-left px-0 py-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)] transition-colors">
+                        <CollapsibleTrigger className="group flex items-center justify-between w-full text-left px-0 py-2 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">
                           <span>Ручная курация скиллов</span>
                           <span className="flex items-center gap-2">
-                            <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                            <span className="text-[length:var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
                               {curatedSkills.length}
                             </span>
                             <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
@@ -2086,22 +2086,22 @@ export default function DashboardPage() {
                     </div>
                   ) : null}
                   {matchingMessage ? (
-                    <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[var(--text-sm)]">
+                    <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
                       {matchingMessage}
                     </p>
                   ) : null}
                   {currentJobId ? (
-                    <p className="text-[var(--text-xs)] text-[var(--color-ink-muted)]">
+                    <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]">
                       Job ID: {currentJobId}
                     </p>
                   ) : null}
                   {openaiUsageMessage ? (
-                    <p className="text-[var(--text-xs)] text-[var(--color-ink-muted)]">
+                    <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]">
                       {openaiUsageMessage}
                     </p>
                   ) : null}
                   {lastMatchingQuery ? (
-                    <p className="text-[var(--text-xs)] text-[var(--color-ink-muted)]">
+                    <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]">
                       Запрос: {lastMatchingQuery}
                     </p>
                   ) : null}
@@ -2120,7 +2120,7 @@ export default function DashboardPage() {
                     </details>
                   ) : null}
                   {visibleMatches.length > 0 && lastSearchAt ? (
-                    <p className="text-[var(--text-sm)] font-semibold text-[var(--color-ink-secondary)]">
+                    <p className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink-secondary)]">
                       {`Топ-${visibleMatches.length}${lastAnalyzedCount ? ` из ${lastAnalyzedCount} просмотренных` : ''} · последний запуск ${lastSearchAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
                     </p>
                   ) : null}
@@ -2128,7 +2128,7 @@ export default function DashboardPage() {
                   {/* Match cards */}
                   <div className="flex flex-col gap-3">
                     {visibleMatches.length === 0 ? (
-                      <p className="text-[var(--color-ink-secondary)] text-[var(--text-sm)] italic">
+                      <p className="text-[color:var(--color-ink-secondary)] text-[length:var(--text-sm)] italic">
                         После запуска здесь появятся подходящие вакансии.
                       </p>
                     ) : null}
@@ -2187,12 +2187,12 @@ export default function DashboardPage() {
                           >
                             {/* Card header row */}
                             <div className="flex items-start justify-between gap-3 flex-wrap">
-                              <h3 className="text-[var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.025em] text-[var(--color-ink)]">
+                              <h3 className="text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.025em] text-[color:var(--color-ink)]">
                                 {match.title}
                               </h3>
                               {/* Score + salary right-aligned, mono */}
-                              <div className="flex flex-col items-end gap-1 shrink-0 font-[var(--font-mono)] text-[var(--text-sm)]">
-                                <span className="font-semibold text-[var(--color-ink)]">
+                              <div className="flex flex-col items-end gap-1 shrink-0 font-[var(--font-mono)] text-[length:var(--text-sm)]">
+                                <span className="font-semibold text-[color:var(--color-ink)]">
                                   {scoreToPercent(match.similarity_score)}
                                 </span>
                                 {(() => {
@@ -2200,10 +2200,10 @@ export default function DashboardPage() {
                                   if (!badge) return null;
                                   const fitColor =
                                     badge.fit === 'below'
-                                      ? 'text-[var(--color-warning)]'
+                                      ? 'text-[color:var(--color-warning)]'
                                       : badge.fit === 'above'
-                                        ? 'text-[var(--color-success)]'
-                                        : 'text-[var(--color-ink-secondary)]';
+                                        ? 'text-[color:var(--color-success)]'
+                                        : 'text-[color:var(--color-ink-secondary)]';
                                   return (
                                     <span className={fitColor}>
                                       {badge.text}
@@ -2214,7 +2214,7 @@ export default function DashboardPage() {
                             </div>
 
                             {/* Meta */}
-                            <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] m-0">
+                            <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] m-0">
                               {match.company || 'Компания не указана'}
                               {' · '}
                               {match.location || 'Локация не указана'}
@@ -2223,12 +2223,12 @@ export default function DashboardPage() {
                             {/* Почему показали */}
                             {reasonFromMatch(match) ? (
                               <Collapsible>
-                                <CollapsibleTrigger className="group flex items-center justify-end w-full text-right text-[var(--text-xs)] text-[var(--color-ink-muted)] hover:text-[var(--color-ink-secondary)] transition-colors py-0.5 gap-1">
+                                <CollapsibleTrigger className="group flex items-center justify-end w-full text-right text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-ink-secondary)] transition-colors py-0.5 gap-1">
                                   <span>Почему показали</span>
                                   <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
                                 </CollapsibleTrigger>
                                 <CollapsibleContent className="data-[state=open]:animate-slide-down">
-                                  <p className="match-reason text-[var(--text-sm)] text-[var(--color-ink-secondary)] leading-[var(--leading-snug)] mt-1">
+                                  <p className="match-reason text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-snug)] mt-1">
                                     {reasonFromMatch(match)}
                                   </p>
                                 </CollapsibleContent>
@@ -2371,7 +2371,7 @@ export default function DashboardPage() {
                                 href={match.source_url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="ml-auto text-[var(--text-sm)] text-[var(--color-ink-muted)] hover:text-[var(--color-accent)] transition-colors no-underline font-semibold"
+                                className="ml-auto text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-accent)] transition-colors no-underline font-semibold"
                                 onClick={() =>
                                   trackClick({
                                     vacancy_id: normalizeVacancyId(match.vacancy_id),
@@ -2399,8 +2399,8 @@ export default function DashboardPage() {
                   <CardHeader className="pb-4">
                     <CollapsibleTrigger className="group flex items-center justify-between w-full text-left gap-3">
                       <CardTitle>Отобранные вакансии</CardTitle>
-                      <span className="flex items-center gap-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
-                        <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                      <span className="flex items-center gap-2 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
+                        <span className="text-[length:var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
                           {selectedVacancies.length}
                         </span>
                         <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
@@ -2410,7 +2410,7 @@ export default function DashboardPage() {
                   <CollapsibleContent className="data-[state=open]:animate-slide-down">
                     <CardContent className="pt-0 flex flex-col gap-3">
                       {selectedVacancies.length === 0 ? (
-                        <p className="text-[var(--color-ink-secondary)] text-[var(--text-sm)] italic">
+                        <p className="text-[color:var(--color-ink-secondary)] text-[length:var(--text-sm)] italic">
                           Пока нет отобранных. Нажмите «+ Плюс» в подборке.
                         </p>
                       ) : null}
@@ -2419,10 +2419,10 @@ export default function DashboardPage() {
                           key={`selected-${item.vacancy_id}`}
                           className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface)] p-4 flex flex-col gap-2"
                         >
-                          <h3 className="text-[var(--text-lg)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.02em]">
+                          <h3 className="text-[length:var(--text-lg)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.02em]">
                             {item.title}
                           </h3>
-                          <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] m-0">
+                          <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] m-0">
                             {item.company || 'Компания не указана'} · {item.location || 'Локация не указана'}
                           </p>
                           <div className="flex items-center gap-2 flex-wrap">
@@ -2430,7 +2430,7 @@ export default function DashboardPage() {
                               href={item.source_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-[var(--text-sm)] font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors no-underline"
+                              className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-hover)] transition-colors no-underline"
                             >
                               Источник →
                             </a>
@@ -2455,8 +2455,8 @@ export default function DashboardPage() {
                   <CardHeader className="pb-4">
                     <CollapsibleTrigger className="group flex items-center justify-between w-full text-left gap-3">
                       <CardTitle>Отклонённые вакансии</CardTitle>
-                      <span className="flex items-center gap-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
-                        <span className="text-[var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                      <span className="flex items-center gap-2 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
+                        <span className="text-[length:var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
                           {dislikedVacancies.length}
                         </span>
                         <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
@@ -2466,7 +2466,7 @@ export default function DashboardPage() {
                   <CollapsibleContent className="data-[state=open]:animate-slide-down">
                     <CardContent className="pt-0 flex flex-col gap-3">
                       {dislikedVacancies.length === 0 ? (
-                        <p className="text-[var(--color-ink-secondary)] text-[var(--text-sm)] italic">
+                        <p className="text-[color:var(--color-ink-secondary)] text-[length:var(--text-sm)] italic">
                           Пока нет минусованных вакансий.
                         </p>
                       ) : null}
@@ -2475,10 +2475,10 @@ export default function DashboardPage() {
                           key={`disliked-${item.vacancy_id}`}
                           className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface)] p-4 flex flex-col gap-2"
                         >
-                          <h3 className="text-[var(--text-lg)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.02em]">
+                          <h3 className="text-[length:var(--text-lg)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.02em]">
                             {item.title}
                           </h3>
-                          <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] m-0">
+                          <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] m-0">
                             {item.company || 'Компания не указана'} · {item.location || 'Локация не указана'}
                           </p>
                           <div className="flex items-center gap-2 flex-wrap">
@@ -2486,7 +2486,7 @@ export default function DashboardPage() {
                               href={item.source_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-[var(--text-sm)] font-semibold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors no-underline"
+                              className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-hover)] transition-colors no-underline"
                             >
                               Источник →
                             </a>
@@ -2550,32 +2550,32 @@ function Analysis({ data, expectedSalaryMin, expectedSalaryMax }: {
     <div className="analysis">
       <Card className="mb-4">
         <CardHeader className="pb-2">
-          <CardTitle className="text-[var(--text-xl)]">
+          <CardTitle className="text-[length:var(--text-xl)]">
             Твой профиль
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           <div className="flex justify-between gap-4">
-            <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">Роль</span>
-            <span className="text-[var(--text-sm)] text-[var(--color-ink)] text-right">{role}</span>
+            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Роль</span>
+            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink)] text-right">{role}</span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">Грейд</span>
-            <span className="text-[var(--text-sm)] font-semibold text-[var(--color-ink)]">{grade}</span>
+            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Грейд</span>
+            <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">{grade}</span>
           </div>
           <div className="flex justify-between items-start gap-4">
-            <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)] shrink-0">Топ-5 скиллов</span>
-            <span className="text-[var(--text-sm)] text-[var(--color-ink)] text-right">{top5Skills}</span>
+            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] shrink-0">Топ-5 скиллов</span>
+            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink)] text-right">{top5Skills}</span>
           </div>
           <div className="flex justify-between gap-4">
-            <span className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">Ожидаемая зарплата</span>
-            <span className="text-[var(--text-sm)] font-[var(--font-mono)] text-[var(--color-ink)]">{salaryDisplay}</span>
+            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Ожидаемая зарплата</span>
+            <span className="text-[length:var(--text-sm)] font-[var(--font-mono)] text-[color:var(--color-ink)]">{salaryDisplay}</span>
           </div>
         </CardContent>
       </Card>
 
       <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <CollapsibleTrigger className="group flex items-center justify-between w-full text-left px-0 py-2 text-[var(--text-sm)] text-[var(--color-ink-secondary)] hover:text-[var(--color-ink)] transition-colors">
+        <CollapsibleTrigger className="group flex items-center justify-between w-full text-left px-0 py-2 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">
           <span>Подробности профиля</span>
           <span className="ml-2 transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
         </CollapsibleTrigger>
