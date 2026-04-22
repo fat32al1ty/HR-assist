@@ -1779,6 +1779,9 @@ def _resolve_user_preferences(
         "relocation_mode": getattr(user, "relocation_mode", "home_only") or "home_only",
         "home_city": getattr(user, "home_city", None),
         "preferred_titles": list(getattr(user, "preferred_titles", None) or []),
+        "expected_salary_min": getattr(user, "expected_salary_min", None),
+        "expected_salary_max": getattr(user, "expected_salary_max", None),
+        "expected_salary_currency": getattr(user, "expected_salary_currency", "RUB") or "RUB",
     }
     if not isinstance(overrides, dict):
         return base
@@ -2057,6 +2060,15 @@ def _candidate_to_match_dict(cand, *, tier: str, tier_reason: str | None = None)
     payload = cand.payload if isinstance(cand.payload, dict) else {}
     if isinstance(payload.get("role_family"), str):
         profile["role_family"] = payload["role_family"]
+    salary_fit = annotations.get("salary_fit")
+    if isinstance(salary_fit, str):
+        profile["salary_fit"] = salary_fit
+    salary_source = annotations.get("salary_source")
+    if isinstance(salary_source, str):
+        profile["salary_source"] = salary_source
+    salary_min = annotations.get("salary_min")
+    salary_max = annotations.get("salary_max")
+    salary_currency = annotations.get("salary_currency")
     return {
         "vacancy_id": vacancy.id,
         "title": vacancy.title,
@@ -2064,6 +2076,9 @@ def _candidate_to_match_dict(cand, *, tier: str, tier_reason: str | None = None)
         "company": vacancy.company,
         "location": vacancy.location,
         "similarity_score": round(cand.hybrid_score, 5),
+        "salary_min": salary_min if isinstance(salary_min, int) else None,
+        "salary_max": salary_max if isinstance(salary_max, int) else None,
+        "salary_currency": salary_currency if isinstance(salary_currency, str) else None,
         "profile": profile,
         "tier": tier,
     }
@@ -2088,6 +2103,7 @@ def _default_matching_stages(db: Session, vector_store, *, search_limit: int) ->
     from .matching.stages.llm_rerank import LLMRerankStage
     from .matching.stages.recall import VectorRecallStage
     from .matching.stages.role_family_gate import RoleFamilyGateStage
+    from .matching.stages.salary_fit import SalaryFitStage
     from .matching.stages.scoring import ScoringStage
     from .matching.stages.tier import TierStage
 
@@ -2102,6 +2118,7 @@ def _default_matching_stages(db: Session, vector_store, *, search_limit: int) ->
         MMRDiversifyStage(lambda_=0.9, top_n=30),
         TierStage(),
         LLMRerankStage(),
+        SalaryFitStage(),
         AugmentStage(),
     ]
 
