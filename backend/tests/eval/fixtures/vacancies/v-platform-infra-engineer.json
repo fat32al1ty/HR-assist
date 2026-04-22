@@ -1,0 +1,23 @@
+{
+  "id": "v-platform-infra-engineer",
+  "title": "Platform Infrastructure Engineer",
+  "source_url": "https://hh.ru/vacancy/100000003",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Platform Infrastructure Engineer",
+    "role": "platform",
+    "summary": "Разработка внутренней платформы для продуктовых команд. Kubernetes-operators на Go, GitOps, service mesh.",
+    "must_have_skills": ["Kubernetes", "Go", "Helm", "Istio", "Linux"],
+    "tools": ["ArgoCD", "Flux", "Terraform"],
+    "domains": ["platform", "devops", "cloud"],
+    "matching_keywords": ["GitOps", "service mesh", "platform engineering"],
+    "requirements": [
+      "Глубокое понимание Kubernetes",
+      "Опыт разработки на Go (или Python + желание учить Go)",
+      "GitOps-подход",
+      "Service mesh (Istio/Linkerd)"
+    ],
+    "seniority": "senior"
+  },
+  "raw_text": "Platform Engineer для развития внутренней платформы. K8s operators, GitOps, service mesh, internal developer platform."
+}

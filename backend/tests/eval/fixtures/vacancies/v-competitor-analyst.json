@@ -1,0 +1,22 @@
+{
+  "id": "v-competitor-analyst",
+  "title": "Аналитик конкурентов / Мониторинг рынка",
+  "source_url": "https://hh.ru/vacancy/100000083",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Аналитик конкурентов",
+    "role": "business-analyst",
+    "summary": "Мониторинг активности конкурентов, цен, продуктов. Подготовка еженедельных отчётов для маркетинга.",
+    "must_have_skills": ["Excel", "PowerPoint", "Benchmark-анализ", "Google Analytics"],
+    "tools": ["Excel", "PowerPoint", "Similarweb"],
+    "domains": ["analytics", "marketing", "business-monitoring"],
+    "matching_keywords": ["мониторинг конкурентов", "рынок", "benchmarking"],
+    "requirements": [
+      "Опыт аналитики рынка / конкурентной разведки",
+      "Excel, сводные таблицы",
+      "Высшее экономическое/маркетинговое"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Аналитик конкурентов. Мониторинг активности конкурентов на рынке e-com, еженедельные отчёты, benchmarking."
+}

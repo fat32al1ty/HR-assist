@@ -1,0 +1,22 @@
+{
+  "id": "v-ml-ops",
+  "title": "MLOps Engineer",
+  "source_url": "https://hh.ru/vacancy/100000023",
+  "source": "hh.ru",
+  "payload": {
+    "title": "MLOps Engineer",
+    "role": "mlops",
+    "summary": "Промышленный деплой ML-моделей: feature store, model serving, мониторинг дрейфа.",
+    "must_have_skills": ["Python", "Kubernetes", "MLflow", "Docker", "Airflow"],
+    "tools": ["Feast", "Seldon Core", "Prometheus"],
+    "domains": ["mlops", "ml", "devops"],
+    "matching_keywords": ["MLOps", "model serving", "feature store"],
+    "requirements": [
+      "Опыт деплоя ML-моделей в продакшене",
+      "Kubernetes",
+      "Python"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "MLOps Engineer. Промышленный деплой моделей, feature store, мониторинг дрейфа."
+}

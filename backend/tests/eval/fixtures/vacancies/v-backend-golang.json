@@ -1,0 +1,23 @@
+{
+  "id": "v-backend-golang",
+  "title": "Middle Go Developer",
+  "source_url": "https://hh.ru/vacancy/100000012",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Middle Go Developer",
+    "role": "backend",
+    "summary": "Высоконагруженный backend на Go для агрегатора такси.",
+    "must_have_skills": ["Go", "PostgreSQL", "Redis", "gRPC"],
+    "tools": ["Kafka", "Docker", "Kubernetes"],
+    "domains": ["backend", "golang"],
+    "matching_keywords": ["Go", "gRPC", "high-load"],
+    "requirements": [
+      "Go 2+ года в продакшене",
+      "gRPC и REST",
+      "PostgreSQL",
+      "Kafka / RabbitMQ"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Middle Go Developer для команды backend такси-агрегатора. Go, gRPC, PostgreSQL, Kafka."
+}

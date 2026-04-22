@@ -1,0 +1,22 @@
+{
+  "id": "v-marketing-content",
+  "title": "Контент-маркетолог",
+  "source_url": "https://hh.ru/vacancy/100000074",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Контент-маркетолог",
+    "role": "marketing",
+    "summary": "Производство контента для соцсетей и блога, работа с подрядчиками-копирайтерами.",
+    "must_have_skills": ["Копирайтинг", "SMM", "Контент-план", "Google Analytics"],
+    "tools": ["Google Analytics", "Яндекс.Метрика", "Canva"],
+    "domains": ["marketing", "content"],
+    "matching_keywords": ["контент-маркетинг", "SMM", "блог"],
+    "requirements": [
+      "Опыт в контент-маркетинге 2+ года",
+      "Грамотная письменная речь",
+      "Знание основ SEO"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Контент-маркетолог. Ведение блога и соцсетей, работа с копирайтерами, аналитика в GA."
+}

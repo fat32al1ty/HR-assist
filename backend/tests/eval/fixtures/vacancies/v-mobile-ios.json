@@ -1,0 +1,22 @@
+{
+  "id": "v-mobile-ios",
+  "title": "iOS Developer (Swift)",
+  "source_url": "https://hh.ru/vacancy/100000040",
+  "source": "hh.ru",
+  "payload": {
+    "title": "iOS Developer",
+    "role": "mobile",
+    "summary": "Разработка мобильного приложения банка для iOS.",
+    "must_have_skills": ["Swift", "SwiftUI", "iOS SDK", "Git"],
+    "tools": ["Xcode", "Cocoapods", "Firebase"],
+    "domains": ["mobile", "ios"],
+    "matching_keywords": ["Swift", "SwiftUI", "mobile"],
+    "requirements": [
+      "Swift 2+ года",
+      "SwiftUI или UIKit",
+      "Понимание архитектурных паттернов (MVVM / VIPER)"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "iOS Developer. Банковское приложение, Swift, SwiftUI."
+}

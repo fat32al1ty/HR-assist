@@ -1,0 +1,46 @@
+{
+  "id": "r-senior-devops",
+  "analysis": {
+    "target_role": "Senior DevOps Engineer",
+    "specialization": "SRE / Platform Engineering",
+    "summary": "7 лет опыта в инфраструктуре: Kubernetes в проде, Terraform/Ansible, CI/CD на GitLab, мониторинг на Prometheus+Grafana, облака AWS и GCP. Последние 3 года — тимлид платформенной команды.",
+    "hard_skills": [
+      "Kubernetes",
+      "Docker",
+      "Terraform",
+      "Ansible",
+      "AWS",
+      "GCP",
+      "Prometheus",
+      "Grafana",
+      "GitLab CI/CD",
+      "ArgoCD",
+      "Helm",
+      "Python",
+      "Bash",
+      "Linux"
+    ],
+    "tools": ["Jenkins", "Vault", "Consul", "Nginx", "PostgreSQL"],
+    "matching_keywords": ["SRE", "платформа", "observability", "infrastructure-as-code"],
+    "soft_skills": ["mentoring", "tech leadership"],
+    "experience": [
+      {
+        "role": "Lead DevOps Engineer",
+        "highlights": [
+          "Миграция on-prem кластера в managed K8s на AWS — downtime 0 минут.",
+          "Внедрение IaC (Terraform) для всей инфры — ручной толк почти исключён.",
+          "Построил observability-стек: Prometheus, Grafana, Loki, алерты в PagerDuty."
+        ]
+      },
+      {
+        "role": "Senior SRE",
+        "highlights": [
+          "SLO/SLI для ключевых сервисов, error budget policy.",
+          "Incident response и постмортемы, снижение MTTR на 40%."
+        ]
+      }
+    ],
+    "total_experience_years": 7,
+    "seniority": "senior"
+  }
+}

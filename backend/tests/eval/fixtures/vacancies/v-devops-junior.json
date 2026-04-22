@@ -1,0 +1,21 @@
+{
+  "id": "v-devops-junior",
+  "title": "Junior DevOps Engineer",
+  "source_url": "https://hh.ru/vacancy/100000006",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Junior DevOps Engineer",
+    "role": "devops",
+    "summary": "Поддержка CI/CD, работа с Kubernetes под менторством старших.",
+    "must_have_skills": ["Linux", "Docker", "Bash", "Git"],
+    "tools": ["GitLab CI", "Kubernetes (базово)"],
+    "domains": ["devops"],
+    "matching_keywords": ["CI/CD", "Docker", "junior devops"],
+    "requirements": [
+      "Linux, Bash, Docker",
+      "Желание учиться Kubernetes"
+    ],
+    "seniority": "junior"
+  },
+  "raw_text": "Junior DevOps. Linux, Docker, CI/CD на GitLab, base K8s."
+}

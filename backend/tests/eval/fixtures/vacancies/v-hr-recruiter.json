@@ -1,0 +1,22 @@
+{
+  "id": "v-hr-recruiter",
+  "title": "IT Recruiter",
+  "source_url": "https://hh.ru/vacancy/100000077",
+  "source": "hh.ru",
+  "payload": {
+    "title": "IT Recruiter",
+    "role": "hr",
+    "summary": "Подбор IT-специалистов (разработчики, тестировщики), ведение воронки найма.",
+    "must_have_skills": ["Рекрутинг", "Подбор персонала", "Интервью", "HR"],
+    "tools": ["hh.ru", "LinkedIn", "Huntflow"],
+    "domains": ["hr", "recruiting"],
+    "matching_keywords": ["IT рекрутинг", "tech recruiter"],
+    "requirements": [
+      "Опыт подбора IT-специалистов 2+ года",
+      "Понимание IT-стека (без требования кодить)",
+      "Английский upper-intermediate"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "IT Recruiter. Подбор разработчиков и других IT-специалистов, работа с Huntflow, прямой поиск в LinkedIn."
+}

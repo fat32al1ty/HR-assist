@@ -1,0 +1,23 @@
+{
+  "id": "v-sre-middle",
+  "title": "Middle Site Reliability Engineer",
+  "source_url": "https://hh.ru/vacancy/100000002",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Middle Site Reliability Engineer",
+    "role": "sre",
+    "summary": "SRE для продуктовой команды. Отвечаем за uptime, SLO/SLI, incident response.",
+    "must_have_skills": ["Kubernetes", "Prometheus", "Grafana", "Linux", "Python"],
+    "tools": ["Terraform", "Loki", "PagerDuty"],
+    "domains": ["sre", "devops", "observability"],
+    "matching_keywords": ["SLO", "incident response", "on-call"],
+    "requirements": [
+      "Опыт эксплуатации микросервисов в Kubernetes",
+      "Prometheus + Grafana в проде",
+      "Скриптинг на Python/Bash",
+      "Опыт работы с инцидентами и постмортемами"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "SRE в продуктовую команду. SLO/SLI, мониторинг, on-call дежурства, разбор инцидентов. K8s, Prometheus, Grafana."
+}

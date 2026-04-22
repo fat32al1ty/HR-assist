@@ -1,0 +1,45 @@
+{
+  "id": "r-middle-python-backend",
+  "analysis": {
+    "target_role": "Middle Python Backend Developer",
+    "specialization": "Backend / REST / PostgreSQL",
+    "summary": "4 года коммерческой разработки на Python: Django, FastAPI, асинхронщина, REST-API, интеграции с платёжками. PostgreSQL, Redis, RabbitMQ в бою.",
+    "hard_skills": [
+      "Python",
+      "Django",
+      "FastAPI",
+      "Flask",
+      "PostgreSQL",
+      "Redis",
+      "RabbitMQ",
+      "Celery",
+      "Docker",
+      "Git",
+      "REST API",
+      "SQLAlchemy",
+      "Pytest"
+    ],
+    "tools": ["Alembic", "Sentry", "GitLab CI", "Pydantic", "Nginx"],
+    "matching_keywords": ["backend", "web development", "микросервисы"],
+    "soft_skills": ["code review", "agile"],
+    "experience": [
+      {
+        "role": "Middle Python Developer",
+        "highlights": [
+          "Перевёл монолит на Django в связку из 4 микросервисов на FastAPI.",
+          "Реализовал платёжную интеграцию (ЮKassa, Stripe).",
+          "Покрыл ядро бизнес-логики unit- и интеграционными тестами (pytest)."
+        ]
+      },
+      {
+        "role": "Junior Backend Developer",
+        "highlights": [
+          "Разработка REST-API для мобильного приложения на Django REST Framework.",
+          "Оптимизация SQL-запросов, индексы, партиционирование таблиц."
+        ]
+      }
+    ],
+    "total_experience_years": 4,
+    "seniority": "middle"
+  }
+}

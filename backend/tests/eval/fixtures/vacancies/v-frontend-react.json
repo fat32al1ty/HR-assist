@@ -1,0 +1,22 @@
+{
+  "id": "v-frontend-react",
+  "title": "Frontend Developer (React + TypeScript)",
+  "source_url": "https://hh.ru/vacancy/100000030",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Frontend Developer",
+    "role": "frontend",
+    "summary": "Разработка SPA на React + TypeScript, интеграции с REST API, компонентные библиотеки.",
+    "must_have_skills": ["JavaScript", "TypeScript", "React", "CSS", "HTML"],
+    "tools": ["Redux Toolkit", "Vite", "Jest", "Storybook"],
+    "domains": ["frontend", "web"],
+    "matching_keywords": ["React", "TypeScript", "SPA", "UI"],
+    "requirements": [
+      "React + TypeScript в продакшене от 1 года",
+      "Понимание компонентного подхода",
+      "Опыт с Redux / Context API"
+    ],
+    "seniority": "junior"
+  },
+  "raw_text": "Junior/Middle Frontend Developer. React, TypeScript, Redux Toolkit, REST API."
+}

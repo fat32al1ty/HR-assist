@@ -1,0 +1,38 @@
+{
+  "id": "r-middle-data-scientist",
+  "analysis": {
+    "target_role": "Data Scientist",
+    "specialization": "ML / classic tabular + NLP",
+    "summary": "3 года в продуктовой ML-команде: feature engineering, бустинги, NLP-пайплайны на трансформерах, A/B-тесты. Продовый опыт деплоя моделей в Kubernetes через BentoML.",
+    "hard_skills": [
+      "Python",
+      "pandas",
+      "NumPy",
+      "scikit-learn",
+      "LightGBM",
+      "XGBoost",
+      "PyTorch",
+      "Hugging Face Transformers",
+      "SQL",
+      "PostgreSQL",
+      "Airflow",
+      "MLflow",
+      "Docker"
+    ],
+    "tools": ["Jupyter", "BentoML", "FastAPI", "Tableau", "DVC"],
+    "matching_keywords": ["ML", "data science", "NLP", "A/B testing"],
+    "soft_skills": ["research", "stakeholder communication"],
+    "experience": [
+      {
+        "role": "Middle Data Scientist",
+        "highlights": [
+          "Построил модель оттока клиентов (LightGBM), +12% к точности vs бейзлайн.",
+          "NLP-классификатор жалоб на BERT, F1 0.87 в продакшене.",
+          "Внедрил MLflow для tracking + модельного реестра."
+        ]
+      }
+    ],
+    "total_experience_years": 3,
+    "seniority": "middle"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "v-cloud-architect",
+  "title": "Cloud Architect (AWS / GCP)",
+  "source_url": "https://hh.ru/vacancy/100000004",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Cloud Architect",
+    "role": "architect",
+    "summary": "Проектирование облачных решений для enterprise-клиентов. Мульти-облако, cost optimization, безопасность.",
+    "must_have_skills": ["AWS", "GCP", "Terraform", "Kubernetes", "Network"],
+    "tools": ["CloudFormation", "Packer", "Vault"],
+    "domains": ["cloud", "architecture", "devops"],
+    "matching_keywords": ["multi-cloud", "cost optimization", "well-architected"],
+    "requirements": [
+      "5+ лет в AWS и/или GCP",
+      "Опыт проектирования multi-region архитектур",
+      "Terraform",
+      "Навыки презентации решений заказчикам"
+    ],
+    "seniority": "senior"
+  },
+  "raw_text": "Cloud Architect для консалтинговой команды. Проектирование AWS/GCP решений для крупных клиентов."
+}

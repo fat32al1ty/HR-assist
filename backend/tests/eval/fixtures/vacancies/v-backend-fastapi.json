@@ -1,0 +1,23 @@
+{
+  "id": "v-backend-fastapi",
+  "title": "Backend Python Developer (FastAPI)",
+  "source_url": "https://hh.ru/vacancy/100000011",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Backend Python Developer",
+    "role": "backend",
+    "summary": "Бэкенд финтех-сервиса на FastAPI. Высокая нагрузка, интеграции с платёжками.",
+    "must_have_skills": ["Python", "FastAPI", "PostgreSQL", "Redis", "Async"],
+    "tools": ["Alembic", "SQLAlchemy", "Docker", "Pytest"],
+    "domains": ["backend", "fintech", "payments"],
+    "matching_keywords": ["async", "REST API", "Python backend"],
+    "requirements": [
+      "FastAPI в продакшене",
+      "Async Python (asyncio)",
+      "PostgreSQL",
+      "Покрытие тестами (pytest)"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Backend Python Developer для финтех-стартапа. FastAPI, асинхронщина, PostgreSQL, платёжные интеграции."
+}

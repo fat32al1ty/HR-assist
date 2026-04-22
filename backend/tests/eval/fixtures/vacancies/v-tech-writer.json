@@ -1,0 +1,22 @@
+{
+  "id": "v-tech-writer",
+  "title": "Technical Writer (IT)",
+  "source_url": "https://hh.ru/vacancy/100000080",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Technical Writer",
+    "role": "tech-writer",
+    "summary": "Документация API, архитектурные описания, гайды для разработчиков.",
+    "must_have_skills": ["Technical Writing", "API documentation", "Markdown", "Git"],
+    "tools": ["OpenAPI", "Docusaurus", "Swagger"],
+    "domains": ["docs", "it"],
+    "matching_keywords": ["technical writing", "API docs"],
+    "requirements": [
+      "Опыт в IT-документации 2+ года",
+      "Понимание REST API",
+      "Английский B2+"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Technical Writer для IT-компании. Документация API, гайды для разработчиков, работа в связке с командами разработки."
+}

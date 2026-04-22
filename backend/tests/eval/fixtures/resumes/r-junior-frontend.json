@@ -1,0 +1,38 @@
+{
+  "id": "r-junior-frontend",
+  "analysis": {
+    "target_role": "Junior Frontend Developer",
+    "specialization": "React / TypeScript",
+    "summary": "1.5 года коммерческой frontend-разработки на React и TypeScript. Next.js, Redux Toolkit, REST и GraphQL, современный CSS (Tailwind).",
+    "hard_skills": [
+      "JavaScript",
+      "TypeScript",
+      "React",
+      "Next.js",
+      "Redux Toolkit",
+      "HTML",
+      "CSS",
+      "Tailwind CSS",
+      "REST API",
+      "GraphQL",
+      "Git",
+      "Webpack",
+      "Vite"
+    ],
+    "tools": ["Storybook", "Jest", "React Testing Library", "Figma", "ESLint"],
+    "matching_keywords": ["frontend", "SPA", "web development", "UI"],
+    "soft_skills": ["teamwork", "attention to detail"],
+    "experience": [
+      {
+        "role": "Junior Frontend Developer",
+        "highlights": [
+          "Реализовал страницы личного кабинета в SPA на React+TS.",
+          "Подключил Storybook и библиотеку UI-компонентов.",
+          "Оптимизировал bundle size, улучшил LCP с 3.2s до 1.4s."
+        ]
+      }
+    ],
+    "total_experience_years": 1.5,
+    "seniority": "junior"
+  }
+}

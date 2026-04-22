@@ -1,0 +1,22 @@
+{
+  "id": "v-backend-java",
+  "title": "Middle Java Developer (Spring)",
+  "source_url": "https://hh.ru/vacancy/100000013",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Middle Java Developer",
+    "role": "backend",
+    "summary": "Backend банковского приложения на Spring Boot + PostgreSQL.",
+    "must_have_skills": ["Java", "Spring Boot", "PostgreSQL", "REST API"],
+    "tools": ["Maven", "Gradle", "Jenkins", "Kafka"],
+    "domains": ["backend", "java", "banking"],
+    "matching_keywords": ["Java", "Spring", "REST API"],
+    "requirements": [
+      "Java 11+ в проде",
+      "Spring Boot, JPA",
+      "PostgreSQL"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Middle Java Developer. Spring Boot, PostgreSQL, Kafka. Банковское приложение."
+}

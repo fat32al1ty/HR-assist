@@ -1,0 +1,22 @@
+{
+  "id": "v-data-scientist-nlp",
+  "title": "Data Scientist (NLP)",
+  "source_url": "https://hh.ru/vacancy/100000021",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Data Scientist (NLP)",
+    "role": "data-scientist",
+    "summary": "NLP для чат-ботов и классификации обращений. BERT, fine-tuning, LLM-применения.",
+    "must_have_skills": ["Python", "PyTorch", "Hugging Face Transformers", "SQL", "pandas"],
+    "tools": ["MLflow", "Docker", "FastAPI"],
+    "domains": ["nlp", "data-science", "ml"],
+    "matching_keywords": ["NLP", "BERT", "LLM", "transformers"],
+    "requirements": [
+      "Опыт с трансформерами в продакшене",
+      "Fine-tuning BERT / подобных моделей",
+      "Python и стандартный ML-стек"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Data Scientist для NLP-задач. BERT, fine-tuning, классификация текстов, чат-боты."
+}

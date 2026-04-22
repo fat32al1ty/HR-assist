@@ -1,0 +1,23 @@
+{
+  "id": "v-backend-python-django",
+  "title": "Middle Python Developer (Django + DRF)",
+  "source_url": "https://hh.ru/vacancy/100000010",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Middle Python Developer",
+    "role": "backend",
+    "summary": "Разработка REST API на Django для marketplace, миграция на микросервисы.",
+    "must_have_skills": ["Python", "Django", "Django REST Framework", "PostgreSQL", "Redis"],
+    "tools": ["Celery", "Docker", "GitLab CI", "Sentry"],
+    "domains": ["backend", "web", "marketplace"],
+    "matching_keywords": ["REST API", "Python backend", "микросервисы"],
+    "requirements": [
+      "Python 3+ года коммерческой разработки",
+      "Django / DRF",
+      "PostgreSQL, индексы, оптимизация запросов",
+      "Понимание асинхронных очередей (Celery)"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Middle Python Developer. Django REST Framework, PostgreSQL, Celery. Marketplace с миллионом пользователей."
+}

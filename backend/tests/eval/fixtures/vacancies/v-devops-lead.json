@@ -1,0 +1,23 @@
+{
+  "id": "v-devops-lead",
+  "title": "Lead DevOps Engineer",
+  "source_url": "https://hh.ru/vacancy/100000001",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Lead DevOps Engineer",
+    "role": "devops",
+    "summary": "Ведущий DevOps в команду платформы. Kubernetes в проде, IaC на Terraform, построение observability.",
+    "must_have_skills": ["Kubernetes", "Terraform", "AWS", "CI/CD", "Python", "Helm"],
+    "tools": ["ArgoCD", "Prometheus", "Grafana", "GitLab CI"],
+    "domains": ["devops", "platform", "cloud"],
+    "matching_keywords": ["SRE", "infrastructure-as-code", "observability"],
+    "requirements": [
+      "Опыт администрирования Kubernetes в продакшене от 3 лет",
+      "Практика с Terraform / Ansible",
+      "AWS или GCP",
+      "Скрипты на Python/Bash"
+    ],
+    "seniority": "lead"
+  },
+  "raw_text": "Вакансия Lead DevOps Engineer. Обязанности: развитие платформы на Kubernetes, автоматизация инфры через Terraform, поддержка CI/CD пайплайнов, построение observability. Требования: опыт K8s 3+ лет, Terraform, AWS, знание Python/Bash."
+}

@@ -1,0 +1,22 @@
+{
+  "id": "v-data-engineer",
+  "title": "Data Engineer (Spark / Airflow)",
+  "source_url": "https://hh.ru/vacancy/100000081",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Data Engineer",
+    "role": "data-engineer",
+    "summary": "ETL-пайплайны на Spark + Airflow, DWH на ClickHouse.",
+    "must_have_skills": ["Python", "Apache Spark", "Airflow", "SQL", "ClickHouse"],
+    "tools": ["Hadoop", "Kafka", "DBT"],
+    "domains": ["data-engineering", "data"],
+    "matching_keywords": ["ETL", "Spark", "Airflow", "DWH"],
+    "requirements": [
+      "Python + Spark",
+      "Airflow",
+      "DWH архитектура"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Data Engineer. Spark-джобы, Airflow-пайплайны, поддержка DWH на ClickHouse."
+}

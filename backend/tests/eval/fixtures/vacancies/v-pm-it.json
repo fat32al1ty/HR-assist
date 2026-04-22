@@ -1,0 +1,22 @@
+{
+  "id": "v-pm-it",
+  "title": "IT Project Manager",
+  "source_url": "https://hh.ru/vacancy/100000061",
+  "source": "hh.ru",
+  "payload": {
+    "title": "IT Project Manager",
+    "role": "project-manager",
+    "summary": "Ведение IT-проектов разработки, работа со scrum-командами.",
+    "must_have_skills": ["Project Management", "Agile", "Scrum", "Jira"],
+    "tools": ["Confluence", "Miro"],
+    "domains": ["management", "it"],
+    "matching_keywords": ["project management", "scrum", "IT projects"],
+    "requirements": [
+      "Опыт ведения IT-проектов 3+ года",
+      "Agile / Scrum",
+      "Английский upper-intermediate"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "IT Project Manager. Ведение проектов разработки, Scrum, работа с командами."
+}

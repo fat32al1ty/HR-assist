@@ -1,0 +1,22 @@
+{
+  "id": "v-ux-designer",
+  "title": "UX/UI Designer",
+  "source_url": "https://hh.ru/vacancy/100000082",
+  "source": "hh.ru",
+  "payload": {
+    "title": "UX/UI Designer",
+    "role": "designer",
+    "summary": "Проектирование интерфейсов веб-сервиса, исследования пользователей, дизайн-система.",
+    "must_have_skills": ["Figma", "UX research", "UI design", "Дизайн-система"],
+    "tools": ["Figma", "Miro", "Maze"],
+    "domains": ["design", "ux"],
+    "matching_keywords": ["UX", "UI", "дизайн-система"],
+    "requirements": [
+      "Портфолио с кейсами",
+      "Figma",
+      "Навыки пользовательских исследований"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "UX/UI Designer. Дизайн веб-сервиса, research-интервью, развитие дизайн-системы."
+}

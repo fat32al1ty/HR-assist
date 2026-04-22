@@ -1,0 +1,22 @@
+{
+  "id": "v-sales-b2b",
+  "title": "Менеджер по продажам B2B",
+  "source_url": "https://hh.ru/vacancy/100000076",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Менеджер по продажам B2B",
+    "role": "sales",
+    "summary": "Продажа услуг корпоративным клиентам, холодные звонки, ведение сделок.",
+    "must_have_skills": ["Продажи", "CRM", "Переговоры", "B2B"],
+    "tools": ["amoCRM", "Битрикс24"],
+    "domains": ["sales", "b2b"],
+    "matching_keywords": ["продажи", "B2B", "CRM"],
+    "requirements": [
+      "Опыт в B2B-продажах 2+ года",
+      "Навыки холодных звонков",
+      "Работа с CRM"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Менеджер B2B-продаж. Холодные звонки, ведение клиентов в CRM, переговоры."
+}

@@ -1,0 +1,22 @@
+{
+  "id": "v-fullstack-react-node",
+  "title": "Fullstack Developer (React + Node.js)",
+  "source_url": "https://hh.ru/vacancy/100000032",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Fullstack Developer",
+    "role": "fullstack",
+    "summary": "Fullstack для стартапа: React на клиенте, Node.js/Express на бэкенде, PostgreSQL.",
+    "must_have_skills": ["JavaScript", "TypeScript", "React", "Node.js", "PostgreSQL"],
+    "tools": ["Express", "Prisma", "Docker"],
+    "domains": ["fullstack", "web"],
+    "matching_keywords": ["fullstack", "React", "Node.js"],
+    "requirements": [
+      "React + TypeScript",
+      "Node.js / Express",
+      "PostgreSQL"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Fullstack Developer. React на клиенте, Node.js на бэкенде, PostgreSQL."
+}

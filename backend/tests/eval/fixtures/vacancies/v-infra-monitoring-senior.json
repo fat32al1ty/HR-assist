@@ -1,0 +1,23 @@
+{
+  "id": "v-infra-monitoring-senior",
+  "title": "Senior Engineer Observability (Zabbix / Prometheus / Grafana)",
+  "source_url": "https://hh.ru/vacancy/100000005",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Senior Engineer Observability",
+    "role": "observability",
+    "summary": "Развитие мониторинга и observability банка. Zabbix → Prometheus, алерты, дашборды, trace-ы.",
+    "must_have_skills": ["Prometheus", "Grafana", "Zabbix", "Linux", "Python"],
+    "tools": ["Loki", "Tempo", "OpenTelemetry"],
+    "domains": ["observability", "devops", "monitoring"],
+    "matching_keywords": ["Prometheus", "Grafana", "OpenTelemetry"],
+    "requirements": [
+      "Опыт с Prometheus/Grafana 3+ года",
+      "Миграции мониторинга с Zabbix",
+      "Скриптинг Python/Bash",
+      "Понимание RED/USE методологии"
+    ],
+    "seniority": "senior"
+  },
+  "raw_text": "Senior Observability Engineer. Развитие стека мониторинга инфраструктуры банка."
+}

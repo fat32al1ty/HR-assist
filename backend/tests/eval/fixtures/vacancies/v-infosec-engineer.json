@@ -1,0 +1,22 @@
+{
+  "id": "v-infosec-engineer",
+  "title": "Security Engineer (AppSec / DevSecOps)",
+  "source_url": "https://hh.ru/vacancy/100000079",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Security Engineer",
+    "role": "security",
+    "summary": "AppSec + DevSecOps: SAST/DAST, безопасная разработка, secrets management, IAM в облаке.",
+    "must_have_skills": ["AppSec", "DevSecOps", "OWASP", "Vault", "Kubernetes"],
+    "tools": ["SonarQube", "Snyk", "AWS IAM"],
+    "domains": ["security", "devops", "appsec"],
+    "matching_keywords": ["DevSecOps", "AppSec", "cloud security"],
+    "requirements": [
+      "Опыт AppSec / DevSecOps 2+ года",
+      "Понимание Kubernetes и CI/CD",
+      "OWASP Top 10"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Security Engineer. DevSecOps, AppSec, встраивание SAST/DAST в CI/CD, работа с Vault, IAM в AWS."
+}

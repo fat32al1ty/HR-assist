@@ -1,0 +1,163 @@
+# HR-Assist matching gold set — Phase 2.2.
+# Format: {"resume_id": str, "vacancy_id": str, "relevance": 0|1|2}.
+# Semantics:
+#   2 = strong match — core stack + role + seniority align.
+#   1 = maybe — adjacent domain OR significant partial overlap.
+#   0 = irrelevant — different discipline, non-IT, or wrong stack.
+# Blank lines and lines starting with "#" are skipped by the loader.
+#
+# === r-senior-devops (Kubernetes / Terraform / AWS, 7y, senior) ===
+{"resume_id": "r-senior-devops", "vacancy_id": "v-devops-lead", "relevance": 2}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-sre-middle", "relevance": 2}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-platform-infra-engineer", "relevance": 2}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-cloud-architect", "relevance": 2}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-infra-monitoring-senior", "relevance": 2}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-devops-junior", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-infosec-engineer", "relevance": 1}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-ml-ops", "relevance": 1}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-backend-python-django", "relevance": 1}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-backend-fastapi", "relevance": 1}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-backend-golang", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-backend-java", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-data-engineer", "relevance": 1}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-ml-engineer", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-data-scientist-nlp", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-data-analyst-bi", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-frontend-react", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-frontend-nextjs", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-fullstack-react-node", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-mobile-ios", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-mobile-android", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-sysadmin-windows", "relevance": 1}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-qa-manual", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-pm-it", "relevance": 1}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-tech-writer", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-ux-designer", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-1c-developer", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-hr-recruiter", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-business-monitoring-media", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-construction-monitoring", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-npa-monitoring", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-energy-retail-analyst", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-marketing-content", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-accountant", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-sales-b2b", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-competitor-analyst", "relevance": 0}
+{"resume_id": "r-senior-devops", "vacancy_id": "v-infosec-compliance", "relevance": 0}
+#
+# === r-middle-python-backend (Python / Django / FastAPI, 4y, middle) ===
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-backend-python-django", "relevance": 2}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-backend-fastapi", "relevance": 2}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-backend-golang", "relevance": 1}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-backend-java", "relevance": 1}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-ml-engineer", "relevance": 1}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-data-scientist-nlp", "relevance": 1}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-data-analyst-bi", "relevance": 1}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-data-engineer", "relevance": 1}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-devops-lead", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-sre-middle", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-platform-infra-engineer", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-cloud-architect", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-infra-monitoring-senior", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-devops-junior", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-infosec-engineer", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-ml-ops", "relevance": 1}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-frontend-react", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-frontend-nextjs", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-fullstack-react-node", "relevance": 1}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-mobile-ios", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-mobile-android", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-sysadmin-windows", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-qa-manual", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-pm-it", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-tech-writer", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-ux-designer", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-1c-developer", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-hr-recruiter", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-business-monitoring-media", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-construction-monitoring", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-npa-monitoring", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-energy-retail-analyst", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-marketing-content", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-accountant", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-sales-b2b", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-competitor-analyst", "relevance": 0}
+{"resume_id": "r-middle-python-backend", "vacancy_id": "v-infosec-compliance", "relevance": 0}
+#
+# === r-middle-data-scientist (Python / ML / NLP, 3y, middle) ===
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-ml-engineer", "relevance": 2}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-data-scientist-nlp", "relevance": 2}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-data-engineer", "relevance": 1}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-ml-ops", "relevance": 2}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-data-analyst-bi", "relevance": 1}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-backend-python-django", "relevance": 1}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-backend-fastapi", "relevance": 1}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-backend-golang", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-backend-java", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-devops-lead", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-sre-middle", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-platform-infra-engineer", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-cloud-architect", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-infra-monitoring-senior", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-devops-junior", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-infosec-engineer", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-frontend-react", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-frontend-nextjs", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-fullstack-react-node", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-mobile-ios", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-mobile-android", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-sysadmin-windows", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-qa-manual", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-pm-it", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-tech-writer", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-ux-designer", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-1c-developer", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-hr-recruiter", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-business-monitoring-media", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-construction-monitoring", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-npa-monitoring", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-energy-retail-analyst", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-marketing-content", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-accountant", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-sales-b2b", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-competitor-analyst", "relevance": 0}
+{"resume_id": "r-middle-data-scientist", "vacancy_id": "v-infosec-compliance", "relevance": 0}
+#
+# === r-junior-frontend (React / TypeScript / Next.js, 1.5y, junior) ===
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-frontend-react", "relevance": 2}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-frontend-nextjs", "relevance": 2}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-fullstack-react-node", "relevance": 2}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-mobile-ios", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-mobile-android", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-backend-python-django", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-backend-fastapi", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-backend-golang", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-backend-java", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-ml-engineer", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-data-scientist-nlp", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-data-analyst-bi", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-data-engineer", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-devops-lead", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-sre-middle", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-platform-infra-engineer", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-cloud-architect", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-infra-monitoring-senior", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-devops-junior", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-infosec-engineer", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-ml-ops", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-sysadmin-windows", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-qa-manual", "relevance": 1}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-pm-it", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-tech-writer", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-ux-designer", "relevance": 1}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-1c-developer", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-hr-recruiter", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-business-monitoring-media", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-construction-monitoring", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-npa-monitoring", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-energy-retail-analyst", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-marketing-content", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-accountant", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-sales-b2b", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-competitor-analyst", "relevance": 0}
+{"resume_id": "r-junior-frontend", "vacancy_id": "v-infosec-compliance", "relevance": 0}

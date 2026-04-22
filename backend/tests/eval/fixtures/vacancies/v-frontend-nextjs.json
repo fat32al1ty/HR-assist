@@ -1,0 +1,23 @@
+{
+  "id": "v-frontend-nextjs",
+  "title": "Next.js Developer",
+  "source_url": "https://hh.ru/vacancy/100000031",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Next.js Developer",
+    "role": "frontend",
+    "summary": "Next.js + App Router для продуктового маркетплейса, SSR/ISR, оптимизация Core Web Vitals.",
+    "must_have_skills": ["Next.js", "React", "TypeScript", "CSS"],
+    "tools": ["Tailwind CSS", "Vercel", "GraphQL"],
+    "domains": ["frontend", "web"],
+    "matching_keywords": ["Next.js", "SSR", "Core Web Vitals", "React"],
+    "requirements": [
+      "Next.js 13+ (App Router)",
+      "SSR / ISR",
+      "TypeScript",
+      "Понимание Core Web Vitals"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Next.js Developer. Разработка SSR-страниц, App Router, оптимизация производительности."
+}

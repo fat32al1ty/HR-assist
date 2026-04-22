@@ -1,0 +1,23 @@
+{
+  "id": "v-ml-engineer",
+  "title": "Middle ML Engineer",
+  "source_url": "https://hh.ru/vacancy/100000020",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Middle ML Engineer",
+    "role": "ml",
+    "summary": "ML-инженер в продуктовую команду. Фичи, эксперименты, деплой моделей.",
+    "must_have_skills": ["Python", "scikit-learn", "LightGBM", "PyTorch", "SQL"],
+    "tools": ["MLflow", "Airflow", "Docker", "BentoML"],
+    "domains": ["ml", "data-science"],
+    "matching_keywords": ["machine learning", "feature engineering", "A/B"],
+    "requirements": [
+      "Опыт ML в продакшене 2+ года",
+      "Табличные данные, бустинги",
+      "PyTorch или TensorFlow",
+      "Python, pandas, SQL"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Middle ML Engineer. Разработка и деплой моделей в продуктовой команде fintech."
+}

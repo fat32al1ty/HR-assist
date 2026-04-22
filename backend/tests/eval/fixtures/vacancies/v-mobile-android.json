@@ -1,0 +1,22 @@
+{
+  "id": "v-mobile-android",
+  "title": "Android Developer (Kotlin)",
+  "source_url": "https://hh.ru/vacancy/100000041",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Android Developer",
+    "role": "mobile",
+    "summary": "Android на Kotlin для банковского приложения.",
+    "must_have_skills": ["Kotlin", "Android SDK", "Jetpack Compose", "Git"],
+    "tools": ["Android Studio", "Gradle", "Firebase"],
+    "domains": ["mobile", "android"],
+    "matching_keywords": ["Kotlin", "Jetpack Compose", "mobile"],
+    "requirements": [
+      "Kotlin 2+ года",
+      "Jetpack Compose",
+      "MVVM"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Android Developer. Kotlin, Jetpack Compose, банковское приложение."
+}

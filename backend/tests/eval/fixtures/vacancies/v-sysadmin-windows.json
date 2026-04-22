@@ -1,0 +1,22 @@
+{
+  "id": "v-sysadmin-windows",
+  "title": "Системный администратор (Windows / AD)",
+  "source_url": "https://hh.ru/vacancy/100000050",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Системный администратор",
+    "role": "sysadmin",
+    "summary": "Поддержка ИТ-инфраструктуры офиса на 300 человек: Windows Server, Active Directory, принтеры, тикеты.",
+    "must_have_skills": ["Windows Server", "Active Directory", "PowerShell", "TCP/IP"],
+    "tools": ["Group Policy", "Veeam", "Hyper-V"],
+    "domains": ["sysadmin", "it-support"],
+    "matching_keywords": ["Windows", "AD", "IT support"],
+    "requirements": [
+      "Администрирование Windows Server 2+ года",
+      "Active Directory, GPO",
+      "Работа с HelpDesk тикетами"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Системный администратор. Поддержка офисной инфраструктуры, Windows Server, Active Directory, тикеты пользователей."
+}

@@ -1,0 +1,22 @@
+{
+  "id": "v-qa-manual",
+  "title": "QA Engineer (manual)",
+  "source_url": "https://hh.ru/vacancy/100000060",
+  "source": "hh.ru",
+  "payload": {
+    "title": "QA Engineer",
+    "role": "qa",
+    "summary": "Ручное тестирование веб- и мобильных приложений.",
+    "must_have_skills": ["Manual QA", "Test design", "SQL", "Jira"],
+    "tools": ["Postman", "Charles Proxy", "TestRail"],
+    "domains": ["qa"],
+    "matching_keywords": ["manual QA", "test cases"],
+    "requirements": [
+      "Опыт ручного тестирования 2+ года",
+      "Тест-дизайн",
+      "Базовый SQL"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Manual QA Engineer. Тестирование веб/моб приложений, тест-кейсы, регрессия."
+}

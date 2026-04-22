@@ -1,0 +1,23 @@
+{
+  "id": "v-data-analyst-bi",
+  "title": "Middle Data Analyst (SQL / BI)",
+  "source_url": "https://hh.ru/vacancy/100000022",
+  "source": "hh.ru",
+  "payload": {
+    "title": "Middle Data Analyst",
+    "role": "analyst",
+    "summary": "Продуктовая аналитика, построение дашбордов в Tableau, A/B-анализ.",
+    "must_have_skills": ["SQL", "Python", "pandas", "Tableau", "A/B testing"],
+    "tools": ["Jupyter", "Airflow", "ClickHouse"],
+    "domains": ["analytics", "data"],
+    "matching_keywords": ["product analytics", "SQL", "dashboards"],
+    "requirements": [
+      "Продвинутый SQL",
+      "Python/pandas",
+      "Опыт с BI-инструментами (Tableau / Metabase)",
+      "Базовая статистика"
+    ],
+    "seniority": "middle"
+  },
+  "raw_text": "Middle Data Analyst. Продуктовая аналитика в marketplace, дашборды Tableau, A/B-тесты."
+}
