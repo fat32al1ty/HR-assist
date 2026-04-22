@@ -100,6 +100,12 @@ LEADERSHIP_MISSING_PENALTY = 0.02
 POSITIVE_PROFILE_WEIGHT = 0.25
 NEGATIVE_PROFILE_WEIGHT = 0.18
 DOMAIN_MISMATCH_PENALTY = 0.10
+# Phase 2.1: if the vector-space signal is very strong (0.85+) we trust the
+# embedding enough to keep a cross-domain vacancy with a penalty — that's
+# how legitimate edge cases like ML → hardware-ML survive. Below this
+# threshold a cross-domain match is almost always a russian-filler false
+# positive (опыт/работы/анализ/мониторинг) and gets hard-dropped.
+DOMAIN_MISMATCH_HARD_DROP_VECTOR_THRESHOLD = 0.85
 UNLIKELY_STACK_TOKENS = {
     "1c",
     "ml",
@@ -336,6 +342,67 @@ NON_IT_DOMAIN_MARKERS = {
     "станкостро",
     "серийное производство",
     "производств",
+    # Phase 2.1: real dogfood bleed-throughs on user 2
+    # Energy retail / trading / regulation
+    "энергосбыт",
+    "энергосбытов",
+    "электроэнерг",
+    "электросн",
+    "электроэнергет",
+    "электрич",
+    "электромонт",
+    "энерготраф",
+    "оптов",
+    "опт рын",
+    "розничн рын",
+    "тариф",
+    # Construction supervision (already had строй* — add site-ops wording)
+    "стройплощ",
+    "строймонт",
+    "сдача объект",
+    "генподряд",
+    "субподряд",
+    # Media / journalism / digital marketing
+    "медиа",
+    "сми",
+    "журналист",
+    "редакци",
+    "редактор контент",
+    "копирайт",
+    "контент-менедж",
+    "реклам",
+    "smm",
+    "таргет",
+    "маркетолог",
+    "бренд-менедж",
+    "бренд менедж",
+    "digital-агент",
+    "digital агент",
+    "креативн",
+    "продюс",
+    # Regulatory / compliance / НПА — not our engineer's ИБ
+    "нпа",
+    "нормативно-правов",
+    "нормативно правов",
+    "комплаенс",
+    "compliance officer",
+    "регуляторн",
+    "антимонопольн",
+    "финмониторинг",
+    "аудитор",
+    "гост ",
+    "гост р",
+    # Non-IT HR / admin
+    "кадровый учет",
+    "кадровое делопроиз",
+    "делопроизвод",
+    "бухгалтер",
+    "главбух",
+    # Business analyst on non-IT retail/B2C
+    "категорийн",
+    "коммерческ отдел",
+    "закупк",
+    "тендер",
 }
 
 
@@ -431,6 +498,171 @@ SKILL_ALIAS_GROUPS = (
         "управление очередью задач",
     },
 )
+# Phase 2.1: generic Russian/English tokens that bridge unrelated domains
+# when they appear alone in a requirement ↔ resume intersection. "Опыт работы
+# в энергосбытовых организациях" tokenizes to {опыт, работы, энергосбытовых,
+# организациях}; without this list a resume that contains "опыт" anywhere
+# matches the requirement. These tokens are *individually* ambiguous — they
+# can mean IT or non-IT depending on neighbors. The phrase-alias, taxonomy
+# and embedding paths still see them in context.
+GENERIC_NOISE_TOKENS = {
+    # work / experience connectors
+    "опыт",
+    "опыта",
+    "опытом",
+    "опыте",
+    "работа",
+    "работы",
+    "работе",
+    "работой",
+    "работу",
+    "работ",
+    "знание",
+    "знания",
+    "знаний",
+    "знаниями",
+    "понимание",
+    "понимания",
+    "навык",
+    "навыки",
+    "навыков",
+    "навыками",
+    # generic activity verbs / nouns
+    "анализ",
+    "анализа",
+    "анализе",
+    "анализу",
+    "анализом",
+    "аналитика",
+    "аналитики",
+    "мониторинг",
+    "мониторинга",
+    "мониторинге",
+    "мониторингу",
+    "мониторингом",
+    "контроль",
+    "контроля",
+    "контроле",
+    "контролем",
+    "сопровождение",
+    "сопровождения",
+    "сопровождению",
+    "развитие",
+    "развития",
+    "развитию",
+    "управление",
+    "управления",
+    "управлению",
+    "управлением",
+    "выполнение",
+    "выполнения",
+    "выполнению",
+    "ведение",
+    "ведения",
+    "ведению",
+    "оценка",
+    "оценки",
+    "оценку",
+    # generic business objects
+    "процесс",
+    "процесса",
+    "процессов",
+    "процессы",
+    "процессам",
+    "процессами",
+    "задача",
+    "задачи",
+    "задач",
+    "задачам",
+    "решение",
+    "решения",
+    "решений",
+    "решениям",
+    "компания",
+    "компании",
+    "компаний",
+    "компанией",
+    "организация",
+    "организации",
+    "организаций",
+    "организациях",
+    "организациям",
+    "клиент",
+    "клиенты",
+    "клиентов",
+    "клиентам",
+    "клиентами",
+    "продукт",
+    "продукта",
+    "продуктов",
+    "продукты",
+    "рынок",
+    "рынка",
+    "рынке",
+    "рынку",
+    "эффективность",
+    "эффективности",
+    "эффективностью",
+    "поведение",
+    "поведения",
+    "поведению",
+    "отчет",
+    "отчеты",
+    "отчетов",
+    "отчетов",
+    "отчеты",
+    "команда",
+    "команды",
+    "командой",
+    "команде",
+    # role filler words (prevents "ведущий/специалист" leaking)
+    "ведущий",
+    "ведущая",
+    "ведущего",
+    "специалист",
+    "специалиста",
+    "специалисту",
+    "специалистом",
+    "специалистов",
+    "сотрудник",
+    "сотрудника",
+    "сотрудником",
+    "инженер",
+    "инженера",
+    "инженером",
+    "инженеру",
+    "инженеров",
+    # generic english fillers
+    "experience",
+    "work",
+    "working",
+    "knowledge",
+    "skill",
+    "skills",
+    "analysis",
+    "monitoring",
+    "control",
+    "management",
+    "process",
+    "processes",
+    "company",
+    "companies",
+    "organization",
+    "organizations",
+    "customer",
+    "customers",
+    "client",
+    "clients",
+    "product",
+    "products",
+    "team",
+    "teams",
+    "support",
+    "development",
+    "responsibility",
+    "responsibilities",
+}
+
 STRICT_REQUIREMENT_TOKENS = {"devops"}
 LEADERSHIP_REQUIREMENT_TOKENS = {
     "teamlead",
@@ -724,13 +956,15 @@ def _build_resume_skill_set(analysis: dict | None) -> set[str]:
     Deliberately narrow — pulls from *curated* fields only:
     - hard_skills / skills / tools / matching_keywords (LLM-extracted skill phrases)
     - target_role / specialization (short structured role strings)
-    - experience.role (short job title per position)
 
-    Soft_skills, strengths, summary, and experience.highlights are free-form prose
-    riddled with generic Russian connectors (опыт, знание, планирование, …) that
-    bridged unrelated requirements via bag-of-words intersection and caused
-    cross-domain false matches. Those fields still feed ``_build_resume_skill_phrases``,
-    where the embedding-similarity path can use them without the bag-of-words trap.
+    Soft_skills, strengths, summary, experience.highlights AND experience.role
+    are free-form prose riddled with generic Russian connectors (опыт, знание,
+    мониторинг, анализ, контроль, …) that bridged unrelated requirements via
+    bag-of-words intersection and caused cross-domain false matches — an
+    IT-senior with role "Ведущий инженер по мониторингу" would match a
+    non-IT vacancy "Мониторинг конкурентов" via the bare token "мониторинг".
+    Those fields still feed ``_build_resume_skill_phrases`` so the
+    embedding-similarity and taxonomy paths see them — without the raw-token trap.
     """
     if not isinstance(analysis, dict):
         return set()
@@ -739,11 +973,6 @@ def _build_resume_skill_set(analysis: dict | None) -> set[str]:
         result.update(_as_string_set(analysis.get(key)))
     for key in ("target_role", "specialization"):
         result.update(_tokenize_text(analysis.get(key)))
-    experience = analysis.get("experience")
-    if isinstance(experience, list):
-        for item in experience:
-            if isinstance(item, dict):
-                result.update(_tokenize_text(item.get("role")))
     return result
 
 
@@ -838,8 +1067,19 @@ def _phrase_aliases(value: str) -> set[str]:
         if normalized in normalized_group:
             aliases.update({item for item in normalized_group if item})
             continue
-        if any(item and item in normalized for item in normalized_group):
-            aliases.update({item for item in normalized_group if item})
+        # Phase 2.1: substring-based group expansion only fires on a
+        # multi-word trigger or a single *content* word. Otherwise a phrase
+        # like "Мониторинг конкурентов" would expand into the
+        # {observability, monitoring, мониторинг} alias group and bridge
+        # to any observability-bearing IT resume on a pure filler word.
+        for item in normalized_group:
+            if not item or item not in normalized:
+                continue
+            is_multiword = " " in item or "-" in item
+            is_content_single = " " not in item and item not in GENERIC_NOISE_TOKENS
+            if is_multiword or is_content_single:
+                aliases.update({g for g in normalized_group if g})
+                break
     return aliases
 
 
@@ -915,6 +1155,30 @@ def _embedding_for_phrase(
     return vector
 
 
+def _tokens_meaningfully_overlap(
+    left: set[str],
+    right: set[str],
+    *,
+    distinctive_len: int = 7,
+) -> bool:
+    """True when the sets overlap on real content tokens, not filler.
+
+    Stop words in ``GENERIC_NOISE_TOKENS`` are stripped first. Then we require
+    either two or more content tokens in common, or one distinctive token
+    (length ≥ ``distinctive_len``) — rare long words like "kubernetes" or
+    "observability" are meaningful on their own; short ones (sql/aws/k8s) are
+    caught by the alias-phrase path, not here.
+    """
+    content_left = left - GENERIC_NOISE_TOKENS
+    content_right = right - GENERIC_NOISE_TOKENS
+    overlap = content_left.intersection(content_right)
+    if not overlap:
+        return False
+    if len(overlap) >= 2:
+        return True
+    return any(len(token) >= distinctive_len for token in overlap)
+
+
 def _requirement_matches_resume(
     requirement: str,
     *,
@@ -971,15 +1235,22 @@ def _requirement_matches_resume(
 
     for group in SKILL_ALIAS_GROUPS:
         normalized_group = {_normalize_phrase(item) for item in group}
-        if req_tokens.intersection(normalized_group) and normalized_group.intersection(
-            resume_phrase_aliases
-        ):
+        # Phase 2.1: the requirement must anchor into this alias group via a
+        # *content* token, not a single filler word. Group
+        # {observability, monitoring, мониторинг} overlaps any phrase with
+        # "мониторинг" — including "Мониторинг конкурентов" — which then
+        # bridges to an IT resume on a business-filler word.
+        req_trigger = req_tokens.intersection(normalized_group) - GENERIC_NOISE_TOKENS
+        if req_trigger and normalized_group.intersection(resume_phrase_aliases):
             return True
 
-    # Raw token intersection against the hard-skill token bag. Safe because
-    # ``_build_resume_skill_set`` now excludes soft_skills/strengths — so generic
-    # Russian words like "опыт"/"знание" can no longer bridge unrelated skills.
-    if req_tokens.intersection(resume_skill_tokens):
+    # Phase 2.1: raw token intersection requires *meaningful* overlap.
+    # One shared generic connector (опыт/работы/анализ/мониторинг/контроль/…)
+    # is not enough — unrelated-domain requirements ("Опыт работы в
+    # энергосбытовых организациях", "Мониторинг конкурентов") can pass on a
+    # single noise token when the resume has ANY role with ANY Russian verb.
+    # Require either ≥2 content tokens or 1 distinctive token (len ≥ 7).
+    if _tokens_meaningfully_overlap(req_tokens, resume_skill_tokens):
         return True
 
     req_vector = _embedding_for_phrase(
@@ -1154,6 +1425,12 @@ def _matched_resume_skills_for_vacancy(
     Preserves original casing from the resume. Dedupes case-insensitively and
     uses alias groups so e.g. "k8s" in resume hits a vacancy asking for
     "kubernetes".
+
+    Phase 2.1: the token-intersection path now requires *meaningful* overlap
+    — one generic shared word (анализ/мониторинг/работы/процессов) is not
+    enough. Otherwise the UI would show "Анализ инцидентов" from the resume
+    as a match to "Анализ поведения клиентов" from the vacancy, because both
+    tokenize to include "анализ". That's the UI lying to the user.
     """
     if not resume_hard_skills or not vacancy_skill_tokens:
         return []
@@ -1171,12 +1448,14 @@ def _matched_resume_skills_for_vacancy(
 
         skill_tokens = _tokenize_rich_text(cleaned)
         hit = False
-        if skill_tokens and skill_tokens.intersection(vacancy_skill_tokens):
+        if skill_tokens and _tokens_meaningfully_overlap(skill_tokens, vacancy_skill_tokens):
             hit = True
         if not hit:
             # Alias-group lookup so "k8s" on resume still counts when vacancy says "kubernetes".
+            # Aliases are short curated tokens — we accept a direct intersection here because
+            # the aliases themselves are content words, not filler.
             for alias in _phrase_aliases(cleaned):
-                alias_tokens = _tokenize_rich_text(alias)
+                alias_tokens = _tokenize_rich_text(alias) - GENERIC_NOISE_TOKENS
                 if alias_tokens and alias_tokens.intersection(vacancy_skill_tokens):
                     hit = True
                     break
@@ -1806,16 +2085,18 @@ def match_vacancies_for_resume(
         ):
             continue
 
-        # Soft domain gate: cross-domain items (IT resume ↔ non-IT vacancy)
-        # used to be dropped outright, which hid cross-domain senior
-        # candidates (e.g. ML → hardware) entirely. Now we still rank them
-        # but subtract DOMAIN_MISMATCH_PENALTY from hybrid so they only
-        # survive when everything else is strong.
+        # Phase 2.1: tiered domain gate.
+        # * vector_score >= 0.85 → keep with penalty (trust the embedding).
+        # * vector_score <  0.85 → hard-drop (most of these are russian-filler
+        #   false positives: "опыт"/"работы"/"анализ"/"мониторинг" bridging
+        #   unrelated industries).
         domain_compatible = _has_domain_compatibility(
             resume.analysis, payload if isinstance(payload, dict) else None
         )
         if not domain_compatible:
             drop_domain_mismatch += 1
+            if float(score) < DOMAIN_MISMATCH_HARD_DROP_VECTOR_THRESHOLD:
+                continue
 
         drop_reason = _hard_filter_drop_reason(
             vacancy_profile=payload if isinstance(payload, dict) else None,

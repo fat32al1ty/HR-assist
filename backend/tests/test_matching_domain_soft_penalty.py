@@ -119,16 +119,27 @@ class DomainSoftPenaltyTest(unittest.TestCase):
         # Penalty must be observable in the score (within 1e-4 of the delta).
         self.assertAlmostEqual(non_penalized - penalized, DOMAIN_MISMATCH_PENALTY, places=4)
 
-    def test_low_score_cross_domain_still_reaches_maybe_tier(self) -> None:
-        # A mid-score cross-domain item (semantic 0.70) should land in the
-        # "maybe" bucket after the penalty; previously it was dropped.
+    def test_low_score_cross_domain_is_hard_dropped(self) -> None:
+        # Phase 2.1: revert to hard-drop when vector_score < 0.85 AND domains
+        # are incompatible. Most mid-score cross-domain items are russian-filler
+        # false positives (опыт/работы/анализ), not real ML→hardware bridges —
+        # let the embedding earn it by clearing 0.85 if it's a real match.
         matches = self._run_match(
             resume_domains=["SRE", "DevOps"],
             vacancy_domains=["Юридическая практика"],
             semantic_score=0.70,
         )
+        self.assertEqual(len(matches), 0)
+
+    def test_high_score_cross_domain_still_surfaces_with_penalty(self) -> None:
+        # Phase 2.1: at vector 0.85+ we still trust the embedding enough to
+        # surface the item with the penalty — this is the ML→hardware path.
+        matches = self._run_match(
+            resume_domains=["ML", "Platform"],
+            vacancy_domains=["Автомобилестроение", "Электронные системы автомобиля"],
+            semantic_score=0.90,
+        )
         self.assertEqual(len(matches), 1)
-        self.assertIn(matches[0]["tier"], {"strong", "maybe"})
 
 
 if __name__ == "__main__":

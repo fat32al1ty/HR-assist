@@ -12,11 +12,14 @@ from app.services.matching_service import match_vacancies_for_resume
 from app.services.vacancy_pipeline import VacancyDiscoveryMetrics, discover_and_index_vacancies
 
 MAX_DEEP_SCAN_QUERIES = 6
-MAX_TOTAL_DISCOVERY_BUDGET = 140
-# Phase 1.9 PR A1: split caps. HTTP scans to HH are free, LLM parses are
-# paid. Letting the scan run wider than the analyze budget lets us dig
-# past the already-indexed top page without blowing the OpenAI budget.
-MAX_SOURCES_SCANNED = 200
+# Phase 2.1: widen the HTTP scan budget 200→400. HH pagination is free (no
+# OpenAI cost) so a bigger scan lets a senior / nichey resume reach into
+# page 2-3 of HH where its real matches live. The LLM cap (COLD_START /
+# WARM) is unchanged — only items we decide to actually parse spend money.
+# MAX_TOTAL_DISCOVERY_BUDGET caps total items across all deep-scan queries
+# in one user-initiated recommend; per-query count is derived from it.
+MAX_SOURCES_SCANNED = 400
+MAX_TOTAL_DISCOVERY_BUDGET = MAX_SOURCES_SCANNED
 # Phase 2.0 PR A1: spend more LLM budget on cold-start so first-run users
 # actually see results. Warm runs (cursor already populated) keep the
 # tight cap — the index is already seeded and further LLM parses mostly
@@ -316,10 +319,16 @@ def recommend_vacancies_for_resume(
         queries = _build_deep_scan_queries(query, rf_only=rf_only, analysis=resume.analysis)[
             :max_queries
         ]
+        # Phase 2.1: HH pagination is free; a wider scan lets nichey / senior
+        # resumes reach their real matches on page 2-3. Use MAX_SOURCES_SCANNED
+        # as the upper bound regardless of discover_count, and raise the
+        # per-query cap so pagination can actually go deep. LLM budget is
+        # separately capped by analyzed_budget — a bigger scan doesn't spend
+        # more OpenAI, just finds more candidates to choose from.
         total_budget = min(
-            max(discover_count * len(queries), discover_count), MAX_TOTAL_DISCOVERY_BUDGET
+            max(discover_count * len(queries), MAX_SOURCES_SCANNED), MAX_SOURCES_SCANNED
         )
-        per_query_count = max(10, min(40, total_budget // max(1, len(queries))))
+        per_query_count = max(10, min(150, total_budget // max(1, len(queries))))
         collect_start = 55 if use_prefetched_index else 10
         collect_span = 25 if use_prefetched_index else 60
         for index, deep_query in enumerate(queries):
