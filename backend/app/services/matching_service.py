@@ -13,7 +13,9 @@ from app.repositories.resume_user_skills import (
 )
 from app.repositories.resumes import get_resume_for_user
 from app.repositories.user_vacancy_feedback import list_disliked_vacancy_ids, list_liked_vacancy_ids
-from app.repositories.vacancies import get_vacancy_by_id
+from app.repositories.vacancies import (
+    get_vacancy_by_id,  # noqa: F401  — re-exported for stages + existing test patches
+)
 from app.services.embeddings import create_embedding
 from app.services.resume_profile_pipeline import persist_resume_profile
 from app.services.skill_taxonomy import expand_concept as expand_skill_concept
@@ -1958,52 +1960,25 @@ def _seniority_mismatch_penalty(
     return 0.0
 
 
-def match_vacancies_for_resume(
+def _build_resume_context(
     db: Session,
     *,
+    resume,
     resume_id: int,
     user_id: int,
-    limit: int = 20,
-    preference_overrides: dict | None = None,
-    metrics: dict | None = None,
-) -> list[dict]:
-    resume = get_resume_for_user(db, resume_id=resume_id, user_id=user_id)
-    if resume is None:
-        return []
+    query_vector: list[float],
+    prefs: dict,
+    excluded_vacancy_ids: set[int],
+) -> tuple:
+    """Build (ResumeContext, rejected_normalized_skill_norms) from DB state.
 
-    try:
-        user = db.get(User, user_id)
-    except (AttributeError, TypeError):
-        user = None
-    prefs = _resolve_user_preferences(user, preference_overrides)
-    preferred_titles = prefs.get("preferred_titles") or []
-    drop_work_format = 0
-    drop_geo = 0
-    drop_no_skill_overlap = 0
-    drop_domain_mismatch = 0
-    seniority_penalty_applied = 0
-    archived_at_match_time = 0
-    title_boosts = 0
-
-    vector_store = get_vector_store()
-    query_vector = vector_store.get_resume_vector(resume_id=resume_id)
-    if query_vector is None:
-        if isinstance(resume.analysis, dict) and resume.analysis:
-            try:
-                persist_resume_profile(
-                    db, resume_id=resume_id, user_id=user_id, profile=resume.analysis
-                )
-                query_vector = vector_store.get_resume_vector(resume_id=resume_id)
-            except Exception:
-                query_vector = None
-    if query_vector is None:
-        return []
-
-    recompute_user_preference_profile(db, user_id=user_id, resume_id=resume_id)
-    positive_pref, negative_pref = vector_store.get_user_preference_vectors(
-        user_id=user_id, resume_id=resume_id
-    )
-    query_vector = _blend_resume_with_preferences(query_vector, positive_pref, negative_pref)
+    Kept separate from the top-level wrapper so the wrapper stays under
+    80 lines and the resume-side assembly is testable in isolation.
+    Returns rejected_normalized alongside the context since it is a
+    resume-derived set that the augment stage needs to strip from its
+    output.
+    """
+    from .matching import ResumeContext
 
     resume_skills = _build_resume_skill_set(resume.analysis)
     resume_roles = _build_resume_role_set(resume.analysis)
@@ -2033,226 +2008,123 @@ def match_vacancies_for_resume(
     resume_phrase_aliases: set[str] = set()
     for phrase in resume_skill_phrases:
         resume_phrase_aliases.update(_phrase_aliases(phrase))
-    resume_phrase_vectors: dict[str, list[float]] = {}
-    embedding_cache: dict[str, list[float]] = {}
-    embedding_budget = {"calls_left": SEMANTIC_GAP_MAX_EMBED_CALLS}
-    leadership_preferred = _resume_prefers_leadership(resume_roles)
-    disliked_vacancy_ids = list_disliked_vacancy_ids(db, user_id=user_id, resume_id=resume_id)
-    liked_vacancy_ids = list_liked_vacancy_ids(db, user_id=user_id, resume_id=resume_id)
-    excluded_set = set(disliked_vacancy_ids).union(liked_vacancy_ids)
-    search_limit = max(limit * 8, 120)
-    found = vector_store.search_vacancy_profiles(query_vector=query_vector, limit=search_limit)
 
-    ranked_all: list[tuple[float, dict]] = []
-    seen_keys: set[str] = set()
-    for vacancy_id, score, payload in found:
-        if vacancy_id in excluded_set:
-            continue
-        if "is_vacancy" in payload and payload.get("is_vacancy") is not True:
-            continue
-
-        vacancy = get_vacancy_by_id(db, vacancy_id=vacancy_id)
-        if vacancy is None or vacancy.status != "indexed":
-            continue
-        if (vacancy.source or "").strip().lower() != PRIMARY_VACANCY_SOURCE:
-            continue
-        if not _host_allowed_for_matching(vacancy.source_url):
-            continue
-        if _looks_non_vacancy_page(vacancy.source_url):
-            continue
-        if _looks_archived_vacancy_strict(vacancy.source_url, vacancy.title, vacancy.raw_text):
-            # Persist the detection so future runs skip the re-check.
-            # We also evict the Qdrant point so retrieval K stops spending on
-            # an archived row.
-            try:
-                vacancy.status = "filtered"
-                vacancy.error_message = "archived detected at match time"
-                db.add(vacancy)
-                db.commit()
-                vector_store.delete_vacancy_profile(vacancy_id=vacancy.id)
-            except Exception:
-                db.rollback()
-            archived_at_match_time += 1
-            continue
-        if _looks_like_listing_page(vacancy.source_url, vacancy.title):
-            continue
-        if _looks_unlikely_stack(vacancy.title, resume_skills):
-            continue
-        if _looks_business_monitoring_role(vacancy.title or "", resume_skills):
-            continue
-        if _looks_hard_non_it_role(
-            vacancy.title or "", payload if isinstance(payload, dict) else None, vacancy.raw_text
-        ):
-            continue
-
-        # Phase 2.1: tiered domain gate.
-        # * vector_score >= 0.85 → keep with penalty (trust the embedding).
-        # * vector_score <  0.85 → hard-drop (most of these are russian-filler
-        #   false positives: "опыт"/"работы"/"анализ"/"мониторинг" bridging
-        #   unrelated industries).
-        domain_compatible = _has_domain_compatibility(
-            resume.analysis, payload if isinstance(payload, dict) else None
-        )
-        if not domain_compatible:
-            drop_domain_mismatch += 1
-            if float(score) < DOMAIN_MISMATCH_HARD_DROP_VECTOR_THRESHOLD:
-                continue
-
-        drop_reason = _hard_filter_drop_reason(
-            vacancy_profile=payload if isinstance(payload, dict) else None,
-            vacancy_location=vacancy.location,
-            prefs=prefs,
-        )
-        if drop_reason == "work_format":
-            drop_work_format += 1
-            continue
-        if drop_reason == "geo":
-            drop_geo += 1
-            continue
-
-        payload_dict = payload if isinstance(payload, dict) else {}
-        if not _has_sufficient_skill_overlap(resume_skills, resume_hard_skills, payload_dict):
-            drop_no_skill_overlap += 1
-            continue
-
-        vacancy_skills = _build_vacancy_skill_set(payload)
-        vacancy_title_tokens = _tokenize_rich_text(vacancy.title or "")
-        overlap = _overlap_score(resume_skills, vacancy_skills)
-        role_overlap = _overlap_score(resume_roles, vacancy_title_tokens) if resume_roles else 0.0
-        hybrid = _hybrid_score(float(score), overlap) + (0.05 * role_overlap)
-        if not domain_compatible:
-            hybrid -= DOMAIN_MISMATCH_PENALTY
-        has_leadership_hint = _title_has_leadership_hint(vacancy.title or "", payload_dict)
-        if leadership_preferred:
-            if has_leadership_hint:
-                hybrid += LEADERSHIP_BONUS
-            else:
-                hybrid -= LEADERSHIP_MISSING_PENALTY
-
-        seniority_delta = _seniority_mismatch_penalty(resume.analysis, payload_dict)
-        if seniority_delta != 0.0:
-            hybrid += seniority_delta
-            seniority_penalty_applied += 1
-
-        title_boost = _preferred_title_boost_score(vacancy.title, preferred_titles)
-        if title_boost > 0.0:
-            hybrid = min(TITLE_BOOST_SCORE_CAP, hybrid + title_boost)
-            if title_boost >= TITLE_BOOST:
-                title_boosts += 1
-
-        dedupe_key = (
-            f"{(vacancy.title or '').strip().lower()}::{(vacancy.company or '').strip().lower()}"
-        )
-        if dedupe_key in seen_keys:
-            continue
-        seen_keys.add(dedupe_key)
-
-        ranked_all.append(
-            (
-                hybrid,
-                {
-                    "vacancy_id": vacancy.id,
-                    "title": vacancy.title,
-                    "source_url": vacancy.source_url,
-                    "company": vacancy.company,
-                    "location": vacancy.location,
-                    "similarity_score": round(hybrid, 5),
-                    "profile": _augment_profile_with_gap_insights(
-                        payload,
-                        resume_skills,
-                        resume_hard_skills=resume_hard_skills,
-                        resume_skill_phrases=resume_skill_phrases,
-                        resume_phrase_aliases=resume_phrase_aliases,
-                        resume_phrase_vectors=resume_phrase_vectors,
-                        embedding_cache=embedding_cache,
-                        embedding_budget=embedding_budget,
-                        resume_total_experience_years=resume_total_years,
-                        vacancy_id=vacancy.id,
-                        rejected_skill_norms=rejected_normalized,
-                    ),
-                },
-            )
-        )
-
-    ranked_all.sort(key=lambda item: item[0], reverse=True)
-    # Two-tier selection: strong picks first, then maybe fills below the strict
-    # cutoff down to MAYBE_MATCH_THRESHOLD. Old behavior returned strict-only
-    # and only fell back to 0.50+ when strict was empty — that discarded real
-    # borderline signal users wanted to see. UI partitions on the `tier` key.
-    ranked_strong = [item for item in ranked_all if item[0] >= STRONG_MATCH_THRESHOLD]
-    ranked_maybe = [
-        item for item in ranked_all if MAYBE_MATCH_THRESHOLD <= item[0] < STRONG_MATCH_THRESHOLD
-    ]
-
-    top_matches: list[dict] = []
-    for _hybrid, payload in ranked_strong[:limit]:
-        top_matches.append({**payload, "tier": "strong"})
-
-    maybe_cap = limit if not ranked_strong else max(1, limit // MAYBE_MATCH_CAP_DIVISOR)
-    for _hybrid, payload in ranked_maybe[:maybe_cap]:
-        profile = payload.get("profile")
-        if isinstance(profile, dict):
-            profile = {**profile, "tier_reason": "below_strict_threshold"}
-        else:
-            profile = {"tier_reason": "below_strict_threshold"}
-        top_matches.append({**payload, "tier": "maybe", "profile": profile})
-
-    if not top_matches:
-        # Last-resort mode: keep recommendations non-empty when candidates exist but strict
-        # thresholds are too conservative for the current resume wording.
-        ranked_relaxed = [item for item in ranked_all if item[0] >= RELAXED_MIN_RELEVANCE_SCORE]
-        for hybrid, payload in ranked_relaxed[:limit]:
-            profile = payload.get("profile")
-            if isinstance(profile, dict):
-                profile = {**profile, "source": "relaxed_fallback", "fallback_tier": "relaxed"}
-            else:
-                profile = {"source": "relaxed_fallback", "fallback_tier": "relaxed"}
-            top_matches.append(
-                {
-                    **payload,
-                    "similarity_score": round(float(hybrid), 5),
-                    "profile": profile,
-                    "tier": "maybe",
-                }
-            )
-
-    def _record_metrics(result: list[dict]) -> list[dict]:
-        if metrics is not None:
-            metrics["hard_filter_drop_work_format"] = drop_work_format
-            metrics["hard_filter_drop_geo"] = drop_geo
-            metrics["hard_filter_drop_no_skill_overlap"] = drop_no_skill_overlap
-            metrics["hard_filter_drop_domain_mismatch"] = drop_domain_mismatch
-            metrics["seniority_penalty_applied"] = seniority_penalty_applied
-            metrics["archived_at_match_time"] = archived_at_match_time
-            metrics["title_boost_applied"] = title_boosts
-        return result
-
-    if len(top_matches) >= limit:
-        return _record_metrics(top_matches)
-    if leadership_preferred and top_matches:
-        return _record_metrics(top_matches[:limit])
-
-    lexical_counters: dict[str, int] = {}
-    lexical_candidates = _lexical_fallback_matches(
-        db,
+    return ResumeContext(
+        resume_id=resume_id,
+        user_id=user_id,
+        analysis=resume.analysis,
+        query_vector=query_vector,
         resume_skills=resume_skills,
         resume_roles=resume_roles,
+        resume_skill_phrases=resume_skill_phrases,
+        resume_hard_skills=resume_hard_skills,
+        resume_phrase_aliases=resume_phrase_aliases,
+        resume_total_years=resume_total_years,
+        leadership_preferred=_resume_prefers_leadership(resume_roles),
+        preferences=prefs,
+        preferred_titles=list(prefs.get("preferred_titles") or []),
+        excluded_vacancy_ids=excluded_vacancy_ids,
+        rejected_skill_norms=rejected_normalized,
+    )
+
+
+def _candidate_to_match_dict(cand, *, tier: str, tier_reason: str | None = None) -> dict:
+    """Project a Candidate into the public match-result dict shape."""
+    vacancy = cand.vacancy
+    profile = dict(cand.augmented_profile) if isinstance(cand.augmented_profile, dict) else {}
+    if tier_reason is not None:
+        profile["tier_reason"] = tier_reason
+    return {
+        "vacancy_id": vacancy.id,
+        "title": vacancy.title,
+        "source_url": vacancy.source_url,
+        "company": vacancy.company,
+        "location": vacancy.location,
+        "similarity_score": round(cand.hybrid_score, 5),
+        "profile": profile,
+        "tier": tier,
+    }
+
+
+def _default_matching_stages(db: Session, vector_store, *, search_limit: int) -> list:
+    """Build the default stage list. Kept as a helper so eval runners can
+    swap stages (e.g. add MMR) without recreating the boilerplate."""
+    from .matching.stages.augment import AugmentStage
+    from .matching.stages.dedupe import DedupeStage
+    from .matching.stages.domain_gate import DomainGateStage
+    from .matching.stages.filter import HardFilterStage
+    from .matching.stages.recall import VectorRecallStage
+    from .matching.stages.scoring import ScoringStage
+    from .matching.stages.tier import TierStage
+
+    return [
+        VectorRecallStage(db=db, vector_store=vector_store, limit=search_limit),
+        HardFilterStage(db=db, vector_store=vector_store),
+        DomainGateStage(),
+        ScoringStage(),
+        DedupeStage(),
+        TierStage(),
+        AugmentStage(),
+    ]
+
+
+def _slice_tiered_matches(candidates: list, *, limit: int) -> list[dict]:
+    """Strong → maybe → relaxed-fallback slicing with tier labels."""
+    strong = [c for c in candidates if c.tier == "strong"]
+    maybe = [c for c in candidates if c.tier == "maybe"]
+    relaxed = [c for c in candidates if c.tier == "relaxed"]
+
+    out: list[dict] = [_candidate_to_match_dict(c, tier="strong") for c in strong[:limit]]
+    maybe_cap = limit if not strong else max(1, limit // MAYBE_MATCH_CAP_DIVISOR)
+    out.extend(
+        _candidate_to_match_dict(c, tier="maybe", tier_reason="below_strict_threshold")
+        for c in maybe[:maybe_cap]
+    )
+    if not out:
+        for cand in relaxed[:limit]:
+            item = _candidate_to_match_dict(cand, tier="maybe")
+            item["profile"]["source"] = "relaxed_fallback"
+            item["profile"]["fallback_tier"] = "relaxed"
+            out.append(item)
+    return out
+
+
+def _merge_lexical_fallback(
+    db: Session,
+    *,
+    ctx,
+    prefs,
+    excluded_set: set[int],
+    top_matches: list[dict],
+    limit: int,
+    metrics: dict | None,
+) -> list[dict]:
+    """When the vector path under-delivers, fill with lexical matches
+    and roll the fallback's drop counters into ``metrics``."""
+    lexical_counters: dict[str, int] = {}
+    lexical = _lexical_fallback_matches(
+        db,
+        resume_skills=ctx.resume_skills,
+        resume_roles=ctx.resume_roles,
         excluded_vacancy_ids=excluded_set,
         limit=limit * 2,
         prefs=prefs,
         drop_counters=lexical_counters,
     )
-    drop_geo += int(lexical_counters.get("geo", 0))
-    title_boosts += int(lexical_counters.get("title_boost", 0))
+    if metrics is not None:
+        metrics["hard_filter_drop_geo"] = metrics.get("hard_filter_drop_geo", 0) + int(
+            lexical_counters.get("geo", 0)
+        )
+        metrics["title_boost_applied"] = metrics.get("title_boost_applied", 0) + int(
+            lexical_counters.get("title_boost", 0)
+        )
 
     if not top_matches:
-        if leadership_preferred:
-            return _record_metrics([])
-        return _record_metrics(lexical_candidates[:limit])
+        return [] if ctx.leadership_preferred else lexical[:limit]
 
     present_ids = {int(item.get("vacancy_id", 0)) for item in top_matches}
     merged = list(top_matches)
-    for item in lexical_candidates:
+    for item in lexical:
         vacancy_id = int(item.get("vacancy_id", 0))
         if vacancy_id <= 0 or vacancy_id in present_ids:
             continue
@@ -2260,4 +2132,78 @@ def match_vacancies_for_resume(
         present_ids.add(vacancy_id)
         if len(merged) >= limit:
             break
-    return _record_metrics(merged[:limit])
+    return merged[:limit]
+
+
+def match_vacancies_for_resume(
+    db: Session,
+    *,
+    resume_id: int,
+    user_id: int,
+    limit: int = 20,
+    preference_overrides: dict | None = None,
+    metrics: dict | None = None,
+) -> list[dict]:
+    """Top-level matching entrypoint — thin composition over the
+    ``app.services.matching`` stage pipeline."""
+    from .matching import MatchingState, run_pipeline
+
+    resume = get_resume_for_user(db, resume_id=resume_id, user_id=user_id)
+    if resume is None:
+        return []
+
+    try:
+        user = db.get(User, user_id)
+    except (AttributeError, TypeError):
+        user = None
+    prefs = _resolve_user_preferences(user, preference_overrides)
+
+    vector_store = get_vector_store()
+    query_vector = vector_store.get_resume_vector(resume_id=resume_id)
+    if query_vector is None and isinstance(resume.analysis, dict) and resume.analysis:
+        try:
+            persist_resume_profile(
+                db, resume_id=resume_id, user_id=user_id, profile=resume.analysis
+            )
+            query_vector = vector_store.get_resume_vector(resume_id=resume_id)
+        except Exception:
+            query_vector = None
+    if query_vector is None:
+        return []
+
+    recompute_user_preference_profile(db, user_id=user_id, resume_id=resume_id)
+    pos, neg = vector_store.get_user_preference_vectors(user_id=user_id, resume_id=resume_id)
+    query_vector = _blend_resume_with_preferences(query_vector, pos, neg)
+
+    excluded_set = set(list_disliked_vacancy_ids(db, user_id=user_id, resume_id=resume_id)).union(
+        list_liked_vacancy_ids(db, user_id=user_id, resume_id=resume_id)
+    )
+
+    ctx = _build_resume_context(
+        db,
+        resume=resume,
+        resume_id=resume_id,
+        user_id=user_id,
+        query_vector=query_vector,
+        prefs=prefs,
+        excluded_vacancy_ids=excluded_set,
+    )
+
+    state = MatchingState(resume_context=ctx, candidates=[])
+    stages = _default_matching_stages(db, vector_store, search_limit=max(limit * 8, 120))
+    state = run_pipeline(state, stages)
+    state.diagnostics.export_to(metrics)
+
+    top_matches = _slice_tiered_matches(state.candidates, limit=limit)
+    if len(top_matches) >= limit or (ctx.leadership_preferred and top_matches):
+        return top_matches[:limit]
+
+    return _merge_lexical_fallback(
+        db,
+        ctx=ctx,
+        prefs=prefs,
+        excluded_set=excluded_set,
+        top_matches=top_matches,
+        limit=limit,
+        metrics=metrics,
+    )

@@ -14,8 +14,6 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.repositories.vacancies import get_vacancy_by_id
-
 from ..state import Candidate, MatchingState
 from .base import BaseStage
 
@@ -31,7 +29,13 @@ class VectorRecallStage(BaseStage):
         self._limit = limit
 
     def run(self, state: MatchingState) -> MatchingState:
-        from app.services.matching_service import PRIMARY_VACANCY_SOURCE
+        # Resolve through matching_service's namespace so existing test
+        # patches on ``app.services.matching_service.get_vacancy_by_id``
+        # continue to intercept recall lookups.
+        from app.services import matching_service as _ms
+
+        PRIMARY_VACANCY_SOURCE = _ms.PRIMARY_VACANCY_SOURCE
+        get_vacancy_by_id = _ms.get_vacancy_by_id
 
         ctx = state.resume_context
         found = self._vector_store.search_vacancy_profiles(
