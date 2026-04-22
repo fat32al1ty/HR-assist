@@ -17,8 +17,13 @@ MAX_TOTAL_DISCOVERY_BUDGET = 140
 # paid. Letting the scan run wider than the analyze budget lets us dig
 # past the already-indexed top page without blowing the OpenAI budget.
 MAX_SOURCES_SCANNED = 200
-MAX_OPENAI_ANALYZED = 18
-MAX_TOTAL_ANALYZED_BUDGET = MAX_OPENAI_ANALYZED
+# Phase 2.0 PR A1: spend more LLM budget on cold-start so first-run users
+# actually see results. Warm runs (cursor already populated) keep the
+# tight cap — the index is already seeded and further LLM parses mostly
+# overlap with existing vectors.
+COLD_START_MAX_OPENAI_ANALYZED = 40
+WARM_MAX_OPENAI_ANALYZED = 18
+MAX_OPENAI_ANALYZED = WARM_MAX_OPENAI_ANALYZED
 # Overlap window to tolerate HH's eventual-consistency on new postings —
 # a vacancy posted right before our cursor might not be visible yet.
 HH_CURSOR_OVERLAP = timedelta(hours=6)
@@ -263,6 +268,9 @@ def recommend_vacancies_for_resume(
         cursor_from = user.last_hh_seen_at - HH_CURSOR_OVERLAP
     fetch_started_at = datetime.now(UTC)
 
+    is_cold_start = user is None or user.last_hh_seen_at is None
+    analyzed_budget = COLD_START_MAX_OPENAI_ANALYZED if is_cold_start else WARM_MAX_OPENAI_ANALYZED
+
     def _commit_cursor() -> None:
         # Only advance the cursor when we actually hit HH on this call.
         # Prefetched-index-only returns do not see newer data, so keeping
@@ -324,9 +332,7 @@ def recommend_vacancies_for_resume(
                 min(80, collect_start + int((index / max(1, len(queries))) * collect_span)),
                 aggregate_metrics,
             )
-            remaining_analyzed_budget = max(
-                0, MAX_TOTAL_ANALYZED_BUDGET - aggregate_metrics.analyzed
-            )
+            remaining_analyzed_budget = max(0, analyzed_budget - aggregate_metrics.analyzed)
             if remaining_analyzed_budget <= 0:
                 break
             result = discover_and_index_vacancies(
@@ -393,7 +399,7 @@ def recommend_vacancies_for_resume(
             rf_only=rf_only,
             force_reindex=False,
             use_brave_fallback=use_brave_fallback,
-            max_analyzed=MAX_TOTAL_ANALYZED_BUDGET,
+            max_analyzed=analyzed_budget,
             date_from=cursor_from,
         )
         fetch_succeeded = True
