@@ -32,6 +32,52 @@ jobs:
       - name: Ruff format check
         run: ruff format --check app/
 
+  matching-eval:
+    name: Matching — Offline Eval (NDCG / MAP / MRR)
+    runs-on: ubuntu-latest
+    needs: backend-lint
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest
+
+      - name: Run harness math tests
+        run: python -m pytest tests/test_matching_eval_math.py -v
+
+      - name: Run gold-set baseline
+        run: python -m pytest tests/test_matching_eval_baseline.py -v
+
+      - name: Print metrics report
+        run: |
+          python - <<'PY'
+          from app.services.matching_eval import evaluate, load_gold_set
+          from tests.eval.adapter import hybrid_matcher, vector_only_matcher
+          from tests.eval.loader import gold_path
+
+          gold = load_gold_set(gold_path())
+          for label, matcher in (("vector_only", vector_only_matcher()), ("hybrid", hybrid_matcher())):
+              report = evaluate(gold, matcher=matcher)
+              print(f"=== {label} ===")
+              print(f"  gold pairs   : {report.total_labeled_pairs}")
+              print(f"  mean NDCG@10 : {report.mean_ndcg_at_10:.4f}")
+              print(f"  mean MAP     : {report.mean_map:.4f}")
+              print(f"  mean MRR     : {report.mean_mrr:.4f}")
+              for r in report.per_resume:
+                  print(f"  - {r.resume_id:30s} NDCG={r.ndcg_at_10:.3f} MAP={r.map_score:.3f} MRR={r.mrr:.3f}")
+          PY
+
   backend-test:
     name: Backend — Unit Tests
     runs-on: ubuntu-latest
@@ -145,7 +191,7 @@ jobs:
   docker-build:
     name: Docker — Build Images
     runs-on: ubuntu-latest
-    needs: [backend-test, frontend-lint-build]
+    needs: [backend-test, frontend-lint-build, matching-eval]
 
     steps:
       - uses: actions/checkout@v4
