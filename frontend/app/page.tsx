@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, Fragment, useEffect, useState } from 'react';
+import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import {
   excludeFeedbackVacancies,
   normalizeVacancyId,
@@ -11,6 +11,7 @@ import {
   formatRecommendationHeadline,
   formatRecommendationMetrics
 } from '../lib/recommendationStats';
+import { createDwellTracker, trackClick } from '../lib/telemetry';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -82,6 +83,7 @@ type VacancyMatch = {
   similarity_score: number;
   profile: Record<string, unknown> | null;
   tier?: 'strong' | 'maybe' | null;
+  match_run_id?: string | null;
 };
 
 type CuratedDirection = 'added' | 'rejected';
@@ -563,6 +565,42 @@ export default function DashboardPage() {
   }, [resumes, selectedResumeId]);
 
   const visibleMatches = excludeFeedbackVacancies(matches, dislikedVacancies, selectedVacancies, hiddenMatchIds);
+
+  const currentMatchRunId = visibleMatches[0]?.match_run_id ?? null;
+  const matchRunIdRef = useRef<string | null>(null);
+  matchRunIdRef.current = currentMatchRunId;
+  const cardRefs = useRef<Map<number, HTMLElement>>(new Map());
+  const dwellTrackerRef = useRef<ReturnType<typeof createDwellTracker> | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') {
+      return;
+    }
+    const tracker = createDwellTracker({ getRunId: () => matchRunIdRef.current });
+    dwellTrackerRef.current = tracker;
+    return () => {
+      tracker.dispose();
+      dwellTrackerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const tracker = dwellTrackerRef.current;
+    if (!tracker) return;
+    const seen = new Set<number>();
+    for (const match of visibleMatches) {
+      const id = normalizeVacancyId(match.vacancy_id);
+      seen.add(id);
+      const el = cardRefs.current.get(id);
+      if (el) tracker.observe(id, el);
+    }
+    for (const id of [...cardRefs.current.keys()]) {
+      if (!seen.has(id)) {
+        tracker.unobserve(id);
+        cardRefs.current.delete(id);
+      }
+    }
+  }, [visibleMatches]);
 
   function setPersistentJobId(jobId: string | null) {
     setCurrentJobId(jobId);
@@ -2378,7 +2416,18 @@ export default function DashboardPage() {
                         </p>
                       </div>
                     ) : null}
-                    <article className="vacancy-item">
+                    <article
+                      className="vacancy-item"
+                      data-vacancy-id={normalizeVacancyId(match.vacancy_id)}
+                      ref={(el) => {
+                        const id = normalizeVacancyId(match.vacancy_id);
+                        if (el) {
+                          cardRefs.current.set(id, el);
+                        } else {
+                          cardRefs.current.delete(id);
+                        }
+                      }}
+                    >
                       <h3>{match.title}</h3>
                       <p className="meta">
                         {match.company || 'Компания не указана'}
@@ -2465,7 +2514,20 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="vacancy-actions">
-                        <a href={match.source_url} target="_blank" rel="noreferrer">
+                        <a
+                          href={match.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() =>
+                            trackClick({
+                              vacancy_id: normalizeVacancyId(match.vacancy_id),
+                              click_kind: 'open_source',
+                              match_run_id: match.match_run_id ?? null,
+                              resume_id: selectedResumeId ?? null,
+                              position: matchIndex,
+                            })
+                          }
+                        >
                           Открыть источник
                         </a>
                         <button
@@ -2474,16 +2536,51 @@ export default function DashboardPage() {
                             matchingBusy ||
                             Boolean(applyingVacancyIds[normalizeVacancyId(match.vacancy_id)])
                           }
-                          onClick={() => void applyToVacancy(match)}
+                          onClick={() => {
+                            trackClick({
+                              vacancy_id: normalizeVacancyId(match.vacancy_id),
+                              click_kind: 'apply',
+                              match_run_id: match.match_run_id ?? null,
+                              resume_id: selectedResumeId ?? null,
+                              position: matchIndex,
+                            });
+                            void applyToVacancy(match);
+                          }}
                         >
                           {applyingVacancyIds[normalizeVacancyId(match.vacancy_id)]
                             ? 'Создаём…'
                             : 'Откликнуться'}
                         </button>
-                        <button className="secondary" disabled={matchingBusy} onClick={() => void likeVacancy(match)}>
+                        <button
+                          className="secondary"
+                          disabled={matchingBusy}
+                          onClick={() => {
+                            trackClick({
+                              vacancy_id: normalizeVacancyId(match.vacancy_id),
+                              click_kind: 'like',
+                              match_run_id: match.match_run_id ?? null,
+                              resume_id: selectedResumeId ?? null,
+                              position: matchIndex,
+                            });
+                            void likeVacancy(match);
+                          }}
+                        >
                           Плюс
                         </button>
-                        <button className="danger" disabled={matchingBusy} onClick={() => void dislikeVacancy(match)}>
+                        <button
+                          className="danger"
+                          disabled={matchingBusy}
+                          onClick={() => {
+                            trackClick({
+                              vacancy_id: normalizeVacancyId(match.vacancy_id),
+                              click_kind: 'dislike',
+                              match_run_id: match.match_run_id ?? null,
+                              resume_id: selectedResumeId ?? null,
+                              position: matchIndex,
+                            });
+                            void dislikeVacancy(match);
+                          }}
+                        >
                           Минус
                         </button>
                       </div>
