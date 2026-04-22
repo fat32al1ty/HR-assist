@@ -47,6 +47,13 @@ jobs:
             echo "== prune =="
             docker image prune -f
 
+            echo "== backfill: vacancy stated salary =="
+            # Idempotent — only touches profiles where salary_min/max is NULL.
+            # Phase 2.7 schema landed in migration 0021 but prod had never
+            # been backfilled; without this the UI salary badge is blank
+            # across every card.
+            docker compose exec -T backend python scripts/backfill_vacancy_salary.py || true
+
       - name: Health check
         uses: appleboy/ssh-action@v1
         with:
