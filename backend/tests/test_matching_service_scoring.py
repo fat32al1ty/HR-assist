@@ -72,8 +72,14 @@ class MatchingServiceScoringTests(unittest.TestCase):
         self.assertNotIn("vendor management", anchors)
 
     def test_business_monitoring_role_is_filtered_for_technical_profile(self) -> None:
-        self.assertTrue(_looks_business_monitoring_role("Head of financial monitoring", {"prometheus", "grafana"}))
-        self.assertFalse(_looks_business_monitoring_role("Head of SRE team", {"prometheus", "grafana"}))
+        self.assertTrue(
+            _looks_business_monitoring_role(
+                "Head of financial monitoring", {"prometheus", "grafana"}
+            )
+        )
+        self.assertFalse(
+            _looks_business_monitoring_role("Head of SRE team", {"prometheus", "grafana"})
+        )
 
     def test_hard_non_it_role_filter_blocks_chemistry_roles(self) -> None:
         self.assertTrue(
@@ -100,7 +106,9 @@ class MatchingServiceScoringTests(unittest.TestCase):
             payload,
             {"prometheus", "linux"},
             resume_skill_phrases=["SRE", "Linux", "Incident response"],
-            resume_phrase_aliases=_phrase_aliases("SRE").union(_phrase_aliases("Linux")).union(_phrase_aliases("Incident response")),
+            resume_phrase_aliases=_phrase_aliases("SRE")
+            .union(_phrase_aliases("Linux"))
+            .union(_phrase_aliases("Incident response")),
             resume_phrase_vectors={},
             embedding_cache={},
             embedding_budget={"calls_left": 0},
@@ -120,7 +128,9 @@ class MatchingServiceScoringTests(unittest.TestCase):
             payload,
             {"sre", "leadership", "incident"},
             resume_skill_phrases=["SRE", "team leadership", "incident response"],
-            resume_phrase_aliases=_phrase_aliases("SRE").union(_phrase_aliases("team leadership")).union(_phrase_aliases("incident response")),
+            resume_phrase_aliases=_phrase_aliases("SRE")
+            .union(_phrase_aliases("team leadership"))
+            .union(_phrase_aliases("incident response")),
             resume_phrase_vectors={},
             embedding_cache={},
             embedding_budget={"calls_left": 0},
@@ -176,6 +186,44 @@ class MatchingServiceScoringTests(unittest.TestCase):
         self.assertIn("K8s", profile["matched_skills"])
         # "Linux" was in resume but vacancy didn't ask for it — must NOT appear.
         self.assertNotIn("Linux", profile["matched_skills"])
+
+    def test_quant_year_requirement_satisfied_by_resume_total_years(self) -> None:
+        """Phase 1.9 PR B1: a 13-year senior must NOT see 'опыт в IT от 3 лет'
+        in the 'не хватает' bucket — we answer year thresholds from
+        resume.total_experience_years, not bag-of-words."""
+        payload = {
+            "must_have_skills": ["опыт в IT от 3 лет", "Python"],
+            "tools": [],
+        }
+        profile = _augment_profile_with_gap_insights(
+            payload,
+            {"python", "linux"},
+            resume_skill_phrases=["Python", "Linux"],
+            resume_phrase_aliases=_phrase_aliases("Python").union(_phrase_aliases("Linux")),
+            resume_phrase_vectors={},
+            embedding_cache={},
+            embedding_budget={"calls_left": 0},
+            resume_total_experience_years=13.0,
+        )
+        self.assertNotIn("опыт в IT от 3 лет", profile["missing_requirements"])
+        self.assertIn("опыт в IT от 3 лет", profile["matched_requirements"])
+
+    def test_quant_year_requirement_stays_missing_when_resume_years_too_low(self) -> None:
+        payload = {
+            "must_have_skills": ["5+ years of backend experience"],
+            "tools": [],
+        }
+        profile = _augment_profile_with_gap_insights(
+            payload,
+            {"python"},
+            resume_skill_phrases=["Python"],
+            resume_phrase_aliases=_phrase_aliases("Python"),
+            resume_phrase_vectors={},
+            embedding_cache={},
+            embedding_budget={"calls_left": 0},
+            resume_total_experience_years=2.0,
+        )
+        self.assertIn("5+ years of backend experience", profile["missing_requirements"])
 
     def test_matched_resume_skills_caps_and_dedupes(self) -> None:
         # Vacancy uses "kubernetes"; resume has both spellings — only one wins.

@@ -1,3 +1,4 @@
+import logging
 import re
 from math import sqrt
 from urllib.parse import urlparse
@@ -13,6 +14,8 @@ from app.services.embeddings import create_embedding
 from app.services.resume_profile_pipeline import persist_resume_profile
 from app.services.user_preference_profile_pipeline import recompute_user_preference_profile
 from app.services.vector_store import get_vector_store
+
+logger = logging.getLogger(__name__)
 
 TITLE_BOOST = 0.10
 TITLE_BOOST_PARTIAL = 0.05
@@ -912,10 +915,19 @@ def _requirement_matches_resume(
     resume_phrase_vectors: dict[str, list[float]],
     embedding_cache: dict[str, list[float]],
     embedding_budget: dict[str, int],
+    resume_total_experience_years: float | None = None,
 ) -> bool:
     req = _normalize_phrase(requirement)
     if not req:
         return True
+
+    # Phase 1.9 PR B1: answer "N+ years" quantitatively. If the requirement
+    # is phrased as a year threshold and the candidate has at least that
+    # many years on the resume, it's satisfied regardless of bag-of-words.
+    required_years = _detect_quantitative_experience_requirement(requirement)
+    if required_years is not None and resume_total_experience_years is not None:
+        if resume_total_experience_years >= float(required_years):
+            return True
 
     req_tokens = _tokenize_rich_text(req)
     if req_tokens.intersection(STRICT_REQUIREMENT_TOKENS):
@@ -977,6 +989,53 @@ def _requirement_matches_resume(
     return False
 
 
+# Phase 1.9 PR B1: quantitative experience detector.
+# Pre-existing matching false-positives on "missing": senior candidates
+# with 10+ years would see "опыт в IT от 3 лет" in the "не хватает"
+# bucket because the phrase never appeared in their hard_skills bag.
+# Detect the N-years ask quantitatively so we can answer it from
+# resume.total_experience_years instead of bag-of-words.
+_QUANT_EXPERIENCE_PATTERNS: tuple[re.Pattern, ...] = (
+    re.compile(r"\bот\s+(\d+)\s*(?:лет|года?|годов)\b", flags=re.IGNORECASE),
+    re.compile(r"(\d+)\s*\+\s*(?:лет|года?|годов)\b", flags=re.IGNORECASE),
+    re.compile(r"\bминимум\s+(\d+)\s*(?:лет|года?|годов)\b", flags=re.IGNORECASE),
+    re.compile(r"\bне\s+менее\s+(\d+)\s*(?:лет|года?|годов)\b", flags=re.IGNORECASE),
+    re.compile(r"(\d+)\s*(?:years?|yrs?)\b", flags=re.IGNORECASE),
+    re.compile(r"(\d+)\s*\+\s*years?\b", flags=re.IGNORECASE),
+)
+
+
+def _detect_quantitative_experience_requirement(text: str) -> int | None:
+    """Return the N from phrases like 'от N лет' / 'N+ years', else None."""
+    if not isinstance(text, str) or not text:
+        return None
+    for pattern in _QUANT_EXPERIENCE_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            try:
+                years = int(match.group(1))
+            except (TypeError, ValueError):
+                continue
+            if 0 < years <= 40:
+                return years
+    return None
+
+
+def _resume_total_experience_years(analysis: dict | None) -> float | None:
+    if not isinstance(analysis, dict):
+        return None
+    raw = analysis.get("total_experience_years")
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value < 0:
+        return None
+    return value
+
+
 def _extract_required_requirements(payload: dict) -> list[str]:
     ordered: list[str] = []
     seen: set[str] = set()
@@ -1001,6 +1060,7 @@ def _classify_requirements(
     embedding_budget: dict[str, int],
     max_missing: int = SEMANTIC_GAP_MAX_REQUIREMENTS_PER_VACANCY,
     max_matched: int = 10,
+    resume_total_experience_years: float | None = None,
 ) -> tuple[list[str], list[str]]:
     """Split a vacancy's required requirements into (matched, missing).
 
@@ -1021,6 +1081,7 @@ def _classify_requirements(
             resume_phrase_vectors=resume_phrase_vectors,
             embedding_cache=embedding_cache,
             embedding_budget=embedding_budget,
+            resume_total_experience_years=resume_total_experience_years,
         )
         if is_match:
             if len(matched) < max_matched:
@@ -1041,6 +1102,7 @@ def _missing_requirements(
     embedding_cache: dict[str, list[float]],
     embedding_budget: dict[str, int],
     max_items: int = SEMANTIC_GAP_MAX_REQUIREMENTS_PER_VACANCY,
+    resume_total_experience_years: float | None = None,
 ) -> list[str]:
     _, missing = _classify_requirements(
         payload,
@@ -1051,6 +1113,7 @@ def _missing_requirements(
         embedding_cache=embedding_cache,
         embedding_budget=embedding_budget,
         max_missing=max_items,
+        resume_total_experience_years=resume_total_experience_years,
     )
     return missing
 
@@ -1128,6 +1191,8 @@ def _augment_profile_with_gap_insights(
     resume_phrase_vectors: dict[str, list[float]],
     embedding_cache: dict[str, list[float]],
     embedding_budget: dict[str, int],
+    resume_total_experience_years: float | None = None,
+    vacancy_id: int | None = None,
 ) -> dict:
     source_profile: dict = payload if isinstance(payload, dict) else {}
     profile = dict(source_profile)
@@ -1139,7 +1204,20 @@ def _augment_profile_with_gap_insights(
         resume_phrase_vectors=resume_phrase_vectors,
         embedding_cache=embedding_cache,
         embedding_budget=embedding_budget,
+        resume_total_experience_years=resume_total_experience_years,
     )
+    # Phase 1.9 PR B1 telemetry: log the "не хватает" list so we can audit
+    # false positives offline without surfacing per-vacancy logging in the UI.
+    if missing:
+        try:
+            logger.info(
+                "matching.missing_requirement vacancy_id=%s count=%d items=%s",
+                vacancy_id,
+                len(missing),
+                missing,
+            )
+        except Exception:
+            pass
     profile["missing_requirements"] = missing
     profile["missing_requirements_count"] = len(missing)
     profile["required_requirements_count"] = len(_extract_required_requirements(source_profile))
@@ -1616,6 +1694,7 @@ def match_vacancies_for_resume(
     resume_roles = _build_resume_role_set(resume.analysis)
     resume_skill_phrases = _build_resume_skill_phrases(resume.analysis)
     resume_hard_skills = _extract_resume_hard_skills(resume.analysis)
+    resume_total_years = _resume_total_experience_years(resume.analysis)
     resume_phrase_aliases: set[str] = set()
     for phrase in resume_skill_phrases:
         resume_phrase_aliases.update(_phrase_aliases(phrase))
@@ -1743,6 +1822,8 @@ def match_vacancies_for_resume(
                         resume_phrase_vectors=resume_phrase_vectors,
                         embedding_cache=embedding_cache,
                         embedding_budget=embedding_budget,
+                        resume_total_experience_years=resume_total_years,
+                        vacancy_id=vacancy.id,
                     ),
                 },
             )
