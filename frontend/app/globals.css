@@ -1115,6 +1115,17 @@ select:focus {
   gap: 4px;
 }
 
+.warmup-tech {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.warmup-tech summary {
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+
 @media (max-width: 860px) {
   .headline,
   .workspace,

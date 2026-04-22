@@ -343,13 +343,13 @@ function sleep(ms: number): Promise<void> {
 function stageLabel(stage: string): string {
   switch (stage) {
     case 'queued':
-      return 'Задача в очереди...';
+      return 'В очереди...';
     case 'collecting':
-      return 'Собираем и фильтруем вакансии...';
+      return 'Ищем и отбираем вакансии...';
     case 'matching':
-      return 'Выполняем matching с резюме...';
+      return 'Сравниваем с резюме...';
     case 'finalizing':
-      return 'Формируем итоговую выдачу...';
+      return 'Готовим подборку...';
     case 'done':
       return 'Готово';
     case 'failed':
@@ -357,6 +357,13 @@ function stageLabel(stage: string): string {
     default:
       return 'Выполняется...';
   }
+}
+
+function formatCountdown(totalMs: number): string {
+  const clamped = Math.max(0, Math.floor(totalMs / 1000));
+  const minutes = Math.floor(clamped / 60);
+  const seconds = clamped % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 const WORK_FORMAT_OPTIONS: { value: WorkFormat; label: string }[] = [
@@ -433,6 +440,7 @@ export default function DashboardPage() {
   const [hiddenMatchIds, setHiddenMatchIds] = useState<number[]>([]);
   const [dashboardStats, setDashboardStats] = useState<DashboardStatsResponse | null>(null);
   const [warmupStatus, setWarmupStatus] = useState<WarmupStatusResponse | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const [userPrefs, setUserPrefs] = useState<UserPrefs | null>(null);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
   const [profileConfirmed, setProfileConfirmed] = useState(false);
@@ -523,6 +531,14 @@ export default function DashboardPage() {
     }, 20000);
     return () => window.clearInterval(timer);
   }, [token]);
+
+  useEffect(() => {
+    if (!warmupStatus?.enabled || !warmupStatus.last_finished_at) {
+      return;
+    }
+    const timer = window.setInterval(() => setNowTick(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [warmupStatus?.enabled, warmupStatus?.last_finished_at]);
 
   useEffect(() => {
     if (resumes.length === 0) {
@@ -1313,43 +1329,6 @@ export default function DashboardPage() {
     }
   }
 
-  async function recommendVacancies() {
-    if (!selectedResumeId) {
-      setMatchingMessage('Select a resume first.');
-      return;
-    }
-
-    setMatchingBusy(true);
-    setMatchingProgress(0);
-    setMatchingStage('');
-    setOpenaiUsageMessage('');
-    setLastMatchingQuery('');
-    setLastSources([]);
-    setPersistentJobId(null);
-    setMatchingMessage('Quick matching from indexed vacancies...');
-
-    try {
-      const quickMatches = await request<VacancyMatch[]>(`/api/vacancies/match/${selectedResumeId}?limit=20`);
-      const filteredQuickMatches = excludeFeedbackVacancies(
-        quickMatches,
-        dislikedVacancies,
-        selectedVacancies,
-        hiddenMatchIds
-      );
-      setMatches(filteredQuickMatches);
-      if (filteredQuickMatches.length > 0) {
-        setMatchingMessage(`Found matches: ${filteredQuickMatches.length}. Quick mode uses current index only.`);
-      } else {
-        setMatchingMessage('No matches in current index. Run "Update Vacancy Index" to expand coverage.');
-      }
-    } catch (error) {
-      setMatchingMessage(error instanceof Error ? error.message : 'Quick matching failed');
-    } finally {
-      setMatchingBusy(false);
-      await loadDashboardStats(selectedResumeId);
-    }
-  }
-
   async function cancelRecommendationJob() {
     if (!currentJobId || cancelRequested) {
       return;
@@ -1414,7 +1393,7 @@ export default function DashboardPage() {
         const status = await request<RecommendationJobStatusResponse>(`/api/vacancies/recommend/status/${started.job_id}`);
         applyJobSnapshot(status);
         if (status.status === 'running' || status.status === 'queued') {
-          setMatchingMessage(`Matching progress: ${formatMetricsInfo(status.metrics || {})}`);
+          setMatchingMessage(`Прогресс: ${formatMetricsInfo(status.metrics || {})}`);
         }
 
         if (status.openai_usage) {
@@ -1508,7 +1487,7 @@ export default function DashboardPage() {
         const status = await request<RecommendationJobStatusResponse>(`/api/vacancies/recommend/status/${snapshot.job_id}`);
         applyJobSnapshot(status);
         if (status.status === 'running' || status.status === 'queued') {
-          setMatchingMessage(`Matching progress: ${formatMetricsInfo(status.metrics || {})}`);
+          setMatchingMessage(`Прогресс: ${formatMetricsInfo(status.metrics || {})}`);
         }
         if (status.status === 'completed') {
           terminalStage = 'completed';
@@ -1939,25 +1918,62 @@ export default function DashboardPage() {
                   <p className="panel-note">Select resume to see scoped stats.</p>
                 )}
 
-                <h3>Background warmup</h3>
+                <h3>Автоматическое обновление</h3>
                 {warmupStatus ? (
-                  <ul className="stats-list">
-                    <li>Status: {warmupStatus.enabled ? (warmupStatus.running ? 'running' : 'idle') : 'disabled'}</li>
-                    <li>Cycle: {warmupStatus.cycle}</li>
-                    <li>Interval: {warmupStatus.interval_seconds}s</li>
-                    <li>Last duration: {warmupStatus.last_duration_seconds ?? 0}s</li>
-                    <li>Last indexed: {warmupStatus.last_metrics.indexed ?? 0}</li>
-                    <li>Last analyzed: {warmupStatus.last_metrics.analyzed ?? 0}</li>
-                    <li>Last fetched: {warmupStatus.last_metrics.fetched ?? 0}</li>
-                    <li>Backfill profiled: {warmupStatus.last_metrics.backfill_profiled ?? 0}</li>
-                    <li>Backfill considered: {warmupStatus.last_metrics.backfill_considered ?? 0}</li>
-                    <li>Queries per cycle: {warmupStatus.queries_per_cycle}</li>
-                    <li>Max analyzed/query: {warmupStatus.max_analyzed_per_query}</li>
-                    <li>Backfill/cycle: {warmupStatus.profile_backfill_enabled ? warmupStatus.profile_backfill_limit_per_cycle : 0}</li>
-                    {warmupStatus.last_error ? <li>Last error: {warmupStatus.last_error}</li> : null}
-                  </ul>
+                  warmupStatus.enabled ? (
+                    (() => {
+                      const intervalMin = Math.max(1, Math.round(warmupStatus.interval_seconds / 60));
+                      const finishedMs = warmupStatus.last_finished_at
+                        ? new Date(warmupStatus.last_finished_at).getTime()
+                        : null;
+                      const nextAt =
+                        finishedMs !== null ? finishedMs + warmupStatus.interval_seconds * 1000 : null;
+                      const remainingMs = nextAt !== null ? nextAt - nowTick : null;
+                      return (
+                        <>
+                          <p className="panel-note">Обновляем индекс вакансий каждые {intervalMin} мин.</p>
+                          {warmupStatus.running ? (
+                            <p className="panel-note">Сейчас идёт автоматическое обновление...</p>
+                          ) : remainingMs !== null ? (
+                            <p className="panel-note">
+                              Следующее обновление через {formatCountdown(remainingMs)}.
+                            </p>
+                          ) : (
+                            <p className="panel-note">Следующее обновление скоро.</p>
+                          )}
+                          {warmupStatus.last_error ? (
+                            <p className="message">Последняя ошибка: {warmupStatus.last_error}</p>
+                          ) : null}
+                          <details className="warmup-tech">
+                            <summary>Техническая статистика</summary>
+                            <ul className="stats-list">
+                              <li>Running: {warmupStatus.running ? 'yes' : 'no'}</li>
+                              <li>Cycle: {warmupStatus.cycle}</li>
+                              <li>Interval: {warmupStatus.interval_seconds}s</li>
+                              <li>Last duration: {warmupStatus.last_duration_seconds ?? 0}s</li>
+                              <li>Last indexed: {warmupStatus.last_metrics.indexed ?? 0}</li>
+                              <li>Last analyzed: {warmupStatus.last_metrics.analyzed ?? 0}</li>
+                              <li>Last fetched: {warmupStatus.last_metrics.fetched ?? 0}</li>
+                              <li>Backfill profiled: {warmupStatus.last_metrics.backfill_profiled ?? 0}</li>
+                              <li>Backfill considered: {warmupStatus.last_metrics.backfill_considered ?? 0}</li>
+                              <li>Queries per cycle: {warmupStatus.queries_per_cycle}</li>
+                              <li>Max analyzed/query: {warmupStatus.max_analyzed_per_query}</li>
+                              <li>
+                                Backfill/cycle:{' '}
+                                {warmupStatus.profile_backfill_enabled
+                                  ? warmupStatus.profile_backfill_limit_per_cycle
+                                  : 0}
+                              </li>
+                            </ul>
+                          </details>
+                        </>
+                      );
+                    })()
+                  ) : (
+                    <p className="panel-note">Автоматическое обновление выключено.</p>
+                  )
                 ) : (
-                  <p className="panel-note">Warmup status unavailable.</p>
+                  <p className="panel-note">Статус недоступен.</p>
                 )}
               </div>
             </aside>
@@ -2268,11 +2284,8 @@ export default function DashboardPage() {
                       </option>
                     ))}
                   </select>
-                  <button className="secondary" onClick={recommendVacancies} disabled={matchingBusy}>
-                    Быстрый подбор
-                  </button>
                   <button className="primary" onClick={refreshVacancyIndex} disabled={matchingBusy}>
-                    Обновить базу вакансий
+                    Обновить подбор
                   </button>
                 </div>
                 {matchingBusy || matchingProgress > 0 ? (
