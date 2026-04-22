@@ -1,0 +1,678 @@
+# Phase 1.9 PR B2 — minimal skill taxonomy.
+#
+# Starting point: ~55 clusters across sre/devops/platform/observability/
+# product_management/project_management/data_engineering/analytics.
+# Intentionally narrow to current product audience (techy jobseekers).
+# No legal, medical, construction, etc. — outside the ICP.
+#
+# Each entry:
+#   concept: canonical slug (lowercase, underscore) — purely for audit.
+#   domain: one of the MVP domains.
+#   forms_ru / forms_en: interchangeable phrases the matcher treats
+#     as equivalent. Both directions — if vacancy asks "планирование"
+#     and resume says "project management", we want a match.
+#
+# Adding a cluster = pure append. Renaming a concept = breaking change
+# (lives in vector cache keys etc.), so prefer to deprecate+add.
+
+- concept: planning
+  domain: project_management
+  forms_ru:
+    - планирование
+    - управление проектами
+    - приоритизация
+    - capacity planning
+    - ресурсное планирование
+    - дорожная карта
+    - roadmap
+  forms_en:
+    - planning
+    - project management
+    - prioritization
+    - agile planning
+    - resource planning
+    - roadmap planning
+
+- concept: task_setting
+  domain: project_management
+  forms_ru:
+    - постановка задач
+    - декомпозиция задач
+    - формулирование требований
+  forms_en:
+    - task setting
+    - task decomposition
+    - requirements formulation
+
+- concept: business_process_analysis
+  domain: project_management
+  forms_ru:
+    - анализ бизнес-процессов
+    - бизнес-анализ
+    - описание процессов
+  forms_en:
+    - business process analysis
+    - business analysis
+    - process mapping
+
+- concept: business_process_optimization
+  domain: project_management
+  forms_ru:
+    - оптимизация бизнес-процессов
+    - улучшение процессов
+    - process improvement
+  forms_en:
+    - business process optimization
+    - process optimization
+    - process improvement
+
+- concept: stakeholder_management
+  domain: project_management
+  forms_ru:
+    - работа со стейкхолдерами
+    - управление ожиданиями
+    - коммуникация со стейкхолдерами
+  forms_en:
+    - stakeholder management
+    - stakeholder communication
+    - expectation management
+
+- concept: agile
+  domain: project_management
+  forms_ru:
+    - agile
+    - эджайл
+    - гибкие методологии
+    - scrum
+    - kanban
+  forms_en:
+    - agile
+    - scrum
+    - kanban
+    - agile methodologies
+
+- concept: product_discovery
+  domain: product_management
+  forms_ru:
+    - продуктовый дискавери
+    - исследование пользователей
+    - customer development
+    - custdev
+  forms_en:
+    - product discovery
+    - user research
+    - customer development
+
+- concept: product_strategy
+  domain: product_management
+  forms_ru:
+    - продуктовая стратегия
+    - стратегия продукта
+    - product vision
+  forms_en:
+    - product strategy
+    - product vision
+
+- concept: product_metrics
+  domain: product_management
+  forms_ru:
+    - продуктовые метрики
+    - unit-экономика
+    - retention
+    - воронка
+    - funnel
+  forms_en:
+    - product metrics
+    - unit economics
+    - retention analysis
+    - funnel analysis
+
+- concept: ab_testing
+  domain: product_management
+  forms_ru:
+    - a/b тесты
+    - ab-тесты
+    - сплит-тесты
+    - эксперименты
+  forms_en:
+    - a/b testing
+    - split testing
+    - experimentation
+
+- concept: team_leadership
+  domain: project_management
+  forms_ru:
+    - руководство командой
+    - team lead
+    - управление командой
+    - наставничество
+    - менторинг
+  forms_en:
+    - team leadership
+    - team lead
+    - people management
+    - mentoring
+    - coaching
+
+- concept: hiring
+  domain: project_management
+  forms_ru:
+    - найм
+    - рекрутинг
+    - подбор персонала
+    - собеседования
+  forms_en:
+    - hiring
+    - recruiting
+    - interviewing
+
+- concept: kubernetes
+  domain: platform
+  forms_ru:
+    - kubernetes
+    - k8s
+    - кубернетес
+    - куб
+  forms_en:
+    - kubernetes
+    - k8s
+
+- concept: docker
+  domain: platform
+  forms_ru:
+    - docker
+    - докер
+    - контейнеризация
+  forms_en:
+    - docker
+    - containerization
+
+- concept: terraform
+  domain: devops
+  forms_ru:
+    - terraform
+    - терраформ
+    - iac
+    - infrastructure as code
+    - инфраструктура как код
+  forms_en:
+    - terraform
+    - infrastructure as code
+    - iac
+
+- concept: ansible
+  domain: devops
+  forms_ru:
+    - ansible
+    - ансибль
+    - configuration management
+  forms_en:
+    - ansible
+    - configuration management
+
+- concept: ci_cd
+  domain: devops
+  forms_ru:
+    - ci/cd
+    - сицд
+    - пайплайны
+    - gitlab ci
+    - github actions
+    - jenkins
+  forms_en:
+    - ci/cd
+    - continuous integration
+    - continuous delivery
+    - pipelines
+    - gitlab ci
+    - github actions
+    - jenkins
+
+- concept: prometheus
+  domain: observability
+  forms_ru:
+    - prometheus
+    - прометеус
+  forms_en:
+    - prometheus
+
+- concept: grafana
+  domain: observability
+  forms_ru:
+    - grafana
+    - графана
+  forms_en:
+    - grafana
+
+- concept: elk_stack
+  domain: observability
+  forms_ru:
+    - elk
+    - elasticsearch
+    - logstash
+    - kibana
+    - opensearch
+  forms_en:
+    - elk
+    - elasticsearch
+    - logstash
+    - kibana
+    - opensearch
+
+- concept: metrics_monitoring
+  domain: observability
+  forms_ru:
+    - мониторинг
+    - сбор метрик
+    - алертинг
+    - alerting
+  forms_en:
+    - monitoring
+    - metrics collection
+    - alerting
+
+- concept: tracing
+  domain: observability
+  forms_ru:
+    - трейсинг
+    - opentelemetry
+    - jaeger
+    - tempo
+    - distributed tracing
+  forms_en:
+    - tracing
+    - distributed tracing
+    - opentelemetry
+    - jaeger
+
+- concept: log_aggregation
+  domain: observability
+  forms_ru:
+    - сбор логов
+    - агрегация логов
+    - loki
+    - log aggregation
+  forms_en:
+    - log aggregation
+    - log collection
+    - loki
+
+- concept: incident_management
+  domain: sre
+  forms_ru:
+    - управление инцидентами
+    - реагирование на инциденты
+    - on-call
+    - oncall
+    - дежурство
+    - postmortem
+    - разбор инцидентов
+  forms_en:
+    - incident management
+    - incident response
+    - on-call
+    - postmortem
+
+- concept: slo_sli
+  domain: sre
+  forms_ru:
+    - slo
+    - sli
+    - sla
+    - уровень обслуживания
+    - бюджет ошибок
+    - error budget
+  forms_en:
+    - slo
+    - sli
+    - sla
+    - error budget
+    - service level objectives
+
+- concept: chaos_engineering
+  domain: sre
+  forms_ru:
+    - chaos engineering
+    - хаос-инжиниринг
+    - chaos monkey
+  forms_en:
+    - chaos engineering
+    - chaos testing
+
+- concept: capacity_planning
+  domain: sre
+  forms_ru:
+    - планирование мощностей
+    - capacity planning
+    - прогноз нагрузки
+  forms_en:
+    - capacity planning
+    - load forecasting
+
+- concept: aws
+  domain: platform
+  forms_ru:
+    - aws
+    - amazon web services
+    - амазон клауд
+  forms_en:
+    - aws
+    - amazon web services
+
+- concept: gcp
+  domain: platform
+  forms_ru:
+    - gcp
+    - google cloud
+  forms_en:
+    - gcp
+    - google cloud
+    - google cloud platform
+
+- concept: azure
+  domain: platform
+  forms_ru:
+    - azure
+    - microsoft azure
+  forms_en:
+    - azure
+    - microsoft azure
+
+- concept: yandex_cloud
+  domain: platform
+  forms_ru:
+    - yandex cloud
+    - яндекс облако
+    - yc
+  forms_en:
+    - yandex cloud
+
+- concept: linux_admin
+  domain: platform
+  forms_ru:
+    - linux
+    - линукс
+    - администрирование linux
+    - системное администрирование
+  forms_en:
+    - linux
+    - linux administration
+    - system administration
+
+- concept: networking
+  domain: platform
+  forms_ru:
+    - сети
+    - tcp/ip
+    - bgp
+    - vpn
+    - сетевые технологии
+  forms_en:
+    - networking
+    - tcp/ip
+    - bgp
+    - vpn
+
+- concept: python
+  domain: platform
+  forms_ru:
+    - python
+    - питон
+  forms_en:
+    - python
+
+- concept: golang
+  domain: platform
+  forms_ru:
+    - golang
+    - go
+    - го
+  forms_en:
+    - golang
+    - go
+
+- concept: bash_scripting
+  domain: platform
+  forms_ru:
+    - bash
+    - shell scripting
+    - скрипты
+  forms_en:
+    - bash
+    - shell scripting
+    - bash scripting
+
+- concept: git
+  domain: devops
+  forms_ru:
+    - git
+    - гит
+    - version control
+    - контроль версий
+  forms_en:
+    - git
+    - version control
+
+- concept: database_admin
+  domain: data_engineering
+  forms_ru:
+    - администрирование бд
+    - dba
+    - postgresql
+    - mysql
+    - базы данных
+  forms_en:
+    - database administration
+    - dba
+    - postgresql
+    - mysql
+
+- concept: sql
+  domain: data_engineering
+  forms_ru:
+    - sql
+    - написание запросов
+    - оптимизация запросов
+  forms_en:
+    - sql
+    - query writing
+    - query optimization
+
+- concept: nosql
+  domain: data_engineering
+  forms_ru:
+    - nosql
+    - mongodb
+    - redis
+    - cassandra
+  forms_en:
+    - nosql
+    - mongodb
+    - redis
+    - cassandra
+
+- concept: etl
+  domain: data_engineering
+  forms_ru:
+    - etl
+    - конвейеры данных
+    - data pipeline
+    - airflow
+  forms_en:
+    - etl
+    - data pipelines
+    - airflow
+
+- concept: data_warehouse
+  domain: data_engineering
+  forms_ru:
+    - хранилище данных
+    - dwh
+    - snowflake
+    - bigquery
+    - clickhouse
+  forms_en:
+    - data warehouse
+    - dwh
+    - snowflake
+    - bigquery
+    - clickhouse
+
+- concept: kafka
+  domain: data_engineering
+  forms_ru:
+    - kafka
+    - кафка
+    - streaming
+    - event streaming
+  forms_en:
+    - kafka
+    - event streaming
+    - message streaming
+
+- concept: sql_analytics
+  domain: analytics
+  forms_ru:
+    - sql-аналитика
+    - продуктовая аналитика в sql
+    - дашборды
+  forms_en:
+    - sql analytics
+    - analytical sql
+    - dashboarding
+
+- concept: bi_tools
+  domain: analytics
+  forms_ru:
+    - bi
+    - metabase
+    - tableau
+    - power bi
+    - superset
+  forms_en:
+    - bi
+    - metabase
+    - tableau
+    - power bi
+    - superset
+
+- concept: python_analytics
+  domain: analytics
+  forms_ru:
+    - аналитика на python
+    - pandas
+    - numpy
+    - jupyter
+  forms_en:
+    - python for analytics
+    - pandas
+    - numpy
+    - jupyter
+
+- concept: statistics
+  domain: analytics
+  forms_ru:
+    - статистика
+    - анализ данных
+    - проверка гипотез
+  forms_en:
+    - statistics
+    - data analysis
+    - hypothesis testing
+
+- concept: security_awareness
+  domain: platform
+  forms_ru:
+    - информационная безопасность
+    - ib
+    - infosec
+    - owasp
+  forms_en:
+    - information security
+    - infosec
+    - owasp
+
+- concept: auth_systems
+  domain: platform
+  forms_ru:
+    - аутентификация
+    - oauth
+    - sso
+    - keycloak
+    - idp
+  forms_en:
+    - authentication
+    - oauth
+    - sso
+    - keycloak
+
+- concept: secrets_management
+  domain: devops
+  forms_ru:
+    - управление секретами
+    - vault
+    - hashicorp vault
+    - aws secrets manager
+  forms_en:
+    - secrets management
+    - vault
+    - hashicorp vault
+
+- concept: service_mesh
+  domain: platform
+  forms_ru:
+    - service mesh
+    - istio
+    - linkerd
+  forms_en:
+    - service mesh
+    - istio
+    - linkerd
+
+- concept: api_gateway
+  domain: platform
+  forms_ru:
+    - api gateway
+    - kong
+    - nginx
+    - traefik
+  forms_en:
+    - api gateway
+    - kong
+    - nginx
+    - traefik
+
+- concept: message_queues
+  domain: platform
+  forms_ru:
+    - очереди сообщений
+    - rabbitmq
+    - nats
+    - sqs
+  forms_en:
+    - message queues
+    - rabbitmq
+    - nats
+    - sqs
+
+- concept: technical_writing
+  domain: project_management
+  forms_ru:
+    - техническая документация
+    - техписательство
+    - документирование
+    - runbook
+  forms_en:
+    - technical writing
+    - documentation
+    - runbooks
+
+- concept: presentation_skills
+  domain: project_management
+  forms_ru:
+    - презентационные навыки
+    - выступление
+    - защита проектов
+  forms_en:
+    - presentation skills
+    - public speaking

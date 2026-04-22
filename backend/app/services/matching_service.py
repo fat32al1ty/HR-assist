@@ -12,6 +12,7 @@ from app.repositories.user_vacancy_feedback import list_disliked_vacancy_ids, li
 from app.repositories.vacancies import get_vacancy_by_id
 from app.services.embeddings import create_embedding
 from app.services.resume_profile_pipeline import persist_resume_profile
+from app.services.skill_taxonomy import expand_concept as expand_skill_concept
 from app.services.user_preference_profile_pipeline import recompute_user_preference_profile
 from app.services.vector_store import get_vector_store
 
@@ -943,6 +944,22 @@ def _requirement_matches_resume(
     req_aliases = _phrase_aliases(req)
     if req_aliases.intersection(resume_phrase_aliases):
         return True
+
+    # Phase 1.9 PR B2: curated RU↔EN concept clusters. "планирование" in a
+    # vacancy must match "project management" on a resume even though the
+    # bag-of-words and phrase-alias layers miss the bilingual bridge.
+    taxonomy_forms = expand_skill_concept(req)
+    if taxonomy_forms:
+        candidate_aliases: set[str] = set()
+        for form in taxonomy_forms:
+            candidate_aliases.update(_phrase_aliases(form))
+        if candidate_aliases.intersection(resume_phrase_aliases):
+            return True
+        taxonomy_tokens: set[str] = set()
+        for form in taxonomy_forms:
+            taxonomy_tokens.update(_tokenize_rich_text(form))
+        if taxonomy_tokens and taxonomy_tokens.intersection(resume_skill_tokens):
+            return True
 
     for group in SKILL_ALIAS_GROUPS:
         normalized_group = {_normalize_phrase(item) for item in group}

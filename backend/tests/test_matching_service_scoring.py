@@ -187,6 +187,43 @@ class MatchingServiceScoringTests(unittest.TestCase):
         # "Linux" was in resume but vacancy didn't ask for it — must NOT appear.
         self.assertNotIn("Linux", profile["matched_skills"])
 
+    def test_gap_insights_resolves_via_taxonomy(self) -> None:
+        """Phase 1.9 PR B2: the four complaint phrases from the plan must
+        match RU-side phrasing via the taxonomy, not just token overlap."""
+        payload = {
+            "must_have_skills": [
+                "планирование",
+                "постановка задач",
+                "анализ бизнес-процессов",
+                "оптимизация бизнес-процессов",
+            ],
+            "tools": [],
+        }
+        profile = _augment_profile_with_gap_insights(
+            payload,
+            # Resume bag-of-words: only EN forms, no literal RU overlap.
+            {"project", "management", "task", "decomposition", "business", "analysis", "process"},
+            resume_skill_phrases=[
+                "Project management",
+                "Task decomposition",
+                "Business analysis",
+                "Process improvement",
+            ],
+            resume_phrase_aliases=_phrase_aliases("Project management")
+            .union(_phrase_aliases("Task decomposition"))
+            .union(_phrase_aliases("Business analysis"))
+            .union(_phrase_aliases("Process improvement")),
+            resume_phrase_vectors={},
+            embedding_cache={},
+            embedding_budget={"calls_left": 0},
+        )
+        self.assertEqual(
+            profile["missing_requirements"],
+            [],
+            f"Expected taxonomy to match all four; got missing={profile['missing_requirements']}",
+        )
+        self.assertEqual(profile["missing_requirements_count"], 0)
+
     def test_quant_year_requirement_satisfied_by_resume_total_years(self) -> None:
         """Phase 1.9 PR B1: a 13-year senior must NOT see 'опыт в IT от 3 лет'
         in the 'не хватает' bucket — we answer year thresholds from
