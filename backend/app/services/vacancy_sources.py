@@ -4,6 +4,7 @@ import html
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -68,7 +69,7 @@ def _record_parse_skip(*, source: str, url: str, reason: str) -> None:
 
 
 REQUEST_HEADERS = {
-    "User-Agent": "HR-Assistant-Bot/1.0 (+https://localhost)",
+    "User-Agent": "HR-Assist-Bot/1.0 (+https://github.com/fat32al1ty/HR-assist)",
     "Accept-Language": "ru,en;q=0.9",
 }
 MAX_PUBLIC_SOURCE_PAGES = 3
@@ -77,6 +78,7 @@ MAX_PREVIEW_ENRICH = 4
 FETCH_TIMEOUT_SECONDS = 4
 ENRICH_TIME_BUDGET_SECONDS = 4
 HH_PUBLIC_API_URL = "https://api.hh.ru/vacancies"
+HH_CONCURRENCY = 3
 ALLOWED_JOB_HOSTS = (
     "hh.ru",
     "career.habr.com",
@@ -477,6 +479,94 @@ def _format_hh_date_from(value: datetime) -> str:
     return value.strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
+def _fetch_hh_page(
+    *, query: str, per_page: int, page: int, date_from: datetime | None
+) -> list[dict[str, Any]]:
+    params: dict[str, Any] = {
+        "text": query,
+        "per_page": per_page,
+        "page": page,
+        "area": settings.hh_area,
+        "search_field": ["name", "company_name", "description"],
+    }
+    if date_from is not None:
+        params["date_from"] = _format_hh_date_from(date_from)
+    try:
+        response = _hh_get_with_fallback(params=params)
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        body = (exc.response.text or "")[:200] if exc.response is not None else ""
+        logger.warning(
+            "hh_api_http_error status=%s page=%s query=%r body=%s",
+            exc.response.status_code if exc.response is not None else "?",
+            page,
+            query,
+            body,
+        )
+        return []
+    except httpx.RequestError as exc:
+        logger.warning("hh_api_request_error page=%s query=%r error=%s", page, query, exc)
+        return []
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        logger.warning("hh_api_json_error page=%s query=%r error=%s", page, query, exc)
+        return []
+    items = payload.get("items", []) if isinstance(payload, dict) else []
+    return items if isinstance(items, list) else []
+
+
+def _parse_hh_items(
+    items: list[dict[str, Any]],
+    *,
+    vacancies: list[dict[str, Any]],
+    seen_urls: set[str],
+    count: int,
+) -> bool:
+    """Append parsed items to `vacancies` in-place. Returns True when full."""
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        title = _to_str(item.get("name"))
+        source_url = _to_str(item.get("alternate_url")) or _to_str(item.get("url"))
+        if not title or not source_url:
+            continue
+        source_url = _normalize_hh_url(source_url)
+        if source_url in seen_urls:
+            continue
+        seen_urls.add(source_url)
+
+        employer = item.get("employer")
+        area = item.get("area")
+        snippet = item.get("snippet")
+        company = _to_str(employer.get("name")) if isinstance(employer, dict) else None
+        location = _to_str(area.get("name")) if isinstance(area, dict) else None
+        requirement = None
+        responsibility = None
+        if isinstance(snippet, dict):
+            requirement = _to_str(snippet.get("requirement"))
+            responsibility = _to_str(snippet.get("responsibility"))
+
+        raw_text = "\n".join(
+            part for part in [title, company, location, requirement, responsibility] if part
+        )
+
+        vacancies.append(
+            {
+                "source": "hh_api",
+                "source_url": source_url,
+                "title": title[:512],
+                "company": company,
+                "location": location,
+                "raw_payload": item,
+                "raw_text": _strip_html(raw_text) if raw_text else None,
+            }
+        )
+        if len(vacancies) >= count:
+            return True
+    return False
+
+
 def _search_hh_public_api_vacancies(
     *,
     query: str,
@@ -489,62 +579,55 @@ def _search_hh_public_api_vacancies(
     per_page = min(max(count, 30), 100)
     max_pages = max(MAX_API_SOURCE_PAGES, 8)
     first_page = max(0, start_page)
-    for page in range(first_page, first_page + max_pages):
-        params: dict[str, Any] = {
-            "text": query,
-            "per_page": per_page,
-            "page": page,
-            "area": settings.hh_area,
-            "search_field": ["name", "company_name", "description"],
+
+    # Fetch the first HH_CONCURRENCY pages in parallel. In the common case
+    # (count=40, per_page=100) the first wave satisfies the request; the
+    # sequential fall-through only runs for deep scans.
+    wave_size = min(HH_CONCURRENCY, max_pages)
+    wave_pages = list(range(first_page, first_page + wave_size))
+    page_items: dict[int, list[dict[str, Any]]] = {}
+    with ThreadPoolExecutor(max_workers=HH_CONCURRENCY) as pool:
+        futures = {
+            pool.submit(
+                _fetch_hh_page,
+                query=query,
+                per_page=per_page,
+                page=page,
+                date_from=date_from,
+            ): page
+            for page in wave_pages
         }
-        if date_from is not None:
-            params["date_from"] = _format_hh_date_from(date_from)
-        response = _hh_get_with_fallback(params=params)
-        response.raise_for_status()
-        payload = response.json()
-        items = payload.get("items", []) if isinstance(payload, dict) else []
+        for future in as_completed(futures):
+            page_num = futures[future]
+            try:
+                page_items[page_num] = future.result()
+            except Exception as exc:
+                logger.warning(
+                    "hh_api_worker_failed page=%s query=%r error=%s", page_num, query, exc
+                )
+                page_items[page_num] = []
+
+    last_wave_empty = False
+    for page in wave_pages:
+        items = page_items.get(page, [])
+        if not items:
+            last_wave_empty = True
+            continue
+        last_wave_empty = False
+        if _parse_hh_items(items, vacancies=vacancies, seen_urls=seen_urls, count=count):
+            return vacancies
+
+    # Only continue sequentially if the first wave produced results on its
+    # last page — otherwise we've very likely exhausted HH.
+    if last_wave_empty or len(vacancies) >= count:
+        return vacancies
+
+    for page in range(first_page + wave_size, first_page + max_pages):
+        items = _fetch_hh_page(query=query, per_page=per_page, page=page, date_from=date_from)
         if not items:
             break
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            title = _to_str(item.get("name"))
-            source_url = _to_str(item.get("alternate_url")) or _to_str(item.get("url"))
-            if not title or not source_url:
-                continue
-            source_url = _normalize_hh_url(source_url)
-            if source_url in seen_urls:
-                continue
-            seen_urls.add(source_url)
-
-            employer = item.get("employer")
-            area = item.get("area")
-            snippet = item.get("snippet")
-            company = _to_str(employer.get("name")) if isinstance(employer, dict) else None
-            location = _to_str(area.get("name")) if isinstance(area, dict) else None
-            requirement = None
-            responsibility = None
-            if isinstance(snippet, dict):
-                requirement = _to_str(snippet.get("requirement"))
-                responsibility = _to_str(snippet.get("responsibility"))
-
-            raw_text = "\n".join(
-                part for part in [title, company, location, requirement, responsibility] if part
-            )
-
-            vacancies.append(
-                {
-                    "source": "hh_api",
-                    "source_url": source_url,
-                    "title": title[:512],
-                    "company": company,
-                    "location": location,
-                    "raw_payload": item,
-                    "raw_text": _strip_html(raw_text) if raw_text else None,
-                }
-            )
-            if len(vacancies) >= count:
-                return vacancies
+        if _parse_hh_items(items, vacancies=vacancies, seen_urls=seen_urls, count=count):
+            return vacancies
     return vacancies
 
 
@@ -645,7 +728,14 @@ def search_vacancies(
             start_page=page_offset,
             date_from=date_from,
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "hh_search_failed query=%r count=%s page_offset=%s error=%s",
+            query,
+            count,
+            page_offset,
+            exc,
+        )
         aggregated = []
 
     deduplicated: list[dict[str, Any]] = []
