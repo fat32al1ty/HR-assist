@@ -71,15 +71,23 @@ class MatchingSourceAndResumeHealTest(unittest.TestCase):
         with (
             patch("app.services.matching_service.get_resume_for_user", return_value=self._resume()),
             patch("app.services.matching_service.get_vector_store", return_value=vector_store),
-            patch("app.services.matching_service.recompute_user_preference_profile", return_value=None),
+            patch(
+                "app.services.matching_service.recompute_user_preference_profile", return_value=None
+            ),
             patch("app.services.matching_service.list_disliked_vacancy_ids", return_value=[]),
             patch("app.services.matching_service.list_liked_vacancy_ids", return_value=[]),
+            patch("app.services.matching_service.list_added_skill_texts", return_value=[]),
+            patch("app.services.matching_service.list_rejected_skill_texts", return_value=[]),
             patch(
                 "app.services.matching_service.get_vacancy_by_id",
-                side_effect=lambda db, vacancy_id: vacancy_non_hh if vacancy_id == 1 else vacancy_hh,
+                side_effect=lambda db, vacancy_id: (
+                    vacancy_non_hh if vacancy_id == 1 else vacancy_hh
+                ),
             ),
         ):
-            matches = match_vacancies_for_resume(SimpleNamespace(), resume_id=13, user_id=3, limit=10)
+            matches = match_vacancies_for_resume(
+                SimpleNamespace(), resume_id=13, user_id=3, limit=10
+            )
 
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["vacancy_id"], 2)
@@ -119,13 +127,19 @@ class MatchingSourceAndResumeHealTest(unittest.TestCase):
         with (
             patch("app.services.matching_service.get_resume_for_user", return_value=self._resume()),
             patch("app.services.matching_service.get_vector_store", return_value=vector_store),
-            patch("app.services.matching_service.recompute_user_preference_profile", return_value=None),
+            patch(
+                "app.services.matching_service.recompute_user_preference_profile", return_value=None
+            ),
             patch("app.services.matching_service.list_disliked_vacancy_ids", return_value=[]),
             patch("app.services.matching_service.list_liked_vacancy_ids", return_value=[]),
+            patch("app.services.matching_service.list_added_skill_texts", return_value=[]),
+            patch("app.services.matching_service.list_rejected_skill_texts", return_value=[]),
             patch("app.services.matching_service.get_vacancy_by_id", return_value=vacancy_hh),
             patch("app.services.matching_service.persist_resume_profile") as mock_persist,
         ):
-            matches = match_vacancies_for_resume(SimpleNamespace(), resume_id=13, user_id=3, limit=10)
+            matches = match_vacancies_for_resume(
+                SimpleNamespace(), resume_id=13, user_id=3, limit=10
+            )
 
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["vacancy_id"], 2)

@@ -7,6 +7,12 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.repositories.resume_user_skills import (
+    count_recent_added_curations,
+    delete_curated_skill,
+    list_curated_skills,
+    upsert_curated_skill,
+)
 from app.repositories.resumes import (
     ResumeLimitExceeded,
     activate_resume,
@@ -19,6 +25,9 @@ from app.repositories.resumes import (
 )
 from app.repositories.users import update_preferences
 from app.schemas.resume import (
+    CuratedSkillCreate,
+    CuratedSkillRead,
+    CuratedSkillResponse,
     ResumeLabelUpdate,
     ResumeProfileConfirmRequest,
     ResumeProfileConfirmResponse,
@@ -222,3 +231,78 @@ def confirm_resume_profile(
         resume=ResumeRead.model_validate(resume),
         preferences=preferences,
     )
+
+
+# Phase 1.9 PR C1 — user-curated skills (✓ "у меня это есть" / ✗ "не моё").
+# After B1 + B2 tightened the matcher, these endpoints give users an
+# explicit override for the remaining cases where the automation is
+# still wrong. One-click per card, case-insensitive dedupe per resume.
+CURATED_SKILL_WARN_THRESHOLD = 5
+
+
+@router.post(
+    "/{resume_id}/skills/curate",
+    response_model=CuratedSkillResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def curate_resume_skill(
+    resume_id: int,
+    payload: CuratedSkillCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> CuratedSkillResponse:
+    resume = get_resume_for_user(db, resume_id=resume_id, user_id=current_user.id)
+    if resume is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+
+    try:
+        row = upsert_curated_skill(
+            db,
+            resume_id=resume.id,
+            skill_text=payload.skill,
+            direction=payload.direction,
+            source_vacancy_id=payload.vacancy_id,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+    recent_added = count_recent_added_curations(db, resume_id=resume.id)
+    return CuratedSkillResponse(
+        skill=CuratedSkillRead.model_validate(row),
+        warn_sanity_check=recent_added > CURATED_SKILL_WARN_THRESHOLD,
+        recent_added_count=recent_added,
+    )
+
+
+@router.get(
+    "/{resume_id}/skills/curate",
+    response_model=list[CuratedSkillRead],
+)
+def list_resume_curated_skills(
+    resume_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[CuratedSkillRead]:
+    resume = get_resume_for_user(db, resume_id=resume_id, user_id=current_user.id)
+    if resume is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+    rows = list_curated_skills(db, resume_id=resume.id)
+    return [CuratedSkillRead.model_validate(row) for row in rows]
+
+
+@router.delete(
+    "/{resume_id}/skills/curate/{skill_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_resume_curated_skill(
+    resume_id: int,
+    skill_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    resume = get_resume_for_user(db, resume_id=resume_id, user_id=current_user.id)
+    if resume is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume not found")
+    removed = delete_curated_skill(db, resume_id=resume.id, skill_id=skill_id)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="curated_skill_not_found")

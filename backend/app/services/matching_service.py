@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.models.vacancy import Vacancy
+from app.repositories.resume_user_skills import (
+    list_added_skill_texts,
+    list_rejected_skill_texts,
+)
 from app.repositories.resumes import get_resume_for_user
 from app.repositories.user_vacancy_feedback import list_disliked_vacancy_ids, list_liked_vacancy_ids
 from app.repositories.vacancies import get_vacancy_by_id
@@ -1210,6 +1214,7 @@ def _augment_profile_with_gap_insights(
     embedding_budget: dict[str, int],
     resume_total_experience_years: float | None = None,
     vacancy_id: int | None = None,
+    rejected_skill_norms: set[str] | None = None,
 ) -> dict:
     source_profile: dict = payload if isinstance(payload, dict) else {}
     profile = dict(source_profile)
@@ -1223,6 +1228,13 @@ def _augment_profile_with_gap_insights(
         embedding_budget=embedding_budget,
         resume_total_experience_years=resume_total_experience_years,
     )
+    # Phase 1.9 PR C1: strip rejected skills from output so the UI
+    # doesn't keep showing items the user explicitly disowned.
+    rejected = rejected_skill_norms or set()
+    if rejected:
+        matched_requirements = [
+            req for req in matched_requirements if _normalize_phrase(req) not in rejected
+        ]
     # Phase 1.9 PR B1 telemetry: log the "не хватает" list so we can audit
     # false positives offline without surfacing per-vacancy logging in the UI.
     if missing:
@@ -1240,9 +1252,12 @@ def _augment_profile_with_gap_insights(
     profile["required_requirements_count"] = len(_extract_required_requirements(source_profile))
     profile["matched_requirements"] = matched_requirements
     vacancy_skill_tokens = _build_vacancy_skill_set(source_profile)
-    profile["matched_skills"] = _matched_resume_skills_for_vacancy(
+    matched_skills = _matched_resume_skills_for_vacancy(
         resume_hard_skills or [], vacancy_skill_tokens
     )
+    if rejected:
+        matched_skills = [s for s in matched_skills if _normalize_phrase(s) not in rejected]
+    profile["matched_skills"] = matched_skills
     return profile
 
 
@@ -1712,6 +1727,26 @@ def match_vacancies_for_resume(
     resume_skill_phrases = _build_resume_skill_phrases(resume.analysis)
     resume_hard_skills = _extract_resume_hard_skills(resume.analysis)
     resume_total_years = _resume_total_experience_years(resume.analysis)
+
+    # Phase 1.9 PR C1: user-curated skills override the LLM parse.
+    # `added` skills get folded into every resume-side input the matcher
+    # looks at (token bag, phrases, hard-skills list). `rejected` skills
+    # are stripped from output (matched_requirements, matched_skills)
+    # so the UI doesn't keep surfacing items the user explicitly
+    # disowned — even if the matcher still thinks they align.
+    user_added_skills = list_added_skill_texts(db, resume_id=resume_id)
+    user_rejected_skills = list_rejected_skill_texts(db, resume_id=resume_id)
+    if user_added_skills:
+        existing_hard_lower = {s.lower() for s in resume_hard_skills}
+        for skill in user_added_skills:
+            resume_skill_phrases.append(skill)
+            resume_skills.update(_tokenize_rich_text(skill))
+            if skill.lower() not in existing_hard_lower:
+                resume_hard_skills.append(skill)
+                existing_hard_lower.add(skill.lower())
+    rejected_normalized = {_normalize_phrase(s) for s in user_rejected_skills if s}
+    rejected_normalized.discard("")
+
     resume_phrase_aliases: set[str] = set()
     for phrase in resume_skill_phrases:
         resume_phrase_aliases.update(_phrase_aliases(phrase))
@@ -1841,6 +1876,7 @@ def match_vacancies_for_resume(
                         embedding_budget=embedding_budget,
                         resume_total_experience_years=resume_total_years,
                         vacancy_id=vacancy.id,
+                        rejected_skill_norms=rejected_normalized,
                     ),
                 },
             )

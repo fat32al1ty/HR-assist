@@ -145,3 +145,43 @@ class ResumeProfileConfirmRequest(BaseModel):
 class ResumeProfileConfirmResponse(BaseModel):
     resume: ResumeRead
     preferences: dict[str, Any]
+
+
+CurationDirection = Literal["added", "rejected"]
+
+CURATED_SKILL_TEXT_MAX = 160
+
+
+class CuratedSkillCreate(BaseModel):
+    """Phase 1.9 PR C1 — payload for POST /resumes/{id}/skills/curate."""
+
+    skill: str = Field(..., min_length=1, max_length=CURATED_SKILL_TEXT_MAX)
+    direction: CurationDirection
+    vacancy_id: int | None = None
+
+    @field_validator("skill")
+    @classmethod
+    def _strip_skill(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("skill must not be blank")
+        return stripped
+
+
+class CuratedSkillRead(BaseModel):
+    id: int
+    skill_text: str
+    direction: CurationDirection
+    source_vacancy_id: int | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CuratedSkillResponse(BaseModel):
+    """Response from POST /curate — returns the stored row plus a soft
+    sanity flag the frontend can render as a gentle banner."""
+
+    skill: CuratedSkillRead
+    warn_sanity_check: bool = False
+    recent_added_count: int = 0

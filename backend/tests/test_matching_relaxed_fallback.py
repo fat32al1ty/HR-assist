@@ -46,18 +46,26 @@ class MatchingRelaxedFallbackTest(unittest.TestCase):
         with (
             patch("app.services.matching_service.get_resume_for_user", return_value=resume),
             patch("app.services.matching_service.get_vector_store", return_value=vector_store),
-            patch("app.services.matching_service.recompute_user_preference_profile", return_value=None),
+            patch(
+                "app.services.matching_service.recompute_user_preference_profile", return_value=None
+            ),
             patch("app.services.matching_service.list_disliked_vacancy_ids", return_value=[]),
             patch("app.services.matching_service.list_liked_vacancy_ids", return_value=[]),
+            patch("app.services.matching_service.list_added_skill_texts", return_value=[]),
+            patch("app.services.matching_service.list_rejected_skill_texts", return_value=[]),
             patch("app.services.matching_service.get_vacancy_by_id", return_value=vacancy),
             patch("app.services.matching_service._host_allowed_for_matching", return_value=True),
             patch("app.services.matching_service._looks_non_vacancy_page", return_value=False),
-            patch("app.services.matching_service._looks_archived_vacancy_strict", return_value=False),
+            patch(
+                "app.services.matching_service._looks_archived_vacancy_strict", return_value=False
+            ),
             patch("app.services.matching_service._looks_like_listing_page", return_value=False),
             patch("app.services.matching_service._looks_unlikely_stack", return_value=False),
             patch("app.services.matching_service._lexical_fallback_matches", return_value=[]),
         ):
-            matches = match_vacancies_for_resume(SimpleNamespace(), resume_id=13, user_id=3, limit=10)
+            matches = match_vacancies_for_resume(
+                SimpleNamespace(), resume_id=13, user_id=3, limit=10
+            )
 
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["vacancy_id"], 101)

@@ -187,6 +187,32 @@ class MatchingServiceScoringTests(unittest.TestCase):
         # "Linux" was in resume but vacancy didn't ask for it — must NOT appear.
         self.assertNotIn("Linux", profile["matched_skills"])
 
+    def test_rejected_skills_stripped_from_output(self) -> None:
+        """Phase 1.9 PR C1: when the user clicks ✗ on a skill the matcher
+        thinks they have, the skill disappears from matched_requirements
+        and matched_skills on subsequent re-matches."""
+        payload = {
+            "must_have_skills": ["Kubernetes", "Prometheus"],
+            "tools": [],
+        }
+        profile = _augment_profile_with_gap_insights(
+            payload,
+            {"kubernetes", "prometheus"},
+            resume_hard_skills=["Kubernetes", "Prometheus"],
+            resume_skill_phrases=["Kubernetes", "Prometheus"],
+            resume_phrase_aliases=_phrase_aliases("Kubernetes").union(
+                _phrase_aliases("Prometheus")
+            ),
+            resume_phrase_vectors={},
+            embedding_cache={},
+            embedding_budget={"calls_left": 0},
+            rejected_skill_norms={"kubernetes"},
+        )
+        self.assertNotIn("Kubernetes", profile["matched_requirements"])
+        self.assertIn("Prometheus", profile["matched_requirements"])
+        self.assertNotIn("Kubernetes", profile["matched_skills"])
+        self.assertIn("Prometheus", profile["matched_skills"])
+
     def test_gap_insights_resolves_via_taxonomy(self) -> None:
         """Phase 1.9 PR B2: the four complaint phrases from the plan must
         match RU-side phrasing via the taxonomy, not just token overlap."""

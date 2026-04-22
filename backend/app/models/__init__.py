@@ -3,6 +3,7 @@ from app.models.auth_otp_code import AuthOtpCode
 from app.models.recommendation_job import RecommendationJob
 from app.models.resume import Resume
 from app.models.resume_profile import ResumeProfile
+from app.models.resume_user_skill import ResumeUserSkill
 from app.models.user import User
 from app.models.user_daily_spend import UserDailySpend
 from app.models.user_vacancy_feedback import UserVacancyFeedback
@@ -15,6 +16,7 @@ __all__ = [
     "RecommendationJob",
     "Resume",
     "ResumeProfile",
+    "ResumeUserSkill",
     "User",
     "UserDailySpend",
     "UserVacancyFeedback",
