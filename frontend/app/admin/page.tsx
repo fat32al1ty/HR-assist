@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useSession } from '@/lib/session';
 import { apiFetch } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import type { AdminStatsResponse } from '@/types/admin';
 
 export default function AdminPage() {
@@ -45,41 +47,29 @@ export default function AdminPage() {
   // Not admin — 403 empty state
   if (!user?.is_admin) {
     return (
-      <main
-        style={{
-          minHeight: '60vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '1rem',
-          fontFamily: 'var(--font-body)',
-          color: 'var(--color-ink)',
-        }}
-      >
-        <p style={{ fontSize: 'var(--text-2xl)', fontWeight: 600 }}>Нет доступа</p>
-        <p style={{ color: 'var(--color-ink-secondary)' }}>
-          Этот раздел доступен только администраторам.
-        </p>
-        <Link
-          href="/"
-          style={{ color: 'var(--color-accent)', textDecoration: 'none' }}
-        >
-          ← На главную
-        </Link>
+      <main className="min-h-[60vh] flex flex-col items-center justify-center gap-4 px-4">
+        <Card className="w-full max-w-sm text-center">
+          <CardHeader>
+            <CardTitle>
+              Нет доступа
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-4">
+            <p className="text-[var(--text-sm)] text-[var(--color-ink-secondary)]">
+              Этот раздел доступен только администраторам.
+            </p>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/">← На главную</Link>
+            </Button>
+          </CardContent>
+        </Card>
       </main>
     );
   }
 
   if (loading) {
     return (
-      <main
-        style={{
-          padding: '2rem',
-          fontFamily: 'var(--font-body)',
-          color: 'var(--color-ink-secondary)',
-        }}
-      >
+      <main className="px-8 py-10 text-[var(--color-ink-secondary)] text-[var(--text-sm)]">
         Загружаем данные...
       </main>
     );
@@ -87,13 +77,7 @@ export default function AdminPage() {
 
   if (error) {
     return (
-      <main
-        style={{
-          padding: '2rem',
-          fontFamily: 'var(--font-body)',
-          color: 'var(--color-danger)',
-        }}
-      >
+      <main className="px-8 py-10 text-[var(--color-danger)] text-[var(--text-sm)]">
         {error}
       </main>
     );
@@ -104,55 +88,27 @@ export default function AdminPage() {
   const warmup = stats?.warmup;
 
   return (
-    <main
-      style={{
-        maxWidth: '1200px',
-        margin: '0 auto',
-        padding: '2rem 1.5rem',
-        fontFamily: 'var(--font-body)',
-      }}
-    >
+    <main className="w-full max-w-[var(--content-width)] mx-auto px-4 py-10">
       <h1
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 'var(--text-3xl)',
-          fontWeight: 600,
-          color: 'var(--color-ink)',
-          marginBottom: '1.5rem',
-          letterSpacing: '-0.03em',
-        }}
+        className={cn(
+          'font-[var(--font-display)] text-[var(--text-3xl)]',
+          'font-semibold text-[var(--color-ink)] tracking-[-0.03em]',
+          'leading-[var(--leading-tight)] mb-8'
+        )}
       >
         Админ-панель
       </h1>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: '1.5rem',
-        }}
-      >
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 stagger-children">
         {/* Qdrant card */}
-        <Card>
+        <Card className="animate-fade-in">
           <CardHeader>
-            <CardTitle
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--text-xl)',
-                color: 'var(--color-ink)',
-              }}
-            >
+            <CardTitle>
               Qdrant
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <dl
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.5rem',
-              }}
-            >
+            <dl className="flex flex-col divide-y divide-[var(--color-border)]">
               <StatRow label="Статус" value={qdrant?.status ?? '—'} />
               <StatRow
                 label="Коллекций"
@@ -188,36 +144,19 @@ export default function AdminPage() {
         </Card>
 
         {/* Last job card */}
-        <Card>
+        <Card className="animate-fade-in">
           <CardHeader>
-            <CardTitle
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--text-xl)',
-                color: 'var(--color-ink)',
-              }}
-            >
+            <CardTitle>
               Последний job
             </CardTitle>
           </CardHeader>
           <CardContent>
             {lastJob == null ? (
-              <p
-                style={{
-                  color: 'var(--color-ink-muted)',
-                  fontSize: 'var(--text-sm)',
-                }}
-              >
+              <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] italic py-2">
                 Нет данных. Передайте ?resume_id=N в URL.
               </p>
             ) : (
-              <dl
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.5rem',
-                }}
-              >
+              <dl className="flex flex-col divide-y divide-[var(--color-border)]">
                 <StatRow label="Роль" value={lastJob.role ?? '—'} />
                 <StatRow
                   label="Специализация"
@@ -265,26 +204,14 @@ export default function AdminPage() {
         </Card>
 
         {/* Warmup internals card */}
-        <Card>
+        <Card className="animate-fade-in">
           <CardHeader>
-            <CardTitle
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--text-xl)',
-                color: 'var(--color-ink)',
-              }}
-            >
+            <CardTitle>
               Warmup internals
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <dl
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.5rem',
-              }}
-            >
+            <dl className="flex flex-col divide-y divide-[var(--color-border)]">
               <StatRow
                 label="Выполняется"
                 value={warmup?.running != null ? String(warmup.running) : '—'}
@@ -314,67 +241,61 @@ export default function AdminPage() {
                 value={warmup?.max_analyzed_per_query ?? '—'}
                 mono
               />
-              {warmup?.last_metrics != null ? (
-                <div>
-                  <dt
-                    style={{
-                      fontSize: 'var(--text-xs)',
-                      color: 'var(--color-ink-muted)',
-                      marginBottom: '2px',
-                    }}
-                  >
-                    Метрики последнего прогона
-                  </dt>
-                  <dd>
-                    <pre
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 'var(--text-xs)',
-                        color: 'var(--color-ink-secondary)',
-                        background: 'var(--color-surface-muted)',
-                        padding: '0.5rem',
-                        borderRadius: 'var(--radius-sm, 4px)',
-                        overflowX: 'auto',
-                        margin: 0,
-                      }}
-                    >
-                      {JSON.stringify(warmup.last_metrics, null, 2)}
-                    </pre>
-                  </dd>
-                </div>
-              ) : null}
-              {warmup?.profile_backfill != null ? (
-                <>
-                  <StatRow
-                    label="Backfill: всего"
-                    value={warmup.profile_backfill.total ?? '—'}
-                    mono
-                  />
-                  <StatRow
-                    label="Backfill: готово"
-                    value={warmup.profile_backfill.done ?? '—'}
-                    mono
-                  />
-                  <StatRow
-                    label="Backfill: ожидает"
-                    value={warmup.profile_backfill.pending ?? '—'}
-                    mono
-                  />
-                </>
-              ) : null}
             </dl>
+            {warmup?.last_metrics != null ? (
+              <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
+                <dt
+                  className={cn(
+                    'text-[var(--text-xs)] text-[var(--color-ink-secondary)]',
+                    'uppercase tracking-[0.1em] font-bold mb-2'
+                  )}
+                >
+                  Метрики последнего прогона
+                </dt>
+                <dd>
+                  <pre
+                    className={cn(
+                      'font-[var(--font-mono)] text-[var(--text-xs)]',
+                      'text-[var(--color-ink-secondary)]',
+                      'bg-[var(--color-surface-muted)]',
+                      'p-3 rounded-[var(--radius-sm)]',
+                      'overflow-x-auto m-0'
+                    )}
+                  >
+                    {JSON.stringify(warmup.last_metrics, null, 2)}
+                  </pre>
+                </dd>
+              </div>
+            ) : null}
+            {warmup?.profile_backfill != null ? (
+              <dl className="flex flex-col divide-y divide-[var(--color-border)] mt-3 pt-3 border-t border-[var(--color-border)]">
+                <StatRow
+                  label="Backfill: всего"
+                  value={warmup.profile_backfill.total ?? '—'}
+                  mono
+                />
+                <StatRow
+                  label="Backfill: готово"
+                  value={warmup.profile_backfill.done ?? '—'}
+                  mono
+                />
+                <StatRow
+                  label="Backfill: ожидает"
+                  value={warmup.profile_backfill.pending ?? '—'}
+                  mono
+                />
+              </dl>
+            ) : null}
           </CardContent>
         </Card>
       </div>
 
       {stats?.generated_at ? (
         <p
-          style={{
-            marginTop: '1.5rem',
-            fontSize: 'var(--text-xs)',
-            color: 'var(--color-ink-muted)',
-            fontFamily: 'var(--font-body)',
-          }}
+          className={cn(
+            'mt-8 text-[var(--text-xs)] text-[var(--color-ink-muted)]',
+            'font-[var(--font-mono)]'
+          )}
         >
           Данные на: {new Date(stats.generated_at).toLocaleString('ru-RU')}
         </p>
@@ -393,31 +314,20 @@ function StatRow({
   mono?: boolean;
 }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'baseline',
-        gap: '1rem',
-      }}
-    >
+    <div className="flex items-baseline justify-between gap-4 py-2">
       <dt
-        style={{
-          fontSize: 'var(--text-sm)',
-          color: 'var(--color-ink-secondary)',
-          flexShrink: 0,
-        }}
+        className={cn(
+          'text-[var(--text-xs)] text-[var(--color-ink-secondary)]',
+          'uppercase tracking-[0.1em] font-bold shrink-0'
+        )}
       >
         {label}
       </dt>
       <dd
-        style={{
-          fontSize: 'var(--text-sm)',
-          color: 'var(--color-ink)',
-          fontFamily: mono ? 'var(--font-mono)' : 'var(--font-body)',
-          textAlign: 'right',
-          margin: 0,
-        }}
+        className={cn(
+          'text-[var(--text-sm)] text-[var(--color-ink)] text-right m-0',
+          mono && 'font-[var(--font-mono)]'
+        )}
       >
         {value}
       </dd>

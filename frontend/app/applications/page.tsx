@@ -188,7 +188,7 @@ function ApplicationCard({
       {/* Title + company */}
       <div className="flex flex-col gap-0.5 min-w-0">
         <span
-          className="font-[var(--font-display)] text-[var(--text-base)] font-semibold text-[var(--color-ink)] leading-[var(--leading-tight)] truncate"
+          className="font-[var(--font-display)] text-[var(--text-xl)] font-[500] text-[var(--color-ink)] leading-[var(--leading-tight)] tracking-[-0.02em] truncate"
           title={row.vacancy_title || 'Без названия'}
         >
           {titleTruncated || 'Без названия'}
@@ -205,7 +205,7 @@ function ApplicationCard({
             {row.resume_label}
           </Badge>
         ) : null}
-        <span className="text-[var(--text-xs)] text-[var(--color-ink-muted)] ml-auto">
+        <span className="font-[var(--font-mono)] text-[var(--text-xs)] text-[var(--color-ink-secondary)] ml-auto">
           {formatFriendlyDate(row.last_status_change_at)}
         </span>
       </div>
@@ -377,7 +377,7 @@ function ApplicationCard({
 function ColumnHeader({ label, count }: { label: string; count: number }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="font-[var(--font-display)] text-[var(--text-base)] font-semibold text-[var(--color-ink)] tracking-[-0.02em]">
+      <span className="font-[var(--font-display)] text-[var(--text-2xl)] font-semibold text-[var(--color-ink)] tracking-[-0.03em] leading-[var(--leading-tight)]">
         {label}
       </span>
       <span
@@ -636,7 +636,7 @@ export default function ApplicationsPage() {
       return (
         <div className="flex flex-col gap-3">
           {empty ? (
-            <p className="text-[var(--text-sm)] text-[var(--color-ink-muted)] italic">
+            <p className="text-[var(--text-sm)] text-[var(--color-ink-secondary)] italic text-center py-6">
               {col.emptyText}
             </p>
           ) : null}
@@ -690,9 +690,9 @@ export default function ApplicationsPage() {
       ) : null}
 
       {/* ── Desktop board (≥900px): 4 equal columns ─────────────────────────── */}
-      <div className="hidden min-[900px]:grid grid-cols-4 gap-6">
+      <div className="hidden min-[900px]:grid grid-cols-4 gap-6 stagger-children">
         {COLUMNS.map((col) => (
-          <div key={col.id} className="flex flex-col gap-3">
+          <div key={col.id} className="flex flex-col gap-3 animate-fade-in">
             {/* Sticky column header */}
             <div
               className={cn(
@@ -703,13 +703,23 @@ export default function ApplicationsPage() {
             >
               <ColumnHeader label={col.label} count={cardsForColumn(col.id).length} />
             </div>
-            {renderColumnBody(col.id)}
+            {/* Column body */}
+            <div
+              className={cn(
+                'flex flex-col gap-3 min-h-[80px]',
+                'bg-[var(--color-surface-raised)] border border-[var(--color-border)]',
+                'rounded-[var(--radius-lg)] shadow-[var(--shadow-sm)]',
+                'p-3'
+              )}
+            >
+              {renderColumnBody(col.id)}
+            </div>
           </div>
         ))}
       </div>
 
       {/* ── Mobile board (<900px): 4 accordions ─────────────────────────────── */}
-      <div className="flex flex-col gap-3 min-[900px]:hidden">
+      <div className="flex flex-col gap-3 min-[900px]:hidden stagger-children">
         {COLUMNS.map((col) => {
           const isOpen = mobileOpenCol === col.id;
           const count = cardsForColumn(col.id).length;
@@ -718,6 +728,7 @@ export default function ApplicationsPage() {
               key={col.id}
               open={isOpen}
               onOpenChange={(open) => setMobileOpenCol(open ? col.id : null)}
+              className="animate-fade-in"
             >
               <CollapsibleTrigger
                 className={cn(
@@ -755,39 +766,44 @@ export default function ApplicationsPage() {
 
       {/* ── Archive toggle ────────────────────────────────────────────────────── */}
       {archiveCount > 0 ? (
-        <div className="flex flex-col gap-4 mt-2">
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => setArchiveOpen((v) => !v)}
+        <div
+          className={cn(
+            'flex flex-col gap-3 mt-2',
+            'bg-[var(--color-surface-raised)] border border-[var(--color-border)]',
+            'rounded-[var(--radius-lg)] shadow-[var(--shadow-sm)]',
+            'p-4'
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => setArchiveOpen((v) => !v)}
+            className={cn(
+              'group inline-flex items-center gap-2 self-start',
+              'text-[var(--text-sm)] font-semibold text-[var(--color-ink-secondary)]',
+              'hover:text-[var(--color-ink)]',
+              'transition-colors duration-[var(--duration-fast)]',
+              'cursor-pointer'
+            )}
+          >
+            <svg
               className={cn(
-                'inline-flex items-center gap-2',
-                'text-[var(--text-sm)] font-semibold text-[var(--color-ink-secondary)]',
-                'hover:text-[var(--color-ink)]',
-                'transition-colors duration-[var(--duration-fast)]',
-                'cursor-pointer'
+                'h-4 w-4 transition-transform duration-[var(--duration-fast)]',
+                archiveOpen && 'rotate-180'
               )}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
             >
-              <svg
-                className={cn(
-                  'h-4 w-4 transition-transform duration-[var(--duration-fast)]',
-                  archiveOpen && 'rotate-180'
-                )}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-              Архив ({archiveCount})
-            </button>
-          </div>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+            Архив ({archiveCount})
+          </button>
 
           {archiveOpen ? (
-            <div className="flex flex-col gap-3 animate-fade-in">
+            <div className="flex flex-col gap-2 animate-fade-in">
               <Separator />
-              <p className="text-[var(--text-xs)] text-[var(--color-ink-muted)] uppercase font-bold tracking-[0.08em]">
+              <p className="text-[var(--text-xs)] text-[var(--color-ink-muted)] uppercase font-bold tracking-[0.08em] pt-1">
                 Архив
               </p>
               {archivedApps
@@ -807,7 +823,7 @@ export default function ApplicationsPage() {
                     )}
                   >
                     <span
-                      className="text-[var(--text-sm)] font-semibold text-[var(--color-ink)] truncate"
+                      className="font-[var(--font-display)] text-[var(--text-base)] font-[500] text-[var(--color-ink)] tracking-[-0.01em] truncate"
                       title={row.vacancy_title}
                     >
                       {row.vacancy_title || 'Без названия'}
@@ -817,7 +833,7 @@ export default function ApplicationsPage() {
                         {row.vacancy_company ?? ''}
                       </span>
                       <Badge variant="danger">{STATUS_LABELS[row.status]}</Badge>
-                      <span className="text-[var(--text-xs)] text-[var(--color-ink-muted)] ml-auto">
+                      <span className="font-[var(--font-mono)] text-[var(--text-xs)] text-[var(--color-ink-secondary)] ml-auto">
                         {formatFriendlyDate(row.last_status_change_at)}
                       </span>
                     </div>

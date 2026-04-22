@@ -4,13 +4,13 @@
    Aesthetic: refined editorial — warm ink on cream, Fraunces + Source Sans 3
    ───────────────────────────────────────────────────────────────────────── */
 
-@import "tailwindcss";
-
-/* ── Google Fonts ─────────────────────────────────────────────────────────
+/* ── Google Fonts — must precede @import "tailwindcss" ───────────────────
    Fraunces: optical-size variable serif (display, headings)
    Source Sans 3: humanist sans (body, UI copy)
    ──────────────────────────────────────────────────────────────────────── */
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Source+Sans+3:ital,wght@0,300..900;1,300..900&display=swap");
+
+@import "tailwindcss";
 
 /* ── CSS Custom Properties — semantic token layer ────────────────────────
    All colour values are defined here. Components use var(--token-name)
