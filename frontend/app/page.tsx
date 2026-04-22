@@ -79,6 +79,23 @@ type VacancyMatch = {
   profile: Record<string, unknown> | null;
 };
 
+type CuratedDirection = 'added' | 'rejected';
+
+type CuratedSkillRead = {
+  id: number;
+  resume_id: number;
+  skill_text: string;
+  direction: CuratedDirection;
+  source_vacancy_id: number | null;
+  created_at: string;
+};
+
+type CuratedSkillResponse = {
+  skill: CuratedSkillRead;
+  warn_sanity_check: boolean;
+  recent_added_count: number;
+};
+
 type VacancyRecommendResponse = {
   query: string;
   indexed: number;
@@ -424,6 +441,8 @@ export default function DashboardPage() {
   const [expandedCoverLetterIds, setExpandedCoverLetterIds] = useState<Record<number, boolean>>({});
   const [coverLetterDrafts, setCoverLetterDrafts] = useState<Record<number, string>>({});
   const [applyingVacancyIds, setApplyingVacancyIds] = useState<Record<number, boolean>>({});
+  const [curatedSkills, setCuratedSkills] = useState<CuratedSkillRead[]>([]);
+  const [curatingSkillKey, setCuratingSkillKey] = useState<string | null>(null);
 
   useEffect(() => {
     const storedToken = window.localStorage.getItem('access_token');
@@ -479,6 +498,14 @@ export default function DashboardPage() {
       return;
     }
     void loadDashboardStats(selectedResumeId);
+  }, [token, selectedResumeId]);
+
+  useEffect(() => {
+    if (!token || !selectedResumeId) {
+      setCuratedSkills([]);
+      return;
+    }
+    void loadCuratedSkills(selectedResumeId);
   }, [token, selectedResumeId]);
 
   useEffect(() => {
@@ -803,6 +830,92 @@ export default function DashboardPage() {
       setSelectedVacancies(data);
     } catch {
       setSelectedVacancies([]);
+    }
+  }
+
+  async function loadCuratedSkills(resumeId: number) {
+    try {
+      const data = await request<CuratedSkillRead[]>(`/api/resumes/${resumeId}/skills/curate`);
+      setCuratedSkills(data);
+    } catch {
+      setCuratedSkills([]);
+    }
+  }
+
+  async function curateMatchSkill(
+    match: VacancyMatch,
+    skill: string,
+    direction: CuratedDirection
+  ) {
+    if (!selectedResumeId) {
+      return;
+    }
+    const trimmed = skill.trim();
+    if (!trimmed) {
+      return;
+    }
+    const key = `${match.vacancy_id}::${direction}::${trimmed.toLowerCase()}`;
+    if (curatingSkillKey) {
+      return;
+    }
+    setCuratingSkillKey(key);
+    try {
+      const payload = await request<CuratedSkillResponse>(
+        `/api/resumes/${selectedResumeId}/skills/curate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            skill: trimmed,
+            direction,
+            vacancy_id: match.vacancy_id
+          })
+        }
+      );
+      setCuratedSkills((current) => {
+        const rest = current.filter((row) => row.id !== payload.skill.id);
+        return [payload.skill, ...rest];
+      });
+      if (payload.warn_sanity_check) {
+        setMatchingMessage(
+          'Отмечено много навыков за последний час — сверьтесь с резюме, чтобы подбор был точным.'
+        );
+      } else if (direction === 'added') {
+        setMatchingMessage(`Добавлено в профиль: «${trimmed}». В следующем подборе учтём.`);
+      } else {
+        setMatchingMessage(`Отмечено как не моё: «${trimmed}». Уберём из «не хватает».`);
+      }
+    } catch (error) {
+      setMatchingMessage(
+        error instanceof Error ? error.message : 'Не удалось сохранить отметку. Попробуйте ещё раз.'
+      );
+    } finally {
+      setCuratingSkillKey(null);
+    }
+  }
+
+  async function uncurateSkill(skillId: number) {
+    if (!selectedResumeId) {
+      return;
+    }
+    const key = `uncurate::${skillId}`;
+    if (curatingSkillKey) {
+      return;
+    }
+    setCuratingSkillKey(key);
+    try {
+      await request<null>(
+        `/api/resumes/${selectedResumeId}/skills/curate/${skillId}`,
+        { method: 'DELETE' }
+      );
+      setCuratedSkills((current) => current.filter((row) => row.id !== skillId));
+      setMatchingMessage('Отметка снята.');
+    } catch (error) {
+      setMatchingMessage(
+        error instanceof Error ? error.message : 'Не удалось снять отметку.'
+      );
+    } finally {
+      setCuratingSkillKey(null);
     }
   }
 
@@ -2088,6 +2201,58 @@ export default function DashboardPage() {
                     {profileSaving ? 'Сохраняем...' : 'Подтвердить и найти работу'}
                   </button>
                   {profileMessage ? <p className="message">{profileMessage}</p> : null}
+                  {curatedSkills.length > 0 ? (
+                    <div className="curated-block">
+                      {curatedSkills.some((row) => row.direction === 'added') ? (
+                        <div className="curated-group">
+                          <p className="curated-title">Добавлено вручную</p>
+                          <ul className="curated-list">
+                            {curatedSkills
+                              .filter((row) => row.direction === 'added')
+                              .map((row) => (
+                                <li key={`curated-added-${row.id}`}>
+                                  <span>{row.skill_text}</span>
+                                  <button
+                                    type="button"
+                                    className="fit-micro-btn fit-micro-undo"
+                                    title="Снять отметку"
+                                    aria-label={`Снять отметку с «${row.skill_text}»`}
+                                    disabled={Boolean(curatingSkillKey)}
+                                    onClick={() => void uncurateSkill(row.id)}
+                                  >
+                                    ✕
+                                  </button>
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {curatedSkills.some((row) => row.direction === 'rejected') ? (
+                        <div className="curated-group">
+                          <p className="curated-title">Отмечено как не моё</p>
+                          <ul className="curated-list">
+                            {curatedSkills
+                              .filter((row) => row.direction === 'rejected')
+                              .map((row) => (
+                                <li key={`curated-rejected-${row.id}`}>
+                                  <span>{row.skill_text}</span>
+                                  <button
+                                    type="button"
+                                    className="fit-micro-btn fit-micro-undo"
+                                    title="Снять отметку"
+                                    aria-label={`Снять отметку с «${row.skill_text}»`}
+                                    disabled={Boolean(curatingSkillKey)}
+                                    onClick={() => void uncurateSkill(row.id)}
+                                  >
+                                    ✕
+                                  </button>
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </section>
               ) : null}
 
@@ -2159,6 +2324,28 @@ export default function DashboardPage() {
                     const matchedRequirements = matchedRequirementsFromMatch(match);
                     const missingRequirements = missingRequirementsFromMatch(match);
                     const matchedEntries = matchedRequirements.length > 0 ? matchedRequirements : matchedSkills;
+                    const curatedForResume = curatedSkills;
+                    const curatedAddedLower = new Set(
+                      curatedForResume.filter((row) => row.direction === 'added').map((row) => row.skill_text.toLowerCase())
+                    );
+                    const curatedRejectedLower = new Set(
+                      curatedForResume.filter((row) => row.direction === 'rejected').map((row) => row.skill_text.toLowerCase())
+                    );
+                    const locallyAddedForMatch = curatedForResume
+                      .filter(
+                        (row) =>
+                          row.direction === 'added' &&
+                          row.source_vacancy_id === match.vacancy_id &&
+                          !matchedEntries.some((item) => item.toLowerCase() === row.skill_text.toLowerCase())
+                      )
+                      .map((row) => row.skill_text);
+                    const visibleMissing = missingRequirements.filter(
+                      (item) =>
+                        !curatedAddedLower.has(item.toLowerCase()) &&
+                        !curatedRejectedLower.has(item.toLowerCase())
+                    );
+                    const isCurating = (skill: string, direction: CuratedDirection) =>
+                      curatingSkillKey === `${match.vacancy_id}::${direction}::${skill.toLowerCase()}`;
                     return (
                     <article className="vacancy-item" key={match.vacancy_id}>
                       <h3>{match.title}</h3>
@@ -2171,10 +2358,21 @@ export default function DashboardPage() {
                       <div className="fit-grid">
                         <div className="fit-box fit-matched">
                           <p className="fit-title">Ты подходишь</p>
-                          {matchedEntries.length > 0 ? (
+                          {matchedEntries.length > 0 || locallyAddedForMatch.length > 0 ? (
                             <ul>
                               {matchedEntries.map((item) => (
                                 <li key={`${match.vacancy_id}-match-${item}`}>{item}</li>
+                              ))}
+                              {locallyAddedForMatch.map((item) => (
+                                <li
+                                  key={`${match.vacancy_id}-match-added-${item}`}
+                                  className="fit-item-added"
+                                >
+                                  {item}
+                                  <span className="curated-badge" title="Добавлено вручную">
+                                    ✓
+                                  </span>
+                                </li>
                               ))}
                             </ul>
                           ) : (
@@ -2183,10 +2381,45 @@ export default function DashboardPage() {
                         </div>
                         <div className="fit-box fit-missing">
                           <p className="fit-title">Чего не хватает</p>
-                          {missingRequirements.length > 0 ? (
+                          {visibleMissing.length > 0 ? (
                             <ul>
-                              {missingRequirements.map((item) => (
-                                <li key={`${match.vacancy_id}-miss-${item}`}>{item}</li>
+                              {visibleMissing.map((item) => (
+                                <li
+                                  key={`${match.vacancy_id}-miss-${item}`}
+                                  className="fit-missing-item"
+                                >
+                                  <span className="fit-missing-text">{item}</span>
+                                  <span className="fit-missing-actions">
+                                    <button
+                                      type="button"
+                                      className="fit-micro-btn fit-micro-add"
+                                      title="Добавить в профиль"
+                                      aria-label={`Добавить навык «${item}» в профиль`}
+                                      disabled={
+                                        !selectedResumeId ||
+                                        matchingBusy ||
+                                        Boolean(curatingSkillKey)
+                                      }
+                                      onClick={() => void curateMatchSkill(match, item, 'added')}
+                                    >
+                                      {isCurating(item, 'added') ? '…' : '✓'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="fit-micro-btn fit-micro-reject"
+                                      title="Отметить как не моё"
+                                      aria-label={`Отметить «${item}» как не моё`}
+                                      disabled={
+                                        !selectedResumeId ||
+                                        matchingBusy ||
+                                        Boolean(curatingSkillKey)
+                                      }
+                                      onClick={() => void curateMatchSkill(match, item, 'rejected')}
+                                    >
+                                      {isCurating(item, 'rejected') ? '…' : '✗'}
+                                    </button>
+                                  </span>
+                                </li>
                               ))}
                             </ul>
                           ) : (

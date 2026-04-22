@@ -693,6 +693,124 @@ select:focus {
   color: #92400e;
 }
 
+.fit-missing-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.fit-missing-text {
+  flex: 1;
+}
+
+.fit-missing-actions {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.fit-micro-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  color: inherit;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.fit-micro-btn:hover:not(:disabled) {
+  border-color: currentColor;
+}
+
+.fit-micro-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fit-micro-add:hover:not(:disabled) {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.fit-micro-reject:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.fit-micro-undo:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.fit-item-added {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.curated-badge {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #bbf7d0;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.curated-block {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.curated-group {
+  display: grid;
+  gap: 6px;
+}
+
+.curated-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.curated-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.curated-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 13px;
+}
+
 .confirm-card {
   display: grid;
   gap: 18px;
