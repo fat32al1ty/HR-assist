@@ -44,7 +44,7 @@ services:
     volumes:
       - resume_storage:/app/storage
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)\""]
       interval: 10s
@@ -63,10 +63,9 @@ services:
       backend:
         condition: service_healthy
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://185.76.242.254:8000
+      NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-https://aijobmatch.ru}
     ports:
-      - "80:3000"
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://' + require('child_process').execSync('hostname -i').toString().trim() + ':3000', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))\""]
       interval: 10s
@@ -74,7 +73,25 @@ services:
       retries: 5
       start_period: 30s
 
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: resume_caddy
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+
 volumes:
   postgres_data:
   qdrant_data:
   resume_storage:
+  caddy_data:
+  caddy_config:

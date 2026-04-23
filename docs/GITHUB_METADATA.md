@@ -4,6 +4,10 @@ Canonical copy-paste source for the public-facing strings used on GitHub, in the
 
 ---
 
+## Live demo
+
+**https://aijobmatch.ru** — closed beta, beta-key required.
+
 ## Suggested repository display title
 
 > **HR Assist — AI Resume Intelligence & Job Matching**

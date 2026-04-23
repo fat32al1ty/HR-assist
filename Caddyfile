@@ -1,0 +1,37 @@
+{
+    email artyom.khiryov@yandex.ru
+}
+
+# Canonical host
+aijobmatch.ru {
+    encode gzip zstd
+
+    # FastAPI routes — proxy to backend container.
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+    handle /docs {
+        reverse_proxy backend:8000
+    }
+    handle /openapi.json {
+        reverse_proxy backend:8000
+    }
+    handle /health {
+        reverse_proxy backend:8000
+    }
+
+    # Everything else — Next.js frontend.
+    handle {
+        reverse_proxy frontend:3000
+    }
+
+    log {
+        output stderr
+        level WARN
+    }
+}
+
+# www → apex redirect
+www.aijobmatch.ru {
+    redir https://aijobmatch.ru{uri} permanent
+}

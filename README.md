@@ -166,9 +166,7 @@ Full release log: [`docs/ROADMAP.md`](docs/ROADMAP.md). Recent highlights:
 
 ## Demo
 
-Live demo is available on request for hiring managers and collaborators. Access is gated by beta-key while the product is in closed beta.
-
-> `DEMO_URL`: *available on request — intentionally omitted from the public README*
+Live demo: **https://aijobmatch.ru** — closed beta, access gated by beta-key.
 
 ## Repository structure
 
