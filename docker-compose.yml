@@ -57,13 +57,12 @@ services:
       context: ./frontend
       args:
         APP_VERSION: ${APP_VERSION:-dev}
+        NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-https://aijobmatch.ru}
     container_name: resume_frontend
     restart: unless-stopped
     depends_on:
       backend:
         condition: service_healthy
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-https://aijobmatch.ru}
     ports:
       - "127.0.0.1:3000:3000"
     healthcheck:
