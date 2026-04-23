@@ -121,3 +121,16 @@ def save_cover_letter(
     db.commit()
     db.refresh(application)
     return application
+
+
+def list_applied_vacancy_ids_for_user(db: Session, *, user_id: int, resume_id: int) -> list[int]:
+    """Vacancy IDs with an active application (non-draft) for the given user+resume."""
+    rows = db.scalars(
+        select(Application.vacancy_id).where(
+            Application.user_id == user_id,
+            Application.resume_id == resume_id,
+            Application.vacancy_id.is_not(None),
+            Application.status.in_(APPLIED_STATUSES),
+        )
+    )
+    return [r for r in rows if r is not None]

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.repositories.applications import list_applied_vacancy_ids_for_user
 from app.repositories.user_vacancy_feedback import (
     list_disliked_vacancy_feedback_ages,
     list_disliked_vacancy_ids,
@@ -18,6 +19,7 @@ from app.services.vector_store import get_vector_store
 logger = logging.getLogger("user_preference")
 
 MIN_EFFECTIVE_WEIGHT = 0.1
+APPLIED_BOOST = 1.3
 
 
 def _centroid(vectors: list[list[float]]) -> list[float] | None:
@@ -125,6 +127,9 @@ def recompute_user_preference_profile(db: Session, *, user_id: int, resume_id: i
     liked_vectors = store.get_vacancy_vectors(vacancy_ids=liked_ids)
     disliked_vectors = store.get_vacancy_vectors(vacancy_ids=disliked_ids)
 
+    applied_ids = list_applied_vacancy_ids_for_user(db, user_id=user_id, resume_id=resume_id)
+    applied_vectors = store.get_vacancy_vectors(vacancy_ids=applied_ids)
+
     if decay_enabled:
         liked_weights = _decay_weights(
             liked_rows, liked_ids, now=now, half_life_days=half_life_days
@@ -132,12 +137,14 @@ def recompute_user_preference_profile(db: Session, *, user_id: int, resume_id: i
         disliked_weights = _decay_weights(
             disliked_rows, disliked_ids, now=now, half_life_days=half_life_days
         )
-        positive, liked_stale = _weighted_centroid(liked_vectors, liked_weights)
+        all_pos_vectors = liked_vectors + applied_vectors
+        all_pos_weights = liked_weights + [APPLIED_BOOST] * len(applied_vectors)
+        positive, liked_stale = _weighted_centroid(all_pos_vectors, all_pos_weights)
         negative, disliked_stale = _weighted_centroid(disliked_vectors, disliked_weights)
         unweighted_positive = _centroid(liked_vectors)
         unweighted_negative = _centroid(disliked_vectors)
         logger.info(
-            "preference_decay user_id=%s resume_id=%s liked=%d disliked=%d "
+            "preference_decay user_id=%s resume_id=%s liked=%d disliked=%d applied=%d "
             "pos_mag_before=%.4f pos_mag_after=%.4f "
             "neg_mag_before=%.4f neg_mag_after=%.4f "
             "stale_liked=%d stale_disliked=%d half_life_days=%.1f",
@@ -145,6 +152,7 @@ def recompute_user_preference_profile(db: Session, *, user_id: int, resume_id: i
             resume_id,
             len(liked_ids),
             len(disliked_ids),
+            len(applied_ids),
             _magnitude(unweighted_positive),
             _magnitude(positive),
             _magnitude(unweighted_negative),
@@ -154,7 +162,9 @@ def recompute_user_preference_profile(db: Session, *, user_id: int, resume_id: i
             half_life_days,
         )
     else:
-        positive = _centroid(liked_vectors)
+        all_pos_vectors = liked_vectors + applied_vectors
+        all_pos_weights = [1.0] * len(liked_vectors) + [APPLIED_BOOST] * len(applied_vectors)
+        positive, _ = _weighted_centroid(all_pos_vectors, all_pos_weights)
         negative = _centroid(disliked_vectors)
 
     updated_at = now.isoformat()

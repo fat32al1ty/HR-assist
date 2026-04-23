@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -56,7 +57,7 @@ type ProfileDraft = {
   seniority: Seniority | '';
   total_experience_years: string;
   top_skills: string[];
-  preferred_work_format: WorkFormat;
+  preferred_work_formats: WorkFormat[];
   relocation_mode: RelocationMode;
   home_city: string;
   preferred_titles: string[];
@@ -333,7 +334,7 @@ function buildProfileDraft(resume: Resume, prefs: UserPrefs): ProfileDraft {
     seniority: isSeniority(analysisSeniority) ? analysisSeniority : '',
     total_experience_years: years,
     top_skills: hardSkills,
-    preferred_work_format: prefs.preferred_work_format,
+    preferred_work_formats: prefs.preferred_work_format === 'any' ? [] : [prefs.preferred_work_format],
     relocation_mode: prefs.relocation_mode,
     home_city: prefs.home_city ?? analysisHomeCity ?? '',
     preferred_titles: prefs.preferred_titles,
@@ -370,6 +371,7 @@ export default function DashboardPage() {
   const [matches, setMatches] = useState<VacancyMatch[]>([]);
   const [selectedVacancies, setSelectedVacancies] = useState<VacancyMatch[]>([]);
   const [dislikedVacancies, setDislikedVacancies] = useState<VacancyMatch[]>([]);
+  const [appliedVacancies, setAppliedVacancies] = useState<VacancyMatch[]>([]);
   const [expandedResumeIds, setExpandedResumeIds] = useState<Record<number, boolean>>({});
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
   const [message, setMessage] = useState('');
@@ -445,13 +447,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setMatches((current) => {
-      const filtered = excludeFeedbackVacancies(current, dislikedVacancies, selectedVacancies, hiddenMatchIds);
+      const filtered = excludeFeedbackVacancies(current, dislikedVacancies, [...selectedVacancies, ...appliedVacancies], hiddenMatchIds);
       if (filtered.length === current.length) {
         return current;
       }
       return filtered;
     });
-  }, [dislikedVacancies, selectedVacancies, hiddenMatchIds]);
+  }, [dislikedVacancies, selectedVacancies, appliedVacancies, hiddenMatchIds]);
 
   useEffect(() => {
     if (!token) {
@@ -501,7 +503,7 @@ export default function DashboardPage() {
     setSelectedResumeId(completed ? completed.id : resumes[0].id);
   }, [resumes, selectedResumeId]);
 
-  const visibleMatches = excludeFeedbackVacancies(matches, dislikedVacancies, selectedVacancies, hiddenMatchIds);
+  const visibleMatches = excludeFeedbackVacancies(matches, dislikedVacancies, [...selectedVacancies, ...appliedVacancies], hiddenMatchIds);
 
   const currentMatchRunId = visibleMatches[0]?.match_run_id ?? null;
   const matchRunIdRef = useRef<string | null>(null);
@@ -963,7 +965,7 @@ export default function DashboardPage() {
     if (topSkills.length > 0) analysisUpdates.top_skills = topSkills;
 
     const preferenceUpdates: Record<string, unknown> = {
-      preferred_work_format: profileDraft.preferred_work_format,
+      preferred_work_format: profileDraft.preferred_work_formats.length === 1 ? profileDraft.preferred_work_formats[0] : 'any',
       relocation_mode: profileDraft.relocation_mode,
       preferred_titles: profileDraft.preferred_titles
     };
@@ -1337,18 +1339,26 @@ export default function DashboardPage() {
       }
       const payload = await response.json().catch(() => ({} as Record<string, unknown>));
       if (response.status === 201) {
-        setMatchingMessage(
-          `Создан отклик на «${vacancy.title || 'вакансию'}». Найдите её в разделе «Мои отклики».`
-        );
+        setAppliedVacancies((current) => {
+          if (current.some((item) => normalizeVacancyId(item.vacancy_id) === vacancyId)) return current;
+          return [vacancy, ...current];
+        });
+        setMatches((current) => removeVacancyMatchEntry(current, vacancy));
+        setMatchingMessage(`Отклик создан — вакансия перемещена в раздел «Отклики».`);
       } else if (response.status === 409) {
         const detail = (payload as { detail?: { application_id?: number; message?: string } }).detail;
         const applicationId =
           detail && typeof detail === 'object' && typeof detail.application_id === 'number'
             ? detail.application_id
             : null;
+        setAppliedVacancies((current) => {
+          if (current.some((item) => normalizeVacancyId(item.vacancy_id) === vacancyId)) return current;
+          return [vacancy, ...current];
+        });
+        setMatches((current) => removeVacancyMatchEntry(current, vacancy));
         setMatchingMessage(
           applicationId
-            ? `По этой вакансии уже есть отклик (#${applicationId}). Откройте его в «Моих откликах».`
+            ? `По этой вакансии уже есть отклик (#${applicationId}).`
             : 'По этой вакансии уже есть отклик.'
         );
       } else {
@@ -1464,8 +1474,62 @@ export default function DashboardPage() {
       <section className="main">
         {!token ? (
           /* ── Auth screen ──────────────────────────────────────────────── */
-          <div className="flex items-center justify-center min-h-[70vh]">
-            <Card className="w-full max-w-md animate-fade-in">
+          <div className="grid lg:grid-cols-[1.15fr_1fr] gap-10 items-center min-h-[80vh] py-10">
+            {/* Hero — left column on desktop, top on mobile */}
+            <div className="flex flex-col gap-7 animate-fade-in">
+              <div className="inline-flex items-center gap-2.5 w-max">
+                <Image
+                  src="/hr-assist-logo.svg"
+                  alt="HR консультант"
+                  width={36}
+                  height={36}
+                  className="rounded-[10px] shadow-[var(--shadow-sm)]"
+                />
+                <span className="font-[var(--font-display)] font-bold text-[length:var(--text-xl)] tracking-[-0.02em] text-[color:var(--color-ink)]">
+                  HR консультант
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <span className="inline-flex w-max px-3 py-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[length:var(--text-xs)] font-bold tracking-[0.08em] uppercase text-[color:var(--color-ink-secondary)]">
+                  AI-HR консультант
+                </span>
+                <h1 className="text-[length:var(--text-display)] leading-[var(--leading-tight)] tracking-[-0.035em] font-bold text-[color:var(--color-ink)] max-w-[620px]">
+                  Твой личный HR консультант
+                </h1>
+                <p className="text-[length:var(--text-lg)] leading-[var(--leading-relaxed)] text-[color:var(--color-ink-secondary)] max-w-[560px]">
+                  Загружаешь резюме — получаешь отранжированный список вакансий,
+                  честный разбор «чего хватает» и «чего нет», и воронку откликов
+                  без ручной рутины.
+                </p>
+              </div>
+
+              <ul className="grid gap-3 max-w-[560px]">
+                {[
+                  ['Вакансии под вас, а не наоборот', 'AI изучает ваше резюме и подбирает только те предложения, где вы реально подходите — нерелевантный спам не попадает в список.'],
+                  ['Честный разбор каждой вакансии', 'Для каждой позиции видно: что у вас уже есть, чего пока не хватает и стоит ли откликаться. Никаких догадок.'],
+                  ['Все отклики в одном месте', 'Отправили резюме — отмечаете статус: отправлено, просмотрено, собеседование, оффер. Сопроводительное письмо готовит AI по одной кнопке.'],
+                  ['Два карьерных направления', 'Хотите совмещать специалиста и руководителя? Создайте два профиля — каждый получает свои вакансии и историю откликов, ничего не перемешается.'],
+                ].map(([title, body]) => (
+                  <li key={title} className="flex gap-3">
+                    <span className="mt-[3px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-subtle)] text-[color:var(--color-accent)] text-[length:var(--text-xs)] font-bold">
+                      ✓
+                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-[length:var(--text-sm)] text-[color:var(--color-ink)]">
+                        {title}
+                      </span>
+                      <span className="text-[length:var(--text-sm)] leading-[var(--leading-snug)] text-[color:var(--color-ink-secondary)]">
+                        {body}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Auth card — right column on desktop */}
+            <Card className="w-full max-w-md lg:justify-self-end animate-fade-in">
               <CardHeader>
                 <CardTitle>
                   {authFormMode === 'login'
@@ -1575,37 +1639,11 @@ export default function DashboardPage() {
           </div>
         ) : (
           /* ── Logged-in workspace ──────────────────────────────────────── */
-          <div className="flex flex-col gap-4">
-            <div className="headline animate-fade-in">
-              <div>
-                <span className="hero-kicker">Smart Matching Workspace</span>
-                <h1>Подбор вакансий с прозрачным объяснением совпадений</h1>
-                <p>
-                  Система сравнивает профиль резюме с вакансиями, показывает процент совпадения,
-                  проблемные требования и помогает вести воронку откликов без ручной рутины.
-                </p>
-              </div>
-              <div className="hero-tags">
-                <span>
-                  Профиль: {selectedResumeId
-                    ? (() => {
-                        const selectedResume = resumes.find((resume) => resume.id === selectedResumeId);
-                        return selectedResume ? resumeDisplayName(selectedResume) : 'не выбран';
-                      })()
-                    : 'не выбран'}
-                </span>
-                <span>Кандидатов: {visibleMatches.length}</span>
-                <span>
-                  Warmup: {warmupStatus?.running ? 'выполняется' : warmupStatus?.enabled ? 'активен' : 'выключен'}
-                </span>
-              </div>
-            </div>
-
-            <div className="workspace stagger-children">
+          <div className="workspace stagger-children">
             {/* ── Sidebar ─────────────────────────────────────────────── */}
-            <aside className="flex flex-col gap-4 animate-fade-in">
+            <aside className="flex flex-col gap-3.5 animate-fade-in">
               {/* Upload card */}
-              <Card>
+              <Card className="border-transparent shadow-none">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-[length:var(--text-2xl)]">Резюме</CardTitle>
                   <CardDescription>
@@ -1616,11 +1654,11 @@ export default function DashboardPage() {
                   {/* Drop zone */}
                   <label
                     className={[
-                      'flex flex-col items-center justify-center gap-2 rounded-[var(--radius-md)] border-2 border-dashed',
-                      'px-4 py-5 cursor-pointer transition-colors duration-[var(--duration-fast)]',
+                      'flex flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-dashed',
+                      'px-4 py-6 cursor-pointer transition-colors duration-[var(--duration-fast)]',
                       dragOver
                         ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)]'
-                        : 'border-[var(--color-border)] bg-[var(--color-surface-muted)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)]',
+                        : 'border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)]',
                       (busy || resumes.length >= RESUME_LIMIT) ? 'opacity-50 pointer-events-none' : '',
                     ].join(' ')}
                     onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -1632,9 +1670,17 @@ export default function DashboardPage() {
                       if (f) void uploadResume(f);
                     }}
                   >
-                    <span className="text-[color:var(--color-ink-muted)] text-[length:var(--text-sm)] font-[var(--font-body)] select-none">
-                      {busy ? 'Анализируем…' : dragOver ? 'Отпустите файл' : 'Перетащите или нажмите'}
-                    </span>
+                    <svg className="w-8 h-8 text-[color:var(--color-ink-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    <div className="text-center select-none">
+                      <span className="block text-[color:var(--color-ink)] text-[length:var(--text-sm)] font-semibold">
+                        {busy ? 'Анализируем резюме…' : dragOver ? 'Отпустите файл' : 'Загрузите резюме'}
+                      </span>
+                      {!busy && !dragOver ? (
+                        <span className="block text-[color:var(--color-ink-muted)] text-[length:var(--text-xs)] mt-0.5">PDF или DOCX · перетащите или нажмите</span>
+                      ) : null}
+                    </div>
                     <input
                       type="file"
                       className="sr-only"
@@ -1643,11 +1689,6 @@ export default function DashboardPage() {
                       onChange={handleFileChange}
                     />
                   </label>
-                  {resumes.length >= RESUME_LIMIT ? (
-                    <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
-                      Лимит {RESUME_LIMIT} профилей достигнут. Удалите один, чтобы загрузить новый.
-                    </p>
-                  ) : null}
                   {message ? (
                     <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
                       {message}
@@ -1656,311 +1697,125 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* Funnel card */}
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-[length:var(--text-2xl)]">Моя воронка</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  {(() => {
-                    const funnel = dashboardStats?.funnel;
-                    const nextEtaMs = funnel?.next_warmup_eta
-                      ? new Date(funnel.next_warmup_eta).getTime() - nowTick
-                      : null;
-                    const showCountdown =
-                      warmupStatus?.enabled &&
-                      funnel?.next_warmup_eta != null &&
-                      nextEtaMs !== null &&
-                      nextEtaMs > 0;
-                    return (
-                      <>
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
-                            Проанализировано
-                          </span>
-                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
-                            {funnel ? funnel.analyzed_count : '—'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
-                            Отобрано
-                          </span>
-                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
-                            {funnel && (funnel.selected_count > 0 || funnel.matched_count > 0)
-                              ? `${funnel.selected_count} / ${funnel.matched_count}`
-                              : '—'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
-                            Последний поиск
-                          </span>
-                          <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                            {funnel ? formatRelativeTimeRu(funnel.last_search_at) : '—'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
-                            Следующее обновление
-                          </span>
-                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
-                            {warmupStatus?.running
-                              ? 'идёт сейчас'
-                              : showCountdown
-                              ? formatCountdown(nextEtaMs as number)
-                              : '—'}
-                          </span>
-                        </div>
-                        {isAdmin ? (
-                          <div className="mt-1 pt-2 border-t border-[var(--color-border)]">
-                            <Link
-                              href="/admin"
-                              className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-ink-secondary)] transition-colors"
-                            >
-                              Админ-панель →
-                            </Link>
-                          </div>
-                        ) : null}
-                      </>
-                    );
-                  })()}
-                </CardContent>
-              </Card>
-            </aside>
-
-            {/* ── Main column ─────────────────────────────────────────── */}
-            <div className="workspace-main">
-              {/* ── Резюме section ──────────────────────────────────── */}
-              <Card className="animate-fade-in">
-                <CardHeader className="pb-4">
-                  <CardTitle>Мое резюме</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-                  {resumes.length === 0 ? (
-                    <p className="text-[color:var(--color-ink-secondary)] text-[length:var(--text-sm)] italic">
-                      Пока нет загруженных резюме.
-                    </p>
-                  ) : null}
-                  {resumes.map((resume) => (
-                    <article
-                      key={resume.id}
-                      className={[
-                        'grid gap-3 border rounded-[var(--radius-xl)] bg-[var(--color-surface)] p-5',
-                        resume.is_active
-                          ? 'border-[var(--color-accent)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_18%,transparent)]'
-                          : 'border-[var(--color-border)]',
-                      ].join(' ')}
-                    >
-                      <div className="flex justify-between gap-4 items-start flex-wrap">
-                        <div className="flex flex-col gap-1">
-                          <h3 className="text-[length:var(--text-2xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.03em] break-all">
-                            {resume.original_filename}
-                            {resume.is_active ? (
-                              <span className="resume-active-tag ml-2">активный</span>
-                            ) : null}
-                          </h3>
-                          <span className={`status ${resume.status}`}>
-                            {statusLabels[resume.status] || resume.status}
-                          </span>
-                        </div>
-                        <div className="inline-flex gap-2 flex-wrap justify-end">
-                          {!resume.is_active ? (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={busy}
-                              onClick={() => void activateResumeProfile(resume.id)}
-                            >
-                              Сделать активным
-                            </Button>
-                          ) : null}
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() => toggleResumeDetails(resume.id)}
-                          >
-                            {expandedResumeIds[resume.id] ? 'Свернуть' : 'Показать детали'}
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() => void deleteResume(resume.id)}
-                          >
-                            Удалить
-                          </Button>
-                        </div>
-                      </div>
-                      <label className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                        <span>Короткое имя профиля</span>
-                        <input
-                          type="text"
-                          maxLength={RESUME_LABEL_MAX}
-                          defaultValue={resume.label ?? ''}
-                          placeholder='Например: "IC Staff" или "Mgmt"'
-                          disabled={busy}
-                          onBlur={(event) => void saveResumeLabel(resume.id, event.target.value)}
-                        />
-                      </label>
-                      {resume.error_message ? (
-                        <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
-                          {resume.error_message}
-                        </p>
-                      ) : null}
-                      {resume.analysis ? (
-                        <Analysis
-                          data={resume.analysis}
-                          expectedSalaryMin={userPrefs?.expected_salary_min}
-                          expectedSalaryMax={userPrefs?.expected_salary_max}
-                        />
-                      ) : null}
-                    </article>
-                  ))}
-                </CardContent>
-              </Card>
-
               {/* ── Что ищу section ─────────────────────────────────── */}
               {profileDraft ? (
-                <Card className="animate-fade-in">
-                  <CardHeader className="pb-4">
+                <Card className="animate-fade-in border-transparent shadow-none">
+                  <CardHeader className="pb-3">
                     <CardTitle>Что ищу</CardTitle>
                   </CardHeader>
-                  <CardContent className="flex flex-col gap-5">
-                    <div className="grid gap-4 border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface-muted)] p-5">
-                      <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                        <span>Формат работы</span>
-                        <div className="radio-row">
-                          {WORK_FORMAT_OPTIONS.map((option) => (
-                            <label key={option.value} className="radio-chip">
-                              <input
-                                type="radio"
-                                name="work-format"
-                                value={option.value}
-                                checked={profileDraft.preferred_work_format === option.value}
-                                onChange={() =>
-                                  updateProfileDraft({ preferred_work_format: option.value })
-                                }
-                              />
-                              <span>{option.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                        <span>Готовность к переезду</span>
-                        <div className="radio-row">
-                          <label className="radio-chip">
+                  <CardContent className="flex flex-col gap-4 min-w-0">
+                    <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                      <span>Формат работы <em className="font-normal not-italic text-[color:var(--color-ink-muted)]">(любой если не выбрано)</em></span>
+                      <div className="radio-row">
+                        {WORK_FORMAT_OPTIONS.filter((o) => o.value !== 'any').map((option) => (
+                          <label key={option.value} className="radio-chip">
                             <input
-                              type="radio"
-                              name="relocation-mode"
-                              value="home_only"
-                              checked={profileDraft.relocation_mode === 'home_only'}
-                              onChange={() => updateProfileDraft({ relocation_mode: 'home_only' })}
+                              type="checkbox"
+                              value={option.value}
+                              checked={profileDraft.preferred_work_formats.includes(option.value)}
+                              onChange={(e) => {
+                                const next = e.target.checked
+                                  ? [...profileDraft.preferred_work_formats, option.value]
+                                  : profileDraft.preferred_work_formats.filter((v) => v !== option.value);
+                                updateProfileDraft({ preferred_work_formats: next });
+                              }}
                             />
-                            <span>Только в моём городе</span>
+                            <span>{option.label}</span>
                           </label>
-                          <label className="radio-chip">
-                            <input
-                              type="radio"
-                              name="relocation-mode"
-                              value="any_city"
-                              checked={profileDraft.relocation_mode === 'any_city'}
-                              onChange={() => updateProfileDraft({ relocation_mode: 'any_city' })}
-                            />
-                            <span>Открыт к переезду</span>
-                          </label>
-                        </div>
-                      </div>
-
-                      {profileDraft.relocation_mode === 'home_only' ? (
-                        <label className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                          <span>Мой город</span>
-                          <input
-                            type="text"
-                            maxLength={120}
-                            value={profileDraft.home_city}
-                            onChange={(event) =>
-                              updateProfileDraft({ home_city: event.target.value })
-                            }
-                            placeholder="Москва"
-                          />
-                        </label>
-                      ) : null}
-
-                      <label className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                        <span>
-                          Желаемые названия вакансий (до 10){' '}
-                          <em className="font-normal not-italic text-[color:var(--color-ink-muted)]">
-                            — поднимают совпадающие в выдаче
-                          </em>
-                        </span>
-                        <textarea
-                          rows={3}
-                          value={profileDraft.preferred_titles.join(', ')}
-                          onChange={(event) => {
-                            const parts = event.target.value
-                              .split(/[,\n]/)
-                              .map((title) => title.trim())
-                              .filter(Boolean)
-                              .slice(0, 10);
-                            updateProfileDraft({ preferred_titles: parts });
-                          }}
-                          placeholder="Senior Backend Engineer, Python Developer"
-                        />
-                      </label>
-
-                      <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                        <span>
-                          Ожидаемая зарплата, ₽/мес.{' '}
-                          <em className="font-normal not-italic text-[color:var(--color-ink-muted)]">
-                            — варианты ниже не скрываем, просто опускаем
-                          </em>
-                        </span>
-                        <div className="salary-range-row">
-                          <input
-                            type="number"
-                            min={0}
-                            max={10_000_000}
-                            step={5000}
-                            value={profileDraft.expected_salary_min}
-                            onChange={(event) =>
-                              updateProfileDraft({ expected_salary_min: event.target.value })
-                            }
-                            placeholder="от"
-                          />
-                          <span className="salary-range-sep">—</span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={10_000_000}
-                            step={5000}
-                            value={profileDraft.expected_salary_max}
-                            onChange={(event) =>
-                              updateProfileDraft({ expected_salary_max: event.target.value })
-                            }
-                            placeholder="до"
-                          />
-                        </div>
+                        ))}
                       </div>
                     </div>
 
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      className="w-full"
-                      disabled={profileSaving || matchingBusy}
-                      onClick={() => void saveProfileAndRecommend()}
-                    >
-                      {profileSaving ? 'Сохраняем…' : matchingBusy ? 'Ищем…' : 'Искать вакансии'}
-                    </Button>
-                    {profileMessage ? (
-                      <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
-                        {profileMessage}
-                      </p>
+                    <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                      <span>Готовность к переезду</span>
+                      <div className="radio-row">
+                        <label className="radio-chip">
+                          <input
+                            type="radio"
+                            name="relocation-mode"
+                            value="home_only"
+                            checked={profileDraft.relocation_mode === 'home_only'}
+                            onChange={() => updateProfileDraft({ relocation_mode: 'home_only' })}
+                          />
+                          <span>Только в моём городе</span>
+                        </label>
+                        <label className="radio-chip">
+                          <input
+                            type="radio"
+                            name="relocation-mode"
+                            value="any_city"
+                            checked={profileDraft.relocation_mode === 'any_city'}
+                            onChange={() => updateProfileDraft({ relocation_mode: 'any_city' })}
+                          />
+                          <span>Открыт к переезду</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {profileDraft.relocation_mode === 'home_only' ? (
+                      <label className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                        <span>Мой город</span>
+                        <input
+                          type="text"
+                          maxLength={120}
+                          value={profileDraft.home_city}
+                          onChange={(event) =>
+                            updateProfileDraft({ home_city: event.target.value })
+                          }
+                          placeholder="Москва"
+                        />
+                      </label>
                     ) : null}
+
+                    <label className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                      <span>Желаемые должности <em className="font-normal not-italic text-[color:var(--color-ink-muted)]">(до 10)</em></span>
+                      <textarea
+                        key={profileDraft.preferred_titles.join(',')}
+                        rows={2}
+                        defaultValue={profileDraft.preferred_titles.join(', ')}
+                        onBlur={(event) => {
+                          const parts = event.target.value
+                            .split(',')
+                            .map((s) => s.trim())
+                            .filter(Boolean)
+                            .slice(0, 10);
+                          updateProfileDraft({ preferred_titles: parts });
+                        }}
+                        placeholder="Backend Engineer, Python Developer"
+                        className="w-full font-normal"
+                      />
+                    </label>
+
+                    <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                      <span>Зарплата, ₽/мес.</span>
+                      <div className="salary-range-row">
+                        <input
+                          type="number"
+                          min={0}
+                          max={10_000_000}
+                          step={5000}
+                          value={profileDraft.expected_salary_min}
+                          onChange={(event) =>
+                            updateProfileDraft({ expected_salary_min: event.target.value })
+                          }
+                          placeholder="от"
+                          className="font-normal"
+                        />
+                        <span className="salary-range-sep">—</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={10_000_000}
+                          step={5000}
+                          value={profileDraft.expected_salary_max}
+                          onChange={(event) =>
+                            updateProfileDraft({ expected_salary_max: event.target.value })
+                          }
+                          placeholder="до"
+                          className="font-normal"
+                        />
+                      </div>
+                    </div>
 
                     {curatedSkills.length > 0 ? (
                       <Collapsible>
@@ -2031,38 +1886,186 @@ export default function DashboardPage() {
                 </Card>
               ) : null}
 
+              {/* Funnel card */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-[length:var(--text-2xl)]">Моя воронка</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  {(() => {
+                    const funnel = dashboardStats?.funnel;
+                    const nextEtaMs = funnel?.next_warmup_eta
+                      ? new Date(funnel.next_warmup_eta).getTime() - nowTick
+                      : null;
+                    const showCountdown =
+                      warmupStatus?.enabled &&
+                      funnel?.next_warmup_eta != null &&
+                      nextEtaMs !== null &&
+                      nextEtaMs > 0;
+                    return (
+                      <>
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Проанализировано</span>
+                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
+                            {funnel ? funnel.analyzed_count : '—'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Отобрано</span>
+                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
+                            {funnel && (funnel.selected_count > 0 || funnel.matched_count > 0)
+                              ? `${funnel.selected_count} / ${funnel.matched_count}`
+                              : '—'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Последний поиск</span>
+                          <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                            {funnel ? formatRelativeTimeRu(funnel.last_search_at) : '—'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Следующее обновление</span>
+                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
+                            {warmupStatus?.running ? 'идёт сейчас' : showCountdown ? formatCountdown(nextEtaMs as number) : '—'}
+                          </span>
+                        </div>
+                        {visibleMatches.length > 0 ? (
+                          <div className="flex justify-between items-baseline">
+                            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Вакансий найдено</span>
+                            <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">{visibleMatches.length}</span>
+                          </div>
+                        ) : null}
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Поиск вакансий</span>
+                          <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                            {warmupStatus?.running ? 'идёт сейчас' : warmupStatus?.enabled ? 'активен' : 'выключен'}
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            </aside>
+
+            {/* ── Main column ─────────────────────────────────────────── */}
+            <div className="workspace-main">
+              {/* ── Резюме section ──────────────────────────────────── */}
+              <Card className="animate-fade-in border-transparent shadow-none">
+                <CardHeader className="pb-3">
+                  <CardTitle>Моё резюме</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  {resumes.length === 0 ? (
+                    <div className="flex flex-col items-center text-center gap-3 py-8">
+                      <svg className="w-12 h-12 text-[color:var(--color-ink-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                      </svg>
+                      <div>
+                        <p className="text-[color:var(--color-ink)] text-[length:var(--text-sm)] font-semibold">Загрузите резюме, чтобы начать</p>
+                        <p className="text-[color:var(--color-ink-secondary)] text-[length:var(--text-xs)] mt-1">AI проанализирует его и подберёт подходящие вакансии</p>
+                      </div>
+                    </div>
+                  ) : null}
+                  {resumes.map((resume) => (
+                    <article
+                      key={resume.id}
+                      className={[
+                        'grid gap-2 border rounded-[var(--radius-xl)] p-4 bg-[var(--color-surface)]',
+                        resume.is_active
+                          ? 'border-[var(--color-accent)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_18%,transparent)]'
+                          : 'border-[var(--color-border)] shadow-[var(--shadow-xs)]',
+                      ].join(' ')}
+                    >
+                      <div className="flex justify-between gap-3 items-start flex-wrap">
+                        <div className="flex flex-col gap-0.5">
+                          <h3 className="text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.03em]">
+                            {resume.analysis
+                              ? (asText(resume.analysis.candidate_name, '') || asText(resume.analysis.target_role, '') || resume.original_filename)
+                              : resume.original_filename}
+                            {resume.is_active ? (
+                              <span className="resume-active-tag ml-2">активный</span>
+                            ) : null}
+                          </h3>
+                          <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]">{resume.original_filename}</span>
+                          {resume.status === 'failed' || resume.status === 'processing' ? (
+                            <span className={`status ${resume.status}`}>
+                              {statusLabels[resume.status]}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="inline-flex gap-2 flex-wrap justify-end">
+                          {!resume.is_active ? (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void activateResumeProfile(resume.id)}
+                              className="text-[length:var(--text-xs)] font-medium text-[color:var(--color-accent)] hover:opacity-70 transition-opacity disabled:opacity-40"
+                            >
+                              Сделать активным
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              if (window.confirm('Удалить резюме? Это действие нельзя отменить.')) {
+                                void deleteResume(resume.id);
+                              }
+                            }}
+                            className="w-7 h-7 flex items-center justify-center rounded-full text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-danger)] hover:bg-[var(--color-danger-subtle)] transition-colors disabled:opacity-40"
+                            title="Удалить резюме"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <path d="M2 2l10 10M12 2L2 12"/>
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      {resume.error_message ? (
+                        <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
+                          {resume.error_message}
+                        </p>
+                      ) : null}
+                      {resume.analysis ? (
+                        <Analysis
+                          data={resume.analysis}
+                          expectedSalaryMin={userPrefs?.expected_salary_min}
+                          expectedSalaryMax={userPrefs?.expected_salary_max}
+                        />
+                      ) : null}
+                    </article>
+                  ))}
+                </CardContent>
+              </Card>
+
               {/* ── Подбор вакансий section ─────────────────────────── */}
-              <Card className="animate-fade-in">
-                <CardHeader className="pb-4">
+              <Card className="animate-fade-in border-transparent shadow-none">
+                <CardHeader className="pb-3">
                   <CardTitle>Подбор вакансий</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
-                  {resumes.length > 1 ? (
-                    <select
-                      className="w-full"
-                      value={selectedResumeId ?? ''}
-                      onChange={(event) => setSelectedResumeId(event.target.value ? Number(event.target.value) : null)}
-                    >
-                      <option value="">Выберите резюме</option>
-                      {resumes.map((resume) => (
-                        <option key={resume.id} value={resume.id}>
-                          #{resume.id} {resume.original_filename}
-                        </option>
-                      ))}
-                    </select>
-                  ) : null}
-                  {!profileDraft ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-4 py-3">
+                    <div>
+                      <p className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                        {matchingBusy ? 'Ищем подходящие вакансии…' : 'Подобрать вакансии'}
+                      </p>
+                      <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
+                        {matchingBusy ? 'Это займёт несколько минут' : 'AI подберёт вакансии под ваш профиль'}
+                      </p>
+                    </div>
                     <Button
                       variant="primary"
                       size="lg"
-                      className="w-full"
-                      onClick={() => void refreshVacancyIndex()}
+                      className="px-6 shrink-0 sm:self-auto self-stretch"
+                      onClick={() => profileDraft ? void saveProfileAndRecommend() : void refreshVacancyIndex()}
                       disabled={matchingBusy || !selectedResumeId}
                     >
-                      {matchingBusy ? 'Ищем…' : 'Искать вакансии'}
+                      {profileSaving ? 'Сохраняем…' : matchingBusy ? 'Ищем…' : 'Подобрать'}
                     </Button>
-                  ) : null}
-                  {matchingBusy || matchingProgress > 0 ? (
+                  </div>
+                  {matchingBusy ? (
                     <div className="progress-box">
                       <div className="progress-head">
                         <span>{matchingStage || 'Идет выполнение...'}</span>
@@ -2085,44 +2088,17 @@ export default function DashboardPage() {
                       ) : null}
                     </div>
                   ) : null}
-                  {matchingMessage ? (
-                    <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
-                      {matchingMessage}
-                    </p>
-                  ) : null}
-                  {currentJobId ? (
-                    <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]">
-                      Job ID: {currentJobId}
-                    </p>
-                  ) : null}
-                  {openaiUsageMessage ? (
-                    <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]">
-                      {openaiUsageMessage}
-                    </p>
-                  ) : null}
-                  {lastMatchingQuery ? (
-                    <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]">
-                      Запрос: {lastMatchingQuery}
-                    </p>
-                  ) : null}
-                  {lastSources.length > 0 ? (
-                    <details className="sources-box">
-                      <summary>Источники текущего запуска ({lastSources.length})</summary>
-                      <ul>
-                        {lastSources.map((sourceUrl) => (
-                          <li key={sourceUrl}>
-                            <a href={sourceUrl} target="_blank" rel="noreferrer">
-                              {sourceUrl}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  ) : null}
-                  {visibleMatches.length > 0 && lastSearchAt ? (
-                    <p className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink-secondary)]">
-                      {`Топ-${visibleMatches.length}${lastAnalyzedCount ? ` из ${lastAnalyzedCount} просмотренных` : ''} · последний запуск ${lastSearchAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
-                    </p>
+                  {(matchingMessage || (visibleMatches.length > 0 && lastSearchAt)) ? (
+                    <div className="rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-4 py-3 flex flex-col gap-1">
+                      {matchingMessage ? (
+                        <p className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">{matchingMessage}</p>
+                      ) : null}
+                      {visibleMatches.length > 0 && lastSearchAt ? (
+                        <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
+                          {`Топ-${visibleMatches.length}${lastAnalyzedCount ? ` из ${lastAnalyzedCount} просмотренных` : ''} · запуск в ${lastSearchAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
+                        </p>
+                      ) : null}
+                    </div>
                   ) : null}
 
                   {/* Match cards */}
@@ -2174,7 +2150,7 @@ export default function DashboardPage() {
                           ) : null}
                           {/* Match card using token classes */}
                           <article
-                            className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface)] p-4 flex flex-col gap-3 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-shadow duration-[var(--duration-fast)]"
+                            className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-4 flex flex-col gap-3 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-shadow duration-[var(--duration-fast)]"
                             data-vacancy-id={normalizeVacancyId(match.vacancy_id)}
                             ref={(el) => {
                               const id = normalizeVacancyId(match.vacancy_id);
@@ -2186,15 +2162,16 @@ export default function DashboardPage() {
                             }}
                           >
                             {/* Card header row */}
-                            <div className="flex items-start justify-between gap-3 flex-wrap">
-                              <h3 className="text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.025em] text-[color:var(--color-ink)]">
+                            <div className="flex items-start justify-between gap-3">
+                              <h3 className="min-w-0 text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.025em] text-[color:var(--color-ink)]">
                                 {match.title}
                               </h3>
-                              {/* Score + salary right-aligned, mono */}
-                              <div className="flex flex-col items-end gap-1 shrink-0 font-[var(--font-mono)] text-[length:var(--text-sm)]">
+                              {/* Relevance + salary right-aligned, mono */}
+                              <div className="flex flex-col items-end gap-0.5 shrink-0 font-[var(--font-mono)] text-[length:var(--text-sm)]">
                                 <span className="font-semibold text-[color:var(--color-ink)]">
                                   {scoreToPercent(match.similarity_score)}
                                 </span>
+                                <span className="text-[length:var(--text-xs)] font-sans font-normal text-[color:var(--color-ink-muted)]">релевантность</span>
                                 {(() => {
                                   const badge = renderSalaryBadge(match);
                                   if (!badge) return null;
@@ -2333,10 +2310,10 @@ export default function DashboardPage() {
                                   ? 'Создаём…'
                                   : 'Откликнуться'}
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
+                              <button
+                                type="button"
                                 disabled={matchingBusy}
+                                title="Интересно"
                                 onClick={() => {
                                   trackClick({
                                     vacancy_id: normalizeVacancyId(match.vacancy_id),
@@ -2347,13 +2324,15 @@ export default function DashboardPage() {
                                   });
                                   void likeVacancy(match);
                                 }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-md)] text-[length:var(--text-xs)] font-medium border border-transparent text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] hover:border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] transition-colors disabled:opacity-40"
                               >
-                                + Плюс
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 1v10M1 6h10"/></svg>
+                                Интересно
+                              </button>
+                              <button
+                                type="button"
                                 disabled={matchingBusy}
+                                title="Не подходит"
                                 onClick={() => {
                                   trackClick({
                                     vacancy_id: normalizeVacancyId(match.vacancy_id),
@@ -2364,9 +2343,11 @@ export default function DashboardPage() {
                                   });
                                   void dislikeVacancy(match);
                                 }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-md)] text-[length:var(--text-xs)] font-medium border border-transparent text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-danger)] hover:bg-[var(--color-danger-subtle)] hover:border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] transition-colors disabled:opacity-40"
                               >
-                                − Минус
-                              </Button>
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 6h10"/></svg>
+                                Не подходит
+                              </button>
                               <a
                                 href={match.source_url}
                                 target="_blank"
@@ -2393,10 +2374,59 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* ── Collapsible archived sections ──────────────────── */}
-              <Card className="animate-fade-in">
+              {/* ── Отклики ─────────────────────────────────────────── */}
+              <Card className="animate-fade-in border-transparent shadow-none">
                 <Collapsible>
-                  <CardHeader className="pb-4">
+                  <CardHeader className="pb-3">
+                    <CollapsibleTrigger className="group flex items-center justify-between w-full text-left gap-3">
+                      <CardTitle>Отклики</CardTitle>
+                      <span className="flex items-center gap-2 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
+                        <span className="text-[length:var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                          {appliedVacancies.length}
+                        </span>
+                        <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
+                      </span>
+                    </CollapsibleTrigger>
+                  </CardHeader>
+                  <CollapsibleContent className="data-[state=open]:animate-slide-down">
+                    <CardContent className="pt-0 flex flex-col gap-3">
+                      {appliedVacancies.length === 0 ? (
+                        <p className="text-[color:var(--color-ink-secondary)] text-[length:var(--text-sm)] italic">
+                          Нажмите «Откликнуться» на карточке вакансии — она переместится сюда.
+                        </p>
+                      ) : null}
+                      {appliedVacancies.map((item) => (
+                        <article
+                          key={`applied-${item.vacancy_id}`}
+                          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-4 flex flex-col gap-2 shadow-[var(--shadow-xs)]"
+                        >
+                          <h3 className="text-[length:var(--text-lg)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.02em]">
+                            {item.title}
+                          </h3>
+                          <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] m-0">
+                            {item.company || 'Компания не указана'}{item.location ? ` · ${item.location}` : ''}
+                          </p>
+                          {item.source_url ? (
+                            <a
+                              href={item.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-accent)] hover:opacity-75 transition-opacity no-underline self-start"
+                            >
+                              Открыть вакансию ↗
+                            </a>
+                          ) : null}
+                        </article>
+                      ))}
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+
+              {/* ── Collapsible archived sections ──────────────────── */}
+              <Card className="animate-fade-in border-transparent shadow-none">
+                <Collapsible>
+                  <CardHeader className="pb-3">
                     <CollapsibleTrigger className="group flex items-center justify-between w-full text-left gap-3">
                       <CardTitle>Отобранные вакансии</CardTitle>
                       <span className="flex items-center gap-2 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
@@ -2417,7 +2447,7 @@ export default function DashboardPage() {
                       {selectedVacancies.map((item) => (
                         <article
                           key={`selected-${item.vacancy_id}`}
-                          className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface)] p-4 flex flex-col gap-2"
+                          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-4 flex flex-col gap-2 shadow-[var(--shadow-xs)]"
                         >
                           <h3 className="text-[length:var(--text-lg)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.02em]">
                             {item.title}
@@ -2450,9 +2480,9 @@ export default function DashboardPage() {
                 </Collapsible>
               </Card>
 
-              <Card className="animate-fade-in">
+              <Card className="animate-fade-in border-transparent shadow-none">
                 <Collapsible>
-                  <CardHeader className="pb-4">
+                  <CardHeader className="pb-3">
                     <CollapsibleTrigger className="group flex items-center justify-between w-full text-left gap-3">
                       <CardTitle>Отклонённые вакансии</CardTitle>
                       <span className="flex items-center gap-2 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
@@ -2473,7 +2503,7 @@ export default function DashboardPage() {
                       {dislikedVacancies.map((item) => (
                         <article
                           key={`disliked-${item.vacancy_id}`}
-                          className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-surface)] p-4 flex flex-col gap-2"
+                          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-4 flex flex-col gap-2 shadow-[var(--shadow-xs)]"
                         >
                           <h3 className="text-[length:var(--text-lg)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.02em]">
                             {item.title}
@@ -2509,9 +2539,110 @@ export default function DashboardPage() {
               {/* Applications section moved to /applications route — slice 2.8.4 */}
             </div>
           </div>
-          </div>
         )}
       </section>
+
+      {/* ── Footer ───────────────────────────────────────────────────────── */}
+      <footer className="w-full mt-auto border-t border-[var(--color-border)] bg-[#f3f6fb]/80 backdrop-blur-sm">
+        <div className="max-w-[1180px] mx-auto px-6 py-6">
+
+          {/* Top row: brand + nav */}
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-6">
+
+            {/* Brand */}
+            <div className="flex flex-col gap-2 max-w-[260px]">
+              <div className="flex items-center gap-2">
+                <Image src="/hr-assist-logo.svg" alt="HR консультант" width={24} height={24} className="rounded-[6px] shadow-[var(--shadow-sm)]" />
+                <span className="font-bold text-[length:var(--text-sm)] tracking-[-0.02em] text-[color:var(--color-ink)]">HR консультант</span>
+              </div>
+              <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)]">
+                AI-ассистент для соискателей — умный подбор вакансий и воронка откликов.
+              </p>
+            </div>
+
+            {/* Nav columns */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6 text-[length:var(--text-xs)]">
+              <div className="flex flex-col gap-1.5">
+                <span className="font-semibold text-[color:var(--color-ink)] mb-0.5">Продукт</span>
+                <a href="/vacancies" className="text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">Подбор вакансий</a>
+                <a href="/resume-analysis" className="text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">Анализ резюме</a>
+                <a href="/funnel" className="text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">Воронка откликов</a>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="font-semibold text-[color:var(--color-ink)] mb-0.5">Компания</span>
+                <a href="/about" className="text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">О проекте</a>
+                <a href="/contacts" className="text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">Контакты</a>
+                <a href="https://github.com/fat32al1ty/HR-assist" target="_blank" rel="noreferrer" className="text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">GitHub</a>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="font-semibold text-[color:var(--color-ink)] mb-0.5">Правовое</span>
+                <a href="/privacy" className="text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">Конфиден­циальность</a>
+                <a href="/terms" className="text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">Условия</a>
+                <a href="/cookies" className="text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">Cookies</a>
+              </div>
+            </div>
+          </div>
+
+          {/* Tech stack */}
+          <div className="mb-4">
+            <p className="text-[length:var(--text-xs)] font-semibold tracking-[0.08em] uppercase text-[color:var(--color-ink-muted)] mb-2.5">Стек</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { name: "Next.js",     color: "#000000", icon: (
+                  <svg viewBox="0 0 180 180" fill="none" className="w-5 h-5 shrink-0"><mask id="nxt-m" style={{maskType:"alpha"}} maskUnits="userSpaceOnUse" x="0" y="0" width="180" height="180"><circle cx="90" cy="90" r="90" fill="black"/></mask><g mask="url(#nxt-m)"><circle cx="90" cy="90" r="90" fill="black"/><path d="M149.508 157.52L69.142 54H54V125.97H66.1V69.438L139.999 164.845C143.333 162.614 146.509 160.165 149.508 157.52Z" fill="url(#nxt-g1)"/><rect x="115" y="54" width="12" height="72" fill="url(#nxt-g2)"/></g><defs><linearGradient id="nxt-g1" x1="109" y1="116.5" x2="144.5" y2="160.5" gradientUnits="userSpaceOnUse"><stop stopColor="white"/><stop offset="1" stopColor="white" stopOpacity="0"/></linearGradient><linearGradient id="nxt-g2" x1="121" y1="54" x2="120.799" y2="106.875" gradientUnits="userSpaceOnUse"><stop stopColor="white"/><stop offset="1" stopColor="white" stopOpacity="0"/></linearGradient></defs></svg>
+                )},
+                { name: "TypeScript",  color: "#3178C6", icon: (
+                  <svg viewBox="0 0 256 256" className="w-5 h-5 shrink-0"><rect width="256" height="256" fill="#3178C6" rx="16"/><path fill="white" d="M150.5 200.5v-27.4c4.5 2.3 9.6 4 14.8 5 5.2 1 10.5 1.5 15.7 1.5 3.2 0 6.3-.3 9.3-.8 3-.5 5.7-1.4 8-2.7 2.3-1.3 4.1-3 5.5-5.2 1.4-2.2 2-4.9 2-8.2 0-2.5-.5-4.7-1.6-6.6-1-1.9-2.5-3.6-4.4-5.1-1.9-1.5-4.1-2.9-6.7-4.2-2.6-1.3-5.4-2.7-8.4-4.1-3.5-1.6-6.7-3.3-9.7-5.1-3-1.8-5.6-3.8-7.8-6.1-2.2-2.3-3.9-4.9-5.2-7.9-1.3-3-1.9-6.5-1.9-10.5 0-5.4 1.1-10 3.3-13.7 2.2-3.7 5.1-6.8 8.7-9.2 3.6-2.4 7.7-4.1 12.3-5.2 4.6-1.1 9.4-1.7 14.4-1.7 4.3 0 8.4.3 12.2.8 3.8.5 7.3 1.3 10.4 2.3v26.6c-1.8-1.1-3.8-2-5.9-2.7-2.1-.7-4.3-1.3-6.5-1.7-2.2-.4-4.4-.7-6.6-.9-2.2-.2-4.3-.3-6.2-.3-3 0-5.9.3-8.5.9-2.6.6-4.9 1.5-6.8 2.8-1.9 1.3-3.4 2.9-4.5 4.9-1.1 2-1.6 4.3-1.6 7 0 2.3.5 4.3 1.4 5.9.9 1.6 2.3 3.1 4 4.4 1.7 1.3 3.8 2.5 6.2 3.7 2.4 1.2 5.1 2.5 8.2 3.9 3.7 1.7 7.2 3.5 10.3 5.4 3.1 1.9 5.9 4 8.2 6.4 2.3 2.4 4.1 5.2 5.4 8.3 1.3 3.1 2 6.8 2 11.1 0 5.8-1.1 10.7-3.3 14.5-2.2 3.8-5.2 6.9-9 9.2-3.8 2.3-8.1 4-13.1 5-5 1-10.2 1.5-15.7 1.5-5.3 0-10.5-.5-15.7-1.4-5.2-.9-9.9-2.3-14.1-4.1ZM92.6 110.7H128v-27H27v27h35.2V214h30.4V110.7Z"/></svg>
+                )},
+                { name: "FastAPI",     color: "#009688", icon: (
+                  <svg viewBox="0 0 256 256" className="w-5 h-5 shrink-0"><circle cx="128" cy="128" r="128" fill="#009688"/><path fill="white" d="M140 32 76 144h60l-20 80 88-120h-64z"/></svg>
+                )},
+                { name: "Python",      color: "#3776AB", icon: (
+                  <svg viewBox="0 0 256 255" className="w-5 h-5 shrink-0"><path fill="#3776AB" d="M126.9 0C62.4 0 66.3 27.5 66.3 27.5l.1 28.5h61.7v8.5H41.8S0 59.7 0 124.9c0 65.2 36.1 62.9 36.1 62.9h21.6v-30.3s-1.2-36 35.4-36h61.1s34.3.6 34.3-33.2V33.8C188.5 1.3 152.1 0 126.9 0Zm-34 19.6c6.1 0 11 4.9 11 11s-4.9 11-11 11-11-4.9-11-11 4.9-11 11-11Z"/><path fill="#FFD43B" d="M129.1 254.6c64.5 0 60.6-27.5 60.6-27.5l-.1-28.5h-61.7v-8.5h86.3s41.8 4.8 41.8-60.5c0-65.2-36.1-62.9-36.1-62.9h-21.6v30.3s1.2 36-35.4 36h-61s-34.3-.6-34.3 33.2v55.4c0 32.5 36.4 33.8 61.5 33.8Zm34-19.6c-6.1 0-11-4.9-11-11s4.9-11 11-11 11 4.9 11 11-4.9 11-11 11Z"/></svg>
+                )},
+                { name: "PostgreSQL",  color: "#336791", icon: (
+                  <svg viewBox="0 0 256 256" className="w-5 h-5 shrink-0"><ellipse cx="128" cy="100" rx="100" ry="72" fill="#336791"/><rect x="28" y="100" width="200" height="72" fill="#336791"/><ellipse cx="128" cy="172" rx="100" ry="28" fill="#336791"/><ellipse cx="128" cy="100" rx="100" ry="28" fill="#5b9bd5"/><path d="M228 100v72c0 15-45 28-100 28S28 187 28 172v-72" fill="none" stroke="#fff" strokeWidth="4" opacity=".3"/><text x="128" y="116" textAnchor="middle" fill="white" fontSize="52" fontWeight="bold" fontFamily="serif">pg</text></svg>
+                )},
+                { name: "OpenAI",      color: "#10A37F", icon: (
+                  <svg viewBox="0 0 41 41" fill="currentColor" className="w-5 h-5 shrink-0" style={{color:"#10A37F"}}><path d="M37.532 16.87a9.963 9.963 0 0 0-.856-8.184 10.078 10.078 0 0 0-10.855-4.835 9.964 9.964 0 0 0-6.75-3.014 10.079 10.079 0 0 0-9.617 6.977 9.967 9.967 0 0 0-6.63 4.811 10.079 10.079 0 0 0 1.24 11.817 9.965 9.965 0 0 0 .856 8.185 10.079 10.079 0 0 0 10.855 4.835 9.965 9.965 0 0 0 6.75 3.014 10.078 10.078 0 0 0 9.617-6.976 9.967 9.967 0 0 0 6.63-4.812 10.079 10.079 0 0 0-1.24-11.817zm-14.97 20.415a7.477 7.477 0 0 1-4.793-1.727c.061-.033.168-.091.237-.134l7.964-4.6a1.294 1.294 0 0 0 .655-1.134V19.054l3.366 1.944a.12.12 0 0 1 .066.092v9.299a7.505 7.505 0 0 1-7.495 7.496zM6.392 33.006a7.471 7.471 0 0 1-.894-5.023c.06.036.162.099.237.141l7.964 4.6a1.297 1.297 0 0 0 1.308 0l9.724-5.614v3.888a.12.12 0 0 1-.048.103l-8.051 4.649a7.504 7.504 0 0 1-10.24-2.744zM4.297 13.62A7.469 7.469 0 0 1 8.2 10.333c0 .068-.004.19-.004.274v9.201a1.294 1.294 0 0 0 .654 1.132l9.723 5.614-3.366 1.944a.12.12 0 0 1-.114.012L7.044 23.86a7.504 7.504 0 0 1-2.747-10.24zm27.658 6.437l-9.724-5.615 3.367-1.943a.121.121 0 0 1 .114-.012l8.048 4.648a7.498 7.498 0 0 1-1.158 13.528v-9.476a1.293 1.293 0 0 0-.647-1.13zm3.35-5.043c-.059-.037-.162-.099-.236-.141l-7.965-4.6a1.298 1.298 0 0 0-1.308 0l-9.723 5.614v-3.888a.12.12 0 0 1 .048-.103l8.05-4.645a7.497 7.497 0 0 1 11.135 7.763zm-21.063 6.929l-3.367-1.944a.12.12 0 0 1-.065-.092v-9.299a7.497 7.497 0 0 1 12.293-5.756 6.94 6.94 0 0 0-.236.134l-7.965 4.6a1.294 1.294 0 0 0-.654 1.132l-.006 11.225zm1.829-3.943l4.33-2.501 4.332 2.5v4.999l-4.331 2.5-4.331-2.5V18z"/></svg>
+                )},
+                { name: "Qdrant",      color: "#DC244C", icon: (
+                  <svg viewBox="0 0 64 64" className="w-5 h-5 shrink-0"><polygon points="32,4 58,18 58,46 32,60 6,46 6,18" fill="#DC244C"/><polygon points="32,4 58,18 32,32" fill="#ff6b8a" opacity=".7"/><polygon points="6,18 32,32 32,60" fill="#a0001c" opacity=".7"/><polygon points="32,32 58,18 58,46" fill="#c0002a" opacity=".6"/><circle cx="32" cy="32" r="10" fill="white" opacity=".9"/></svg>
+                )},
+                { name: "Docker",      color: "#2496ED", icon: (
+                  <svg viewBox="0 0 256 190" className="w-5 h-5 shrink-0"><path fill="#2496ED" d="M250 87.6c-4.4-3-14.7-4.2-22.6-2.6-.9-8.5-6.1-15.9-15.8-22.6l-5.4-3.5-3.5 5.4c-4.4 7-6.6 16.6-5.9 25.8a38 38 0 0 0 5.2 13.7c-7.6 4.2-20 5.3-22.5 5.4H18.4C8.4 109.6 0 118 0 128.2a75 75 0 0 0 1.2 13.6C4.7 160 13 173 24.8 181.7c13.3 9.8 34.9 15 59.4 15 11.4 0 22.7-1 33.7-3a133 133 0 0 0 44.6-17.4 117 117 0 0 0 30.5-29.6c14.8-21 23.7-44.5 29.3-65.2 17 1 28.4-4.2 34.3-9.1 3.7-3 5.8-5.9 6.6-7.6l2.6-6-15.8-10.2Z"/><path fill="#2496ED" d="M28.4 87.6h24.4V64H28.4v23.6Zm27.2 0h24.4V64H55.6v23.6Zm27.3 0h24.4V64H82.9v23.6Zm27.2 0h24.4V64h-24.4v23.6Zm-54.4-26h24.4V38H55.7v23.6Zm27.2 0h24.4V38H82.9v23.6Zm27.2 0h24.4V38h-24.4v23.6Zm27.3 0h24.4V38h-24.4v23.6Zm0 26h24.4V64h-24.4v23.6Z"/></svg>
+                )},
+                { name: "Tailwind",    color: "#06B6D4", icon: (
+                  <svg viewBox="0 0 256 154" className="w-5 h-5 shrink-0"><path fill="#06B6D4" fillRule="evenodd" d="M128 0C93.867 0 72.533 17.067 64 51.2 76.8 34.133 91.733 27.733 108.8 32c9.737 2.434 16.697 9.499 24.401 17.318C145.751 62.057 160.275 76.8 192 76.8c34.133 0 55.467-17.067 64-51.2-12.8 17.067-27.733 23.467-44.8 19.2-9.737-2.434-16.697-9.499-24.401-17.318C174.249 14.743 159.725 0 128 0ZM64 76.8C29.867 76.8 8.533 93.867 0 128c12.8-17.067 27.733-23.467 44.8-19.2 9.737 2.434 16.697 9.499 24.401 17.318C81.751 138.857 96.275 153.6 128 153.6c34.133 0 55.467-17.067 64-51.2-12.8 17.067-27.733 23.467-44.8 19.2-9.737-2.434-16.697-9.499-24.401-17.318C110.249 91.543 95.725 76.8 64 76.8Z"/></svg>
+                )},
+                { name: "SQLAlchemy",  color: "#D71F00", icon: (
+                  <svg viewBox="0 0 256 256" className="w-5 h-5 shrink-0"><rect width="256" height="256" rx="20" fill="#D71F00"/><text x="128" y="148" textAnchor="middle" fill="white" fontSize="60" fontWeight="bold" fontFamily="monospace">SA</text></svg>
+                )},
+              ].map(({ name, color, icon }) => (
+                <div
+                  key={name}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--color-border)] bg-white/60 text-[length:var(--text-xs)] font-medium text-[color:var(--color-ink)] shadow-[var(--shadow-xs)] hover:shadow-[var(--shadow-sm)] transition-shadow"
+                >
+                  {icon}
+                  <span>{name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 border-t border-[var(--color-border)] text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
+            <span>© {new Date().getFullYear()} HR консультант. Все права защищены.</span>
+            <span className="inline-flex items-center gap-1.5">
+              Работает на
+              <span className="font-semibold text-[color:var(--color-ink)]">Claude&nbsp;Sonnet</span>
+              &amp;
+              <span className="font-semibold text-[color:var(--color-ink)]">GPT-4o</span>
+            </span>
+          </div>
+
+        </div>
+      </footer>
     </main>
   );
 }
@@ -2535,7 +2666,6 @@ function Analysis({ data, expectedSalaryMin, expectedSalaryMax }: {
 
   const role = asText(data.target_role, '') || asText(data.specialization, '') || '—';
   const grade = asText(data.seniority, '—');
-  const top5Skills = hardSkills.slice(0, 5).join(', ') || '—';
   const salaryDisplay =
     expectedSalaryMin || expectedSalaryMax
       ? [
@@ -2548,68 +2678,62 @@ function Analysis({ data, expectedSalaryMin, expectedSalaryMax }: {
 
   return (
     <div className="analysis">
-      <Card className="mb-4">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-[length:var(--text-xl)]">
-            Твой профиль
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
+      {/* Compact summary — always visible */}
+      <div className="grid gap-1.5 pt-1 pb-2">
+        <div className="flex justify-between gap-4">
+          <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">Роль</span>
+          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink)] text-right">{role}</span>
+        </div>
+        <div className="flex justify-between gap-4">
+          <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">Грейд</span>
+          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink)]">{grade}</span>
+        </div>
+        {totalExperience !== null ? (
           <div className="flex justify-between gap-4">
-            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Роль</span>
-            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink)] text-right">{role}</span>
+            <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">Опыт</span>
+            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink)]">{totalExperience} лет</span>
           </div>
-          <div className="flex justify-between gap-4">
-            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Грейд</span>
-            <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">{grade}</span>
-          </div>
+        ) : null}
+        {hardSkills.length > 0 ? (
           <div className="flex justify-between items-start gap-4">
-            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] shrink-0">Топ-5 скиллов</span>
-            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink)] text-right">{top5Skills}</span>
+            <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)] shrink-0">Топ навыки</span>
+            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink)] text-right">{hardSkills.slice(0, 5).join(', ')}</span>
           </div>
+        ) : null}
+        {(expectedSalaryMin || expectedSalaryMax) ? (
           <div className="flex justify-between gap-4">
-            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Ожидаемая зарплата</span>
+            <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">Зарплата</span>
             <span className="text-[length:var(--text-sm)] font-[var(--font-mono)] text-[color:var(--color-ink)]">{salaryDisplay}</span>
           </div>
-        </CardContent>
-      </Card>
+        ) : null}
+      </div>
 
       <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <CollapsibleTrigger className="group flex items-center justify-between w-full text-left px-0 py-2 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">
-          <span>Подробности профиля</span>
-          <span className="ml-2 transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
+        <CollapsibleTrigger className="group flex items-center gap-1.5 text-left py-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-accent)] hover:opacity-75 transition-opacity">
+          <span>{detailsOpen ? 'Свернуть' : 'Подробности профиля'}</span>
+          <span className="no-underline text-[length:var(--text-xs)] transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
         </CollapsibleTrigger>
         <CollapsibleContent className="data-[state=open]:animate-slide-down">
-          <div className="profile-card">
-            <div>
-              <span className="eyebrow">Кандидат</span>
-              <h4>{asText(data.candidate_name, 'Имя не определено')}</h4>
-              <p>{asText(data.target_role, 'Целевая роль не определена')}</p>
-            </div>
-            <div>
-              <span className="eyebrow">Грейд (оценка модели)</span>
-              <h4>{asText(data.seniority, 'Не определен')}</h4>
-              <p>{seniorityConfidence === null ? 'Уверенность не рассчитана' : `Уверенность модели: ${Math.round(seniorityConfidence * 100)}%`}</p>
-            </div>
-            <div>
-              <span className="eyebrow">Опыт</span>
-              <h4>{totalExperience === null ? 'Не указан' : `${totalExperience} лет`}</h4>
-              <p>{asText(data.specialization, 'Специализация не определена')}</p>
-            </div>
-          </div>
-
           <div className="analysis-section">
             <h4>Краткий профиль</h4>
             <p>{asText(data.summary, 'Описание пока недоступно')}</p>
           </div>
-          <List title="Hard skills" items={hardSkills} />
-          <List title="Soft skills" items={softSkills} />
-          <List title="Инструменты и технологии" items={tools} />
-          <List title="Домены и отрасли" items={domains} />
+          <PillList title="Hard skills" items={hardSkills} />
+          <PillList title="Soft skills" items={softSkills} />
+          <PillList title="Инструменты и технологии" items={tools} />
+          <PillList title="Домены и отрасли" items={domains} />
           <List title="Сильные стороны" items={strengths} />
           <List title="Зоны роста" items={weaknesses} />
-          <List title="Риски для найма" items={riskFlags} />
+          <List title="Риски" items={riskFlags} />
           <List title="Рекомендации" items={recommendations} />
+          <button
+            type="button"
+            onClick={() => setDetailsOpen(false)}
+            className="mt-2 flex items-center gap-1.5 text-left py-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-accent)] hover:opacity-75 transition-opacity"
+          >
+            <span>Свернуть</span>
+            <span className="text-[length:var(--text-xs)] rotate-180">▼</span>
+          </button>
         </CollapsibleContent>
       </Collapsible>
     </div>
@@ -2617,10 +2741,7 @@ function Analysis({ data, expectedSalaryMin, expectedSalaryMax }: {
 }
 
 function List({ title, items }: { title: string; items: string[] }) {
-  if (items.length === 0) {
-    return null;
-  }
-
+  if (items.length === 0) return null;
   return (
     <div className="analysis-section">
       <h4>{title}</h4>
@@ -2629,6 +2750,25 @@ function List({ title, items }: { title: string; items: string[] }) {
           <li key={item}>{item}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function PillList({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="analysis-section">
+      <h4>{title}</h4>
+      <div className="flex flex-wrap gap-1.5 mt-1">
+        {items.map((item) => (
+          <span
+            key={item}
+            className="inline-block px-2.5 py-0.5 rounded-full text-[length:var(--text-xs)] font-medium bg-[color-mix(in_srgb,var(--color-accent)_13%,transparent)] text-[color:var(--color-ink)] border border-[color-mix(in_srgb,var(--color-accent)_28%,transparent)]"
+          >
+            {item}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { SessionProvider } from '@/lib/session';
 import Topbar from '@/components/Topbar';
@@ -6,6 +6,11 @@ import Topbar from '@/components/Topbar';
 export const metadata: Metadata = {
   title: 'HR Помощник',
   description: 'Умный кабинет для анализа резюме и подбора вакансий',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({

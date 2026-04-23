@@ -35,13 +35,13 @@ export default function Topbar() {
         <div className="topbar-brand">
           <Image
             src="/hr-assist-logo.svg"
-            alt="HR Assist"
+            alt="HR консультант"
             width={30}
             height={30}
             className="topbar-brand-logo"
           />
           <Link href="/" className="topbar-brand-link">
-            HR Assist
+            HR консультант
           </Link>
           <a
             href="https://github.com/fat32al1ty/HR-assist/releases"

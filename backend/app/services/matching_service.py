@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.models.vacancy import Vacancy
+from app.repositories.applications import list_applied_vacancy_ids_for_user
 from app.repositories.resume_user_skills import (
     list_added_skill_texts,
     list_rejected_skill_texts,
@@ -2230,8 +2231,10 @@ def match_vacancies_for_resume(
     pos, neg = vector_store.get_user_preference_vectors(user_id=user_id, resume_id=resume_id)
     query_vector = _blend_resume_with_preferences(query_vector, pos, neg)
 
-    excluded_set = set(list_disliked_vacancy_ids(db, user_id=user_id, resume_id=resume_id)).union(
-        list_liked_vacancy_ids(db, user_id=user_id, resume_id=resume_id)
+    excluded_set = (
+        set(list_disliked_vacancy_ids(db, user_id=user_id, resume_id=resume_id))
+        .union(list_liked_vacancy_ids(db, user_id=user_id, resume_id=resume_id))
+        .union(list_applied_vacancy_ids_for_user(db, user_id=user_id, resume_id=resume_id))
     )
 
     ctx = _build_resume_context(

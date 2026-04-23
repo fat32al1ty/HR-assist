@@ -5,6 +5,7 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.repositories.applications import list_applied_vacancy_ids_for_user
 from app.repositories.resumes import get_active_resume_for_user, get_resume_for_user
 from app.repositories.user_vacancy_feedback import (
     list_disliked_vacancies,
@@ -59,8 +60,11 @@ def _excluded_ids_for_active_resume(db: Session, user: User) -> set[int]:
     resume = get_active_resume_for_user(db, user_id=user.id)
     if resume is None:
         return set()
-    return list_disliked_vacancy_ids(db, user_id=user.id, resume_id=int(resume.id)).union(
-        list_liked_vacancy_ids(db, user_id=user.id, resume_id=int(resume.id))
+    resume_id = int(resume.id)
+    return (
+        list_disliked_vacancy_ids(db, user_id=user.id, resume_id=resume_id)
+        .union(list_liked_vacancy_ids(db, user_id=user.id, resume_id=resume_id))
+        .union(list_applied_vacancy_ids_for_user(db, user_id=user.id, resume_id=resume_id))
     )
 
 
