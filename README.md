@@ -1,111 +1,238 @@
-# HR-Assist — AI-ассистент для соискателей
+# HR Assist
 
-> Загружаешь резюме — получаешь отранжированный список вакансий, честный разбор «чего хватает» и «чего нет», и воронку откликов без ручной рутины.
+**AI-assisted resume intelligence and job matching platform.**
 
-**Конкурирует с:** hh.ru Premium · карьерные коучи · getmatch
+> Upload a resume — get a structured candidate profile, a ranked shortlist of real vacancies, a per-vacancy "why shown" explanation, and a gap analysis of the skills you are missing. Feedback on each vacancy (shortlist / blacklist / like / dislike) is time-decayed and fed back into ranking.
 
-## Что умеет
+> Russian version: [README.ru.md](README.ru.md).
 
-| Фича | Детали |
+---
+
+## Overview
+
+HR Assist is an end-to-end system for jobseekers. A user uploads a PDF or DOCX resume; the platform extracts text, runs a structured LLM analysis, infers an approximate seniority grade, pulls live vacancies from the hh.ru API, embeds both sides into Qdrant, and ranks the results with a multi-stage semantic matcher. For every vacancy the user sees why it was recommended and which skills are missing to reach the bar. Shortlist, blacklist, like and dislike signals are weighted by time decay and feed back into future ranking.
+
+The platform runs locally on Docker Compose and is deployed to a dedicated server for closed-beta use.
+
+## Value proposition
+
+- **For the jobseeker:** turns a raw resume into a ranked, explained shortlist of real vacancies — instead of keyword search on job boards.
+- **For the hiring manager reading this repo:** a full-stack AI product that treats matching as a search / retrieval problem with an eval bar in CI, not a single embedding-similarity call behind a UI.
+
+## Key features
+
+| | |
 |---|---|
-| **AI-подбор вакансий** | Семантический поиск по Qdrant — по смыслу резюме, не по ключевым словам. 8-стадийный матчер с MMR-разнообразием и объяснением «Почему показали». |
-| **Анализ резюме** | GPT-4o разбирает PDF/DOCX: роль, грейд, опыт, hard/soft skills, домены, сильные стороны, зоны роста, риски, рекомендации. |
-| **Трекер откликов** | Kanban-доска: Откликнулся → Ответили → Пригласили → Отказали. Вакансии с откликами не дублируются в подборе. |
-| **AI cover letter** | Генерация и редактирование сопроводительного письма прямо в карточке отклика. |
-| **Профиль предпочтений** | Формат работы, переезд, должности, зарплата — учитываются в подборе. Decay-взвешенный: старый фидбэк затухает. |
-| **Decay-профиль** | Лайки/дизлайки взвешены по времени через экспоненциальный decay — свежий фидбэк весит больше. |
-| **Панель администратора** | Управление пользователями, флаг is_admin, техническая статистика. |
+| **Resume parsing** | PDF/DOCX → plain text → structured profile (role, grade, hard/soft skills, domains, experience). |
+| **AI resume analysis** | LLM breakdown: strengths, growth zones, risks, concrete improvement suggestions. |
+| **Skill extraction & grade inference** | Normalised against an RU↔EN skill taxonomy with ESCO-based role classification. |
+| **Semantic vacancy matching** | Qdrant vector index plus a multi-stage matcher: pre-filter, domain gate, skill-overlap floor, MMR diversity, cross-encoder / LLM rerank. |
+| **Gap analysis** | Per-vacancy "why shown" and the exact skills the user is missing. |
+| **Feedback loop** | Shortlist / blacklist / like / dislike, weighted by time decay, influence future ranking. |
+| **Application tracker** | Kanban flow (Applied → Replied → Interviewing → Rejected) with AI-generated cover letters. |
+| **Vacancy sourcing** | Live hh.ru API fetch into an internal vacancy index, parallelised with LLM parsing. Additional source adapters (SuperJob, Habr Career) are present in the code but off by default. |
+| **Preference profile** | Work format, relocation, target roles, salary — stored per user and factored into ranking. |
+| **Admin panel** | User management, funnel telemetry, technical statistics. |
 
-## Архитектура
+## How it works
+
+```
+Upload resume (PDF/DOCX)
+        ↓
+Extract text (pypdf / python-docx)
+        ↓
+Structured LLM analysis (role, grade, skills, domains)
+        ↓
+Embed resume profile → Qdrant
+        ↓
+Fetch live vacancies (hh.ru API) → embed → Qdrant
+        ↓
+Multi-stage semantic matching (domain gate, skill floor, MMR, rerank)
+        ↓
+Ranked shortlist with "why shown" + missing-skills explanation
+        ↓
+User feedback (shortlist / blacklist / like / dislike)
+        ↓
+Feedback decayed over time, fed back into ranking
+```
+
+## Architecture
 
 ```mermaid
 flowchart LR
-  UI["Next.js UI"] --> API["FastAPI API"]
-  API --> PG["PostgreSQL"]
-  API --> QD["Qdrant"]
+  UI["Next.js UI"] --> API["FastAPI"]
+  API --> PG[("PostgreSQL")]
+  API --> QD[("Qdrant")]
   API --> OAI["OpenAI API"]
-  API --> SRC["HH / Habr / SuperJob Sources"]
+  API --> HH["hh.ru API"]
 ```
 
-Подробности: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+Three stateful stores, one application boundary:
 
-## Быстрый старт
+- **PostgreSQL** — source of truth for users, resumes, vacancies, applications, feedback, telemetry.
+- **Qdrant** — dense vector store for resume and vacancy embeddings.
+- **OpenAI** — LLM analysis and embeddings; a local cross-encoder handles rerank.
+- **FastAPI** owns all business logic; the Next.js frontend is a thin UI layer over the REST API.
 
-1. Скопируйте env:
+Deeper dive: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Rerank notes: [`docs/RERANK.md`](docs/RERANK.md). ESCO role classification: [`docs/ESCO.md`](docs/ESCO.md).
 
-```powershell
-Copy-Item .env.example .env.local
-```
+## Tech stack
 
-2. Заполните минимум в `.env.local`:
+- **Backend:** FastAPI, SQLAlchemy 2, Alembic, Pydantic, slowapi
+- **AI layer:** OpenAI (analysis + embeddings), sentence-transformers (local cross-encoder rerank)
+- **Data:** PostgreSQL 16, Qdrant 1.13
+- **Frontend:** Next.js 16, React 19, TypeScript, Tailwind v4, shadcn/ui, Radix
+- **Infra:** Docker Compose, GitHub Actions CI, SSH-based CD
+- **Auth:** JWT + email OTP + beta-key gate
 
-```env
-OPENAI_API_KEY=sk-...
-JWT_SECRET_KEY=replace-with-strong-secret
-BETA_TESTER_KEYS=your-beta-key-1,your-beta-key-2
-AUTH_EMAIL_DELIVERY_MODE=console
-```
+## Running locally
 
-3. Запустите сервисы:
+```bash
+cp .env.example .env.local
+# Fill in at least OPENAI_API_KEY, JWT_SECRET_KEY, BETA_TESTER_KEYS
+# Leave AUTH_EMAIL_DELIVERY_MODE=console to read OTP codes from backend logs.
 
-```powershell
 docker compose up -d --build
 ```
 
-4. Откройте:
+Services:
 
-- UI: [http://localhost:3000](http://localhost:3000)
-- API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
-- Health: [http://localhost:8000/health](http://localhost:8000/health)
-- Config check: [http://localhost:8000/api/system/config-check](http://localhost:8000/api/system/config-check)
-- Qdrant: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
+- UI — http://localhost:3000
+- API docs — http://localhost:8000/docs
+- Health — http://localhost:8000/health
+- Qdrant dashboard — http://localhost:6333/dashboard
 
-## Как работает вход
+Alembic migrations run automatically when the backend container starts.
 
-1. Регистрация: email + пароль + beta-key.
-2. Подтверждение email одноразовым кодом.
-3. Вход: `login/start` (email+пароль), затем `login/verify` (код+challenge).
-4. Защищенные API доступны только после подтверждения email.
+## Environment variables
 
-## Ключевые переменные окружения
+Full reference: [`.env.example`](.env.example). Minimum to run:
 
-Полный список: [.env.example](.env.example)
+| Variable | Purpose |
+|---|---|
+| `OPENAI_API_KEY` | LLM + embeddings |
+| `OPENAI_ANALYSIS_MODEL` | Model used for resume / vacancy analysis |
+| `OPENAI_MATCHING_MODEL` | Model used for detailed matching + rerank |
+| `OPENAI_EMBEDDING_MODEL` | Embedding model (defaults to `text-embedding-3-large`) |
+| `JWT_SECRET_KEY` | JWT signing secret |
+| `BETA_TESTER_KEYS` | Comma-separated list of accepted beta keys |
+| `AUTH_EMAIL_DELIVERY_MODE` | `console` for local dev, `smtp` for production |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `QDRANT_URL` | Qdrant endpoint |
+| `OPENAI_REQUEST_BUDGET_USD` | Per-request spend cap (enforced when `OPENAI_ENFORCE_REQUEST_BUDGET=true`) |
 
-- `OPENAI_API_KEY` - ключ OpenAI.
-- `OPENAI_ANALYSIS_MODEL` - модель анализа резюме/вакансий.
-- `OPENAI_MATCHING_MODEL` - модель детального matching.
-- `JWT_SECRET_KEY` - секрет подписи JWT.
-- `BETA_TESTER_KEYS` - список разрешенных ключей бета-тестеров.
-- `AUTH_EMAIL_DELIVERY_MODE` - `console` для локалки, `smtp` для прода.
-- `DATABASE_URL` - подключение к PostgreSQL.
-- `QDRANT_URL` - адрес Qdrant.
+Optional source adapters (`HH_API_TOKEN`, `SUPERJOB_API_KEY`, `HABR_CAREER_API_TOKEN`, `BRAVE_API_KEY`) can be left empty — the platform works against public hh.ru endpoints without them.
 
-## Безопасность
+## API / system notes
 
-- Не коммитьте `.env.local`.
-- Не храните реальные токены/секреты в репозитории.
-- Для production используйте только SMTP-режим отправки кодов.
-- Пожалуйста, сообщайте уязвимости приватно: [SECURITY.md](SECURITY.md)
+- **Auth flow:** register → verify email → `POST /api/auth/login/start` (email + password) → `POST /api/auth/login/verify` (OTP + challenge). Protected endpoints require a verified email.
+- **Rate limiting:** slowapi on auth endpoints to contain brute-force.
+- **Prompt-injection guard:** untrusted resume and vacancy text is sanitised before being handed to the LLM (`app/services/llm_guard.py`).
+- **Cost guard:** per-user daily OpenAI spend budget stops runaway usage (`app/models/user_daily_spend.py`).
+- **Observability:** structured logs, impression / click / dwell telemetry on matching results (`app/services/match_telemetry.py`).
+- **Matching eval harness:** labelled gold pairs with NDCG / MAP / MRR floors enforced in CI (`backend/tests/test_matching_eval_*`).
 
-## Планы развития
+## Current status
 
-Полный публичный roadmap: [docs/ROADMAP.md](docs/ROADMAP.md).
+Closed-beta MVP. The end-to-end flow runs in production on a dedicated server.
 
-Недавние релизы:
+### What works now
 
-- `v0.8.1` — Полный редизайн интерфейса + трекер откликов + исправления (2026-04-23): новая дизайн-система Tailwind v4 + shadcn/ui с 10 темами и семантическими токенами; все UI-компоненты (Button, Card, Badge, Collapsible, Dialog, Input, Topbar) переписаны с нуля; новые страницы `/applications` (Kanban-трекер), `/admin`, `/vacancies`, `/resume-analysis`, `/funnel`, `/about`, `/contacts`, правовые страницы; главная страница полностью переработана — двухколоночный workspace, sticky-сайдбар с профилем, автоанализ резюме при загрузке, линейный flow подбора; decay-взвешенный профиль предпочтений; исправлено дублирование вакансий с откликами в подборе; полировка UX (убраны разделители, компактные отступы, кнопка Свернуть в анализе, нормальный вес шрифта в полях ввода).
+- Registration + email-OTP auth behind a beta-key gate
+- PDF / DOCX upload, parse, structured LLM analysis, skill and grade extraction
+- Live hh.ru fetch, embed, Qdrant index
+- Multi-stage semantic matching with "why shown" and missing-skills explanation
+- Shortlist / blacklist / like / dislike with time-decayed influence on ranking
+- Application tracker (Kanban) with AI-generated cover letters
+- Admin panel, user preference profile, funnel telemetry
+- Docker Compose local stack, GitHub Actions CI, SSH-based CD to production
 
-- `v0.8.0` — Phase 2.8 (Serious product polish): auth-ошибки перестали рендериться как `[object Object]`; Tailwind v4 + shadcn фундамент с refined-editorial дизайн-системой (Fraunces + Source Sans 3, cream canvas + cardinal red, WCAG AA/AAA); `users.is_admin` + `/admin` роут с технической статистикой, в сайдбаре юзера — честная воронка (проанализировано / отобрано / последний поиск / следующее обновление); роут-сплит `/`, `/applications`, `/admin` с глобальным Topbar + переключателем профилей; главный поток линейный — автоанализ при загрузке, компактная карточка профиля из 4 строк, один блок «Что ищу», одна CTA «Искать вакансии» + заголовок результатов «Топ-N из M просмотренных»; курация скиллов / отобранные / отклонённые / детали профиля — свернуты по умолчанию; Kanban откликов переверстан на 4 колонки с архивом под toggle и notes-редактором в свёрнутой секции карточки; дизайн-проход на всех трёх экранах с оркестрованной fade-reveal и `prefers-reduced-motion` guard.
-- `v0.7.0` — Phase 2.1–2.7 (Matching quality overhaul): шумовой гейт против кросс-доменных залётчиков; eval-харнесс на 148 gold-парах с NDCG/MAP/MRR-флорами в CI; матчер разобран на 8 стадий + MMR для разнообразия; ESCO-классификатор ролей с хард-дропом tech→non-tech; cross-encoder/LLM-rerank с блоком «Почему показали» на карточке; impression/click/dwell-телеметрия; скелет зарплатного fit — поле «Ожидаемая зарплата» в профиле и бейдж зарплаты на карточке (предсказатель пока спит до роста корпуса).
-- `v0.6.0` — Phase 2.0 (First-run rescue): холодный индекс расширен 18 → 40 вакансий; параллельный HH-fetch и LLM-parse ускорили подбор в 2-3×; выдача разделилась на `strong` + `maybe` два уровня, доменный гейт перестал дропать кросс-домен в ноль; три кнопки подбора схлопнулись в одну «Обновить подбор», а «Background warmup» из 12 технических строк стал человеческим «Следующее обновление через MM:SS».
-- `v0.5.0` — Phase 1.9 (Freshness + accuracy + agency): HH-cursor, чтобы каждое «Обновить подбор» приносило свежее, а не повторяло старое; quant-детектор «от N лет» и RU↔EN skill-таксономия, чтобы «не хватает» не врал на навыках, которые у юзера есть; микро-кнопки ✓/✗ на карточке вакансии для прямого user-override.
-- `v0.4.0` — Phase 1.8 (Matching relevance hardening): доменный гейт IT ↔ non-IT до хард-фильтров, строгое разделение hard/soft полей в bag-of-words, поднятый `MIN_RELEVANCE_SCORE`. Сеньорное IT-резюме больше не ловит стройку, авто и юристов из-за общих русских слов.
-- `v0.3.0` — Phase 1.7 (Matching quality + multi-profile): skill-overlap floor, штраф за грейд, обновлённый title boost, гигиена индекса, time-decay предпочтений, до 2 профилей-резюме с изолированным фидбэком и бейджами на Kanban.
-- `v0.2.0` — Phase 1 (Actionability): предпочтения при поиске, объяснение совпадений, трекер откликов, AI-сопроводительные, отмена подбора.
-- `v0.1.0` — Phase 0 (Foundation): бюджет-гард на OpenAI, структурные логи, rate-limit на auth, SMTP-доставка кодов.
+### Planned next
 
-> Версия намеренно меньше 1.0 — продукт в закрытой бете, публичный запуск состоится позже.
+- Salary predictor (field and badge are wired; predictor activates once the vacancy corpus grows)
+- Additional vacancy source adapters switched on in production
+- Public launch (sub-1.0 version is intentional while in closed beta)
 
-## Вклад в проект
+## Roadmap
 
-Правила для контрибьюторов: [CONTRIBUTING.md](CONTRIBUTING.md)
+Full release log: [`docs/ROADMAP.md`](docs/ROADMAP.md). Recent highlights:
+
+- `v0.8.x` — Design-system rewrite (Tailwind v4 + shadcn), admin panel, linear workspace flow, UI/UX polish
+- `v0.7.0` — Matching quality overhaul: multi-stage matcher, MMR diversity, ESCO role gate, cross-encoder rerank, eval harness with CI floors
+- `v0.6.0` — First-run rescue: bigger cold index, parallel HH fetch + LLM parse, strong / maybe tier split
+- `v0.5.0` — HH cursor for freshness, skill taxonomy, user override controls
+- `v0.1.0 – v0.4.0` — Foundation, actionability, multi-profile + time decay, IT / non-IT domain gate
+
+## Demo
+
+Live demo is available on request for hiring managers and collaborators. Access is gated by beta-key while the product is in closed beta.
+
+> `DEMO_URL`: *available on request — intentionally omitted from the public README*
+
+## Repository structure
+
+```
+backend/
+  app/
+    api/            FastAPI routes
+    services/       Business logic (matching, analysis, sourcing, embeddings, guard, telemetry)
+    models/         SQLAlchemy models
+    repositories/   Persistence layer
+    schemas/        Pydantic DTOs
+    core/           Config, security, logging
+  alembic/          DB migrations
+  tests/            Pytest suite (unit + integration)
+frontend/
+  app/              Next.js routes (home, applications, admin, vacancies, resume-analysis, funnel)
+  components/       UI components
+  lib/              API client, hooks
+  styles/           Global styles + Tailwind config
+  types/            Shared TS types
+docs/               Architecture, roadmap, rerank, ESCO notes
+.github/workflows/  CI (ci.yml) + CD (cd.yml)
+docker-compose.yml
+```
+
+## Why this project matters
+
+Most "AI resume" tools stop at surface-level feedback. HR Assist is built as a real search / retrieval system:
+
+- A matcher that has to beat a measurable eval bar in CI, not just look plausible.
+- Explicit handling of the ways semantic search breaks in practice — cross-domain leakage, noise floor, skill-overlap gate, grade mismatch, MMR for diversity.
+- A feedback loop that actually changes ranking, with time decay so stale signals fade.
+- Production concerns up front: prompt-injection guard, per-user cost budget, rate limiting, structured logs, health checks.
+
+Full-stack AI product — retrieval, LLM orchestration, evaluation, UX, ops — not a notebook.
+
+## Design decisions
+
+- **Qdrant over pgvector** — vector and relational workloads scale independently.
+- **Multi-stage matcher instead of a single embedding similarity call** — cosine alone is not enough; domain gates and skill floors kill cross-domain false positives before they reach the user.
+- **Eval harness in CI** — matching quality is a regression surface, not a vibe check.
+- **Time-decayed feedback** — last month's preferences should outweigh last year's; a linear aggregate does not.
+- **Thin frontend, thick backend** — the UI holds no business logic; everything testable lives behind the FastAPI boundary.
+
+## Screenshots
+
+*(Image files will be committed under `docs/screenshots/` in a follow-up — placeholders below describe the expected content.)*
+
+- **Resume upload** — `docs/screenshots/01-resume-upload.png`
+  Landing workspace with the upload drop-zone and the preference profile sidebar.
+- **Resume analysis** — `docs/screenshots/02-resume-analysis.png`
+  Structured profile output after the LLM run: role, grade, skills, strengths, growth zones.
+- **Job matching results** — `docs/screenshots/03-matching-results.png`
+  Ranked shortlist with "why shown" and missing-skills explanation on each card.
+- **Feedback / application workflow** — `docs/screenshots/04-applications-kanban.png`
+  Kanban tracker (Applied → Replied → Interviewing → Rejected) with per-card notes and cover letter.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## Security
+
+See [`SECURITY.md`](SECURITY.md) for the disclosure process.
+
+## License
+
+No license has been published yet — the repository is shared for portfolio and hiring review. Please contact the author before reusing the code.
