@@ -2632,13 +2632,7 @@ export default function DashboardPage() {
 
           {/* Bottom bar */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 border-t border-[var(--color-border)] text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
-            <span>© {new Date().getFullYear()} HR консультант. Все права защищены.</span>
-            <span className="inline-flex items-center gap-1.5">
-              Работает на
-              <span className="font-semibold text-[color:var(--color-ink)]">Claude&nbsp;Sonnet</span>
-              &amp;
-              <span className="font-semibold text-[color:var(--color-ink)]">GPT-4o</span>
-            </span>
+            <span>© {new Date().getFullYear()} HR консультант.</span>
           </div>
 
         </div>
