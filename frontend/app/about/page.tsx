@@ -11,32 +11,29 @@ export default function AboutPage() {
             Мы помогаем находить<br />работу быстрее и осознаннее
           </h1>
           <p className="text-[length:var(--text-xl)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)]">
-            HR консультант — AI-ассистент для соискателей. Не агрегатор, не рекрутинговое агентство. Инструмент на вашей стороне.
+            HR консультант — персональный AI-проект по анализу резюме и подбору вакансий. Демонстрационный, не коммерческий.
           </p>
         </div>
 
-        {/* Миссия */}
-        <div className="max-w-[780px] mx-auto px-6 py-12">
-          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-white/70 shadow-[var(--shadow-sm)] p-8">
-            <h2 className="text-[length:var(--text-2xl)] font-bold text-[color:var(--color-ink)] mb-4 tracking-[-0.02em]">Миссия</h2>
+        {/* Статус */}
+        <div className="max-w-[780px] mx-auto px-6 py-8">
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-white/70 shadow-[var(--shadow-sm)] p-6">
+            <h2 className="text-[length:var(--text-lg)] font-bold text-[color:var(--color-ink)] mb-3">Статус</h2>
             <p className="text-[length:var(--text-base)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)]">
-              Помочь каждому соискателю находить работу быстрее и осознаннее — без спама, без интуитивных откликов наугад и без переплаты за Premium-подписки, которые не объясняют, почему вакансия подходит именно вам.
+              Проект ведёт один автор — как открытое портфолио. Юридического лица или ИП за сервисом нет, плата не взимается, договор с пользователем не заключается. Код открыт на GitHub, сервис разворачивается локально через Docker. Публичный экземпляр работает в демонстрационном режиме.
             </p>
           </div>
         </div>
 
-        {/* История */}
+        {/* Идея */}
         <div className="max-w-[780px] mx-auto px-6 py-12">
-          <h2 className="text-[length:var(--text-3xl)] font-bold text-[color:var(--color-ink)] mb-6 tracking-[-0.02em]">Как появился проект</h2>
+          <h2 className="text-[length:var(--text-3xl)] font-bold text-[color:var(--color-ink)] mb-6 tracking-[-0.02em]">Идея</h2>
           <div className="space-y-4 text-[length:var(--text-base)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)]">
             <p>
-              Всё началось с личного опыта: поиск работы через hh.ru — это сотни вакансий-спама, ноль объяснений, почему ты подходишь или нет, и Premium-подписка за 2 500 ₽ в месяц, которая просто поднимает отклик в ленте.
+              Поиск работы через типовые job-борды — это сотни вакансий, ноль объяснений, почему кандидат подходит, и непрозрачный ранжир. Идея проекта — собрать end-to-end AI-систему, которая читает резюме, извлекает структурный профиль, семантически матчит вакансии и объясняет, каких навыков не хватает.
             </p>
             <p>
-              Мы задались вопросом: а что, если AI мог бы читать резюме так же, как опытный рекрутер, и честно говорить — вот твои сильные стороны, вот что тебя тормозит, вот вакансии, где ты реально конкурентоспособен?
-            </p>
-            <p>
-              Так появился HR консультант. Инструмент, который работает на соискателя, а не на площадку.
+              Это инженерный эксперимент: посмотреть, насколько далеко можно продвинуть качество подбора с помощью векторного поиска, многоступенчатого ранкера, ESCO-классификации ролей и evaluation-харнесса. Параллельно — собрать приличную внешнюю обвязку вокруг auth, приватности и разработческой петли.
             </p>
           </div>
         </div>

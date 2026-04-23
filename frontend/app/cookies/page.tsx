@@ -8,60 +8,44 @@ export default function CookiesPage() {
             Правовое
           </span>
           <h1 className="text-[length:var(--text-display)] font-bold tracking-[-0.03em] leading-[var(--leading-tight)] text-[color:var(--color-ink)] mb-4">
-            Политика cookies
+            Cookies и локальное хранилище
           </h1>
           <p className="text-[length:var(--text-base)] text-[color:var(--color-ink-secondary)]">
-            Последнее обновление: 23 апреля 2026 г.
+            Последнее обновление: 24 апреля 2026 г.
           </p>
         </div>
 
         {/* Контент */}
-        <div className="max-w-[780px] mx-auto px-6 pb-20 space-y-8">
+        <div className="max-w-[780px] mx-auto px-6 pb-20 space-y-6">
           <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-white/70 shadow-[var(--shadow-sm)] p-6">
-            <h2 className="text-[length:var(--text-lg)] font-bold text-[color:var(--color-ink)] mb-3">Что такое cookies</h2>
+            <h2 className="text-[length:var(--text-lg)] font-bold text-[color:var(--color-ink)] mb-3">
+              Что используется
+            </h2>
             <p className="text-[length:var(--text-base)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)]">
-              Cookies — небольшие текстовые файлы, которые сохраняются в вашем браузере при посещении сайта. Они позволяют сайту запоминать ваши предпочтения и поддерживать сессию входа.
+              Сервис использует только технически необходимые cookies и браузерное локальное
+              хранилище для хранения токена сессии после входа. Без этих данных невозможно
+              поддерживать состояние авторизации между страницами.
             </p>
           </div>
 
           <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-white/70 shadow-[var(--shadow-sm)] p-6">
-            <h2 className="text-[length:var(--text-lg)] font-bold text-[color:var(--color-ink)] mb-4">Какие cookies мы используем</h2>
-            <div className="space-y-4">
-              {[
-                {
-                  type: 'Сессионные',
-                  desc: 'Необходимы для работы авторизации. Хранят токен сессии на время вашего визита. Удаляются при закрытии браузера или выходе из аккаунта.',
-                  required: true,
-                },
-                {
-                  type: 'Аналитические',
-                  desc: 'Анонимные данные об использовании сервиса: какие страницы посещались, сколько времени занял анализ резюме. Помогают нам улучшать продукт. Не содержат персональных данных.',
-                  required: false,
-                },
-              ].map(({ type, desc, required }) => (
-                <div key={type} className="flex gap-4 items-start">
-                  <span
-                    className={`shrink-0 mt-0.5 text-[length:var(--text-xs)] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
-                      required
-                        ? 'bg-[var(--color-success-subtle)] text-[color:var(--color-success)]'
-                        : 'bg-[var(--color-accent-subtle)] text-[color:var(--color-accent)]'
-                    }`}
-                  >
-                    {required ? 'Обязательные' : 'Аналитика'}
-                  </span>
-                  <div>
-                    <p className="font-semibold text-[color:var(--color-ink)] text-[length:var(--text-base)] mb-1">{type}</p>
-                    <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)]">{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <h2 className="text-[length:var(--text-lg)] font-bold text-[color:var(--color-ink)] mb-3">
+              Чего не используется
+            </h2>
+            <ul className="text-[length:var(--text-base)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)] space-y-1 list-disc pl-6">
+              <li>системы веб-аналитики (Яндекс.Метрика, Google Analytics и т. п.)</li>
+              <li>рекламные cookies и системы ретаргетинга</li>
+              <li>cookies сторонних социальных сетей</li>
+            </ul>
           </div>
 
           <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-white/70 shadow-[var(--shadow-sm)] p-6">
-            <h2 className="text-[length:var(--text-lg)] font-bold text-[color:var(--color-ink)] mb-3">Как управлять cookies</h2>
+            <h2 className="text-[length:var(--text-lg)] font-bold text-[color:var(--color-ink)] mb-3">
+              Управление
+            </h2>
             <p className="text-[length:var(--text-base)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)]">
-              Вы можете отключить cookies в настройках браузера. Обратите внимание: отключение сессионных cookies приведёт к невозможности входа в аккаунт. Аналитические cookies можно отключить без потери функциональности сервиса.
+              Cookies и локальное хранилище можно очистить через настройки браузера. Это приведёт
+              к выходу из учётной записи. Повторный вход полностью восстановит работу сервиса.
             </p>
           </div>
         </div>
