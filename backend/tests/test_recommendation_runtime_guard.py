@@ -29,7 +29,6 @@ class RecommendationRuntimeGuardTest(unittest.TestCase):
             content_type="application/pdf",
             storage_path=f"/tmp/{suffix}.pdf",
             status="completed",
-            extracted_text="Python backend FastAPI PostgreSQL",
             analysis={
                 "target_role": "Backend Engineer",
                 "specialization": "Platform Services",
@@ -43,7 +42,9 @@ class RecommendationRuntimeGuardTest(unittest.TestCase):
         self.db.refresh(self.resume)
 
     def tearDown(self) -> None:
-        self.db.execute(delete(UserVacancyFeedback).where(UserVacancyFeedback.user_id == self.user.id))
+        self.db.execute(
+            delete(UserVacancyFeedback).where(UserVacancyFeedback.user_id == self.user.id)
+        )
         self.db.execute(delete(Resume).where(Resume.user_id == self.user.id))
         self.db.execute(delete(User).where(User.id == self.user.id))
         self.db.commit()

@@ -33,7 +33,6 @@ class FeedbackFlowIntegrationTest(unittest.TestCase):
             content_type="application/pdf",
             storage_path=f"/tmp/{suffix}.pdf",
             status="completed",
-            extracted_text="feedback flow",
             analysis={"target_role": "backend engineer"},
             error_message=None,
             is_active=True,
@@ -57,7 +56,9 @@ class FeedbackFlowIntegrationTest(unittest.TestCase):
         self.db.refresh(self.vacancy)
 
     def tearDown(self) -> None:
-        self.db.execute(delete(UserVacancyFeedback).where(UserVacancyFeedback.user_id == self.user.id))
+        self.db.execute(
+            delete(UserVacancyFeedback).where(UserVacancyFeedback.user_id == self.user.id)
+        )
         self.db.execute(delete(Vacancy).where(Vacancy.id == self.vacancy.id))
         self.db.execute(delete(Resume).where(Resume.user_id == self.user.id))
         self.db.execute(delete(User).where(User.id == self.user.id))

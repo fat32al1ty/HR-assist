@@ -1982,7 +1982,7 @@ export default function DashboardPage() {
                         <div className="flex flex-col gap-0.5">
                           <h3 className="text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.03em]">
                             {resume.analysis
-                              ? (asText(resume.analysis.candidate_name, '') || asText(resume.analysis.target_role, '') || resume.original_filename)
+                              ? (asText(resume.analysis.target_role, '') || resume.original_filename)
                               : resume.original_filename}
                             {resume.is_active ? (
                               <span className="resume-active-tag ml-2">активный</span>

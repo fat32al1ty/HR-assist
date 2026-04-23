@@ -157,6 +157,7 @@ Closed-beta MVP. The end-to-end flow runs in production on a dedicated server.
 
 Full release log: [`docs/ROADMAP.md`](docs/ROADMAP.md). Recent highlights:
 
+- `v0.9.0` — Privacy minimization (Level A): PII scrubber, no raw resume text persisted, uploaded file deleted after analysis, no identifiers in Qdrant payload — see [`PRIVACY.md`](PRIVACY.md)
 - `v0.8.x` — Design-system rewrite (Tailwind v4 + shadcn), admin panel, linear workspace flow, UI/UX polish
 - `v0.7.0` — Matching quality overhaul: multi-stage matcher, MMR diversity, ESCO role gate, cross-encoder rerank, eval harness with CI floors
 - `v0.6.0` — First-run rescue: bigger cold index, parallel HH fetch + LLM parse, strong / maybe tier split
@@ -211,6 +212,10 @@ Full-stack AI product — retrieval, LLM orchestration, evaluation, UX, ops — 
 - **Eval harness in CI** — matching quality is a regression surface, not a vibe check.
 - **Time-decayed feedback** — last month's preferences should outweigh last year's; a linear aggregate does not.
 - **Thin frontend, thick backend** — the UI holds no business logic; everything testable lives behind the FastAPI boundary.
+
+## Privacy
+
+HR Assist is built to persist the minimum amount of personal data. Resume text is PII-scrubbed before it reaches the LLM, the uploaded file is deleted immediately after analysis, and the vector store holds no identifiers — see [`PRIVACY.md`](PRIVACY.md) for the exhaustive list of what is and is not stored.
 
 ## Contributing
 

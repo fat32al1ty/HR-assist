@@ -68,7 +68,9 @@ class DomainSoftPenaltyTest(unittest.TestCase):
                 "app.services.matching_service.recompute_user_preference_profile",
                 return_value=None,
             ),
-            patch("app.services.matching_service.list_applied_vacancy_ids_for_user", return_value=[]),
+            patch(
+                "app.services.matching_service.list_applied_vacancy_ids_for_user", return_value=[]
+            ),
             patch("app.services.matching_service.list_disliked_vacancy_ids", return_value=[]),
             patch("app.services.matching_service.list_liked_vacancy_ids", return_value=[]),
             patch("app.services.matching_service.list_added_skill_texts", return_value=[]),

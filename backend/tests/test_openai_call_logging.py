@@ -3,6 +3,7 @@
 This is the contract test: future refactors that accidentally drop logging
 (or wrap it in a silent try/except) break this test loudly.
 """
+
 from __future__ import annotations
 
 import json

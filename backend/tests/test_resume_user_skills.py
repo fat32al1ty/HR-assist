@@ -42,7 +42,6 @@ class ResumeUserSkillsRepoTest(unittest.TestCase):
             content_type="application/pdf",
             storage_path=f"/tmp/{suffix}.pdf",
             status="completed",
-            extracted_text="Python backend",
             analysis={},
         )
         self.db.add(self.resume)

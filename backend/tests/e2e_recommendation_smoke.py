@@ -36,7 +36,9 @@ def _create_auth_user(client: httpx.Client, ctx: SmokeContext) -> tuple[str, int
     register_payload = {"email": email, "password": password, "full_name": "Autotest User"}
     register_response = _request(client, "POST", "/api/auth/register", json=register_payload)
     if register_response.status_code not in (201, 409):
-        raise RuntimeError(f"Register failed: {register_response.status_code} {register_response.text}")
+        raise RuntimeError(
+            f"Register failed: {register_response.status_code} {register_response.text}"
+        )
 
     login_response = _request(
         client,
@@ -69,9 +71,7 @@ def _create_completed_resume_for_user(user_id: int, ctx: SmokeContext) -> int:
             content_type="application/pdf",
             storage_path=f"/tmp/smoke-{uuid.uuid4().hex}.pdf",
             status="completed",
-            extracted_text="Python backend engineer, FastAPI, PostgreSQL, Docker, monitoring.",
             analysis={
-                "candidate_name": "Smoke Test",
                 "target_role": "Backend Engineer",
                 "specialization": "Platform services",
                 "hard_skills": ["Python", "FastAPI", "PostgreSQL", "Docker"],
@@ -127,7 +127,9 @@ def run_smoke() -> None:
             json=payload,
         )
         if start_response.status_code != 200:
-            raise RuntimeError(f"Start recommendation failed: {start_response.status_code} {start_response.text}")
+            raise RuntimeError(
+                f"Start recommendation failed: {start_response.status_code} {start_response.text}"
+            )
 
         job_id = start_response.json()["job_id"]
         deadline = time.time() + SMOKE_TIMEOUT_SECONDS
@@ -142,7 +144,9 @@ def run_smoke() -> None:
                 headers=headers,
             )
             if status_response.status_code != 200:
-                raise RuntimeError(f"Polling failed: {status_response.status_code} {status_response.text}")
+                raise RuntimeError(
+                    f"Polling failed: {status_response.status_code} {status_response.text}"
+                )
             status_payload = status_response.json()
             status = status_payload.get("status")
             stage = status_payload.get("stage")
@@ -155,7 +159,9 @@ def run_smoke() -> None:
             time.sleep(SMOKE_POLL_INTERVAL_SECONDS)
 
         if final_status is None:
-            raise RuntimeError(f"Recommendation job timeout after {SMOKE_TIMEOUT_SECONDS}s (job={job_id})")
+            raise RuntimeError(
+                f"Recommendation job timeout after {SMOKE_TIMEOUT_SECONDS}s (job={job_id})"
+            )
         if final_status != "completed":
             error_message = (final_payload or {}).get("error_message") or "Unknown failure"
             raise RuntimeError(f"Recommendation job failed (job={job_id}): {error_message}")

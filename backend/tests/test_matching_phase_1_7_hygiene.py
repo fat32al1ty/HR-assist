@@ -43,7 +43,9 @@ class ArchivedAtMatchTimeTest(unittest.TestCase):
                 "app.services.matching_service.recompute_user_preference_profile",
                 return_value=None,
             ),
-            patch("app.services.matching_service.list_applied_vacancy_ids_for_user", return_value=[]),
+            patch(
+                "app.services.matching_service.list_applied_vacancy_ids_for_user", return_value=[]
+            ),
             patch("app.services.matching_service.list_disliked_vacancy_ids", return_value=[]),
             patch("app.services.matching_service.list_liked_vacancy_ids", return_value=[]),
             patch(
@@ -185,9 +187,7 @@ class QdrantIsVacancyFilterTest(unittest.TestCase):
 
         with patch("app.services.vector_store.settings") as settings:
             settings.qdrant_collection_prefix = "hr_assistant"
-            store.search_vacancy_profiles(
-                query_vector=[0.1] * 4, limit=5, only_vacancies=False
-            )
+            store.search_vacancy_profiles(query_vector=[0.1] * 4, limit=5, only_vacancies=False)
 
         call_args = store.client.search.call_args
         self.assertIsNone(call_args.kwargs["query_filter"])

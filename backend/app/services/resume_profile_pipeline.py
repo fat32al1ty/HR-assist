@@ -9,7 +9,6 @@ from app.services.vector_store import get_vector_store
 
 def build_resume_profile_text(profile: dict[str, Any]) -> str:
     parts = [
-        f"Candidate: {profile.get('candidate_name') or 'unknown'}",
         f"Target role: {profile.get('target_role') or 'unknown'}",
         f"Specialization: {profile.get('specialization') or 'unknown'}",
         f"Seniority: {profile.get('seniority') or 'unknown'}",
@@ -31,7 +30,6 @@ def build_resume_profile_text(profile: dict[str, Any]) -> str:
 def build_resume_vector_payload(profile: dict[str, Any], *, canonical_text: str) -> dict[str, Any]:
     return {
         "type": "resume_profile",
-        "candidate_name": profile.get("candidate_name"),
         "target_role": profile.get("target_role"),
         "specialization": profile.get("specialization"),
         "seniority": profile.get("seniority"),
@@ -42,7 +40,6 @@ def build_resume_vector_payload(profile: dict[str, Any], *, canonical_text: str)
         "domains": profile.get("domains") or [],
         "languages": profile.get("languages") or [],
         "matching_keywords": profile.get("matching_keywords") or [],
-        "canonical_text": canonical_text,
     }
 
 

@@ -5,6 +5,7 @@ straight to stdout. Tests here lock in the new behavior: the INFO log
 records only recipient (redacted), subject, and body length — never the
 body itself. The raw body remains available at DEBUG for local dev.
 """
+
 from __future__ import annotations
 
 import logging

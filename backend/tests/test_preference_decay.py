@@ -18,33 +18,25 @@ from app.services.user_preference_profile_pipeline import (
 class DecayWeightUnitTests(unittest.TestCase):
     def test_recent_feedback_keeps_full_weight(self) -> None:
         now = datetime(2026, 4, 21, tzinfo=UTC)
-        weights = _decay_weights(
-            [(1, now)], [1], now=now, half_life_days=30.0
-        )
+        weights = _decay_weights([(1, now)], [1], now=now, half_life_days=30.0)
         self.assertAlmostEqual(weights[0], 1.0, places=6)
 
     def test_half_life_gives_half_weight(self) -> None:
         now = datetime(2026, 4, 21, tzinfo=UTC)
         thirty_days_ago = now - timedelta(days=30)
-        weights = _decay_weights(
-            [(1, thirty_days_ago)], [1], now=now, half_life_days=30.0
-        )
+        weights = _decay_weights([(1, thirty_days_ago)], [1], now=now, half_life_days=30.0)
         self.assertAlmostEqual(weights[0], math.exp(-1.0), places=5)
 
     def test_ninety_day_gap_decays_below_stale_threshold(self) -> None:
         now = datetime(2026, 4, 21, tzinfo=UTC)
         ninety_days_ago = now - timedelta(days=90)
-        weights = _decay_weights(
-            [(1, ninety_days_ago)], [1], now=now, half_life_days=30.0
-        )
+        weights = _decay_weights([(1, ninety_days_ago)], [1], now=now, half_life_days=30.0)
         self.assertLess(weights[0], MIN_EFFECTIVE_WEIGHT)
 
     def test_naive_timestamp_treated_as_utc(self) -> None:
         now = datetime(2026, 4, 21, tzinfo=UTC)
         naive_recent = datetime(2026, 4, 21)
-        weights = _decay_weights(
-            [(5, naive_recent)], [5], now=now, half_life_days=30.0
-        )
+        weights = _decay_weights([(5, naive_recent)], [5], now=now, half_life_days=30.0)
         self.assertAlmostEqual(weights[0], 1.0, places=5)
 
 
@@ -101,9 +93,7 @@ class RecomputePipelineDecayTests(unittest.TestCase):
                 "app.services.user_preference_profile_pipeline.list_disliked_vacancy_feedback_ages",
                 return_value=[],
             ),
-            patch(
-                "app.services.user_preference_profile_pipeline.settings"
-            ) as settings_mock,
+            patch("app.services.user_preference_profile_pipeline.settings") as settings_mock,
         ):
             settings_mock.preference_decay_enabled = decay_enabled
             settings_mock.preference_decay_half_life_days = 30.0

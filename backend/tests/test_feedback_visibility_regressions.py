@@ -87,9 +87,13 @@ class FeedbackVisibilityRegressionTest(unittest.TestCase):
         self.db.commit()
 
     def tearDown(self) -> None:
-        self.db.execute(delete(UserVacancyFeedback).where(UserVacancyFeedback.user_id == self.user.id))
         self.db.execute(
-            delete(Vacancy).where(Vacancy.id.in_([self.filtered_vacancy.id, self.failed_vacancy.id]))
+            delete(UserVacancyFeedback).where(UserVacancyFeedback.user_id == self.user.id)
+        )
+        self.db.execute(
+            delete(Vacancy).where(
+                Vacancy.id.in_([self.filtered_vacancy.id, self.failed_vacancy.id])
+            )
         )
         self.db.execute(delete(Resume).where(Resume.user_id == self.user.id))
         self.db.execute(delete(User).where(User.id == self.user.id))

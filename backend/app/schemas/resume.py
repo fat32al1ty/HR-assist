@@ -25,7 +25,6 @@ class ResumeRead(BaseModel):
     original_filename: str
     content_type: str
     status: str
-    extracted_text: str | None
     analysis: dict[str, Any] | None
     error_message: str | None
     is_active: bool

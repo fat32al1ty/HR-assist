@@ -134,9 +134,7 @@ class EscoLookupTest(unittest.TestCase):
                 )
             )
         )
-        self.db.execute(
-            delete(EscoSkill).where(EscoSkill.esco_uri.like("http://test/skill/%"))
-        )
+        self.db.execute(delete(EscoSkill).where(EscoSkill.esco_uri.like("http://test/skill/%")))
         self.db.execute(
             delete(EscoOccupation).where(EscoOccupation.esco_uri.like("http://test/occ/%"))
         )

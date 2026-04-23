@@ -117,12 +117,10 @@ def update_resume_processing_result(
     resume: Resume,
     *,
     status: str,
-    extracted_text: str | None = None,
     analysis: dict | None = None,
     error_message: str | None = None,
 ) -> Resume:
     resume.status = status
-    resume.extracted_text = extracted_text
     resume.analysis = analysis
     resume.error_message = error_message
     db.add(resume)

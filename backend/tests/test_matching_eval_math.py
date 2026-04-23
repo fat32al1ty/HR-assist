@@ -72,9 +72,7 @@ class AveragePrecisionTest(unittest.TestCase):
 
     def test_two_hits_one_near_top_one_further(self) -> None:
         # [1, 0, 1, 0] → precisions at hits: 1/1 and 2/3. Mean = (1 + 2/3)/2.
-        self.assertAlmostEqual(
-            average_precision([1, 0, 1, 0]), (1.0 + 2.0 / 3.0) / 2.0, places=6
-        )
+        self.assertAlmostEqual(average_precision([1, 0, 1, 0]), (1.0 + 2.0 / 3.0) / 2.0, places=6)
 
     def test_relevance_two_counts_as_hit(self) -> None:
         # AP is binarized at >= 1.
@@ -229,9 +227,7 @@ class EvaluateRunnerTest(unittest.TestCase):
 
     def test_to_json_is_valid_json_with_expected_keys(self) -> None:
         report = EvalReport(
-            per_resume=(
-                ResumeEvalResult("r1", 0.5, 0.6, 0.7, 3, 5, 1),
-            ),
+            per_resume=(ResumeEvalResult("r1", 0.5, 0.6, 0.7, 3, 5, 1),),
             mean_ndcg_at_10=0.5,
             mean_map=0.6,
             mean_mrr=0.7,

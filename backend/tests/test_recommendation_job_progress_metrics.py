@@ -30,7 +30,6 @@ class RecommendationJobProgressMetricsTest(unittest.TestCase):
             content_type="application/pdf",
             storage_path=f"/tmp/{suffix}.pdf",
             status="completed",
-            extracted_text="metrics test",
             analysis={"target_role": "backend engineer"},
             error_message=None,
         )

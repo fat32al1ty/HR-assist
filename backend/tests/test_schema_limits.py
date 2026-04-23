@@ -1,4 +1,5 @@
 """Regression: reject over-cap strings at the schema layer (422), not downstream."""
+
 from __future__ import annotations
 
 import unittest

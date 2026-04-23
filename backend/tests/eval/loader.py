@@ -65,11 +65,7 @@ def load_vector_scores() -> dict[str, dict[str, float]]:
     top-level ``_comment``.
     """
     raw = json.loads((FIXTURES_DIR / "vector_scores.json").read_text(encoding="utf-8"))
-    return {
-        resume_id: scores
-        for resume_id, scores in raw.items()
-        if not resume_id.startswith("_")
-    }
+    return {resume_id: scores for resume_id, scores in raw.items() if not resume_id.startswith("_")}
 
 
 def gold_path() -> Path:

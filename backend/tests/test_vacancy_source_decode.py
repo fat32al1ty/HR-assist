@@ -6,6 +6,7 @@ This test locks in the new behavior: raise VacancyFetchError on undecodable
 bytes, log the failure, and increment the parse-error counter so the job
 metrics surface it.
 """
+
 from __future__ import annotations
 
 import unittest

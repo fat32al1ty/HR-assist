@@ -142,6 +142,13 @@ def validate_runtime_settings() -> None:
         raise RuntimeError("JWT_SECRET_KEY must be configured with a strong secret in production")
     if is_production and not beta_keys:
         raise RuntimeError("BETA_TESTER_KEYS must be configured in production")
+    if (
+        settings.app_env.lower() not in {"local", "test"}
+        and settings.auth_email_delivery_mode.lower() == "console"
+    ):
+        raise RuntimeError(
+            "AUTH_EMAIL_DELIVERY_MODE=console is not allowed outside local/test environments"
+        )
     if is_production and settings.auth_email_delivery_mode.lower() != "smtp":
         raise RuntimeError("AUTH_EMAIL_DELIVERY_MODE must be smtp in production")
     if is_production and settings.auth_email_delivery_mode.lower() == "smtp":

@@ -4,6 +4,7 @@ Covers both the pre-flight check (start_recommendation_job raises when today's
 spend already exceeds the cap) and the in-flight check (the tracker raises
 DailyBudgetExceeded as soon as the UPSERT'd total crosses the cap).
 """
+
 from __future__ import annotations
 
 import unittest
@@ -47,9 +48,7 @@ class DailyBudgetTest(unittest.TestCase):
         settings.openai_enforce_user_daily_budget = True
 
     def tearDown(self) -> None:
-        self.db.execute(
-            delete(UserDailySpend).where(UserDailySpend.user_id == self.user_id)
-        )
+        self.db.execute(delete(UserDailySpend).where(UserDailySpend.user_id == self.user_id))
         self.db.execute(delete(User).where(User.id == self.user_id))
         self.db.commit()
         self.db.close()
@@ -81,9 +80,7 @@ class DailyBudgetTest(unittest.TestCase):
 
     def test_start_recommendation_job_refuses_when_pre_spent(self) -> None:
         # User's today spend already exceeds the daily cap.
-        increment_daily_spend(
-            self.db, user_id=self.user_id, amount_usd=float(Decimal("0.20"))
-        )
+        increment_daily_spend(self.db, user_id=self.user_id, amount_usd=float(Decimal("0.20")))
         with self.assertRaises(DailyBudgetReachedBeforeStart):
             start_recommendation_job(
                 user_id=self.user_id,

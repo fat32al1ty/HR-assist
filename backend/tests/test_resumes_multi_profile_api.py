@@ -102,9 +102,7 @@ class MultiProfileApiTest(unittest.TestCase):
         # Only one active remains
         active_ids = list(
             self.db.scalars(
-                select(Resume.id).where(
-                    Resume.user_id == self.user.id, Resume.is_active.is_(True)
-                )
+                select(Resume.id).where(Resume.user_id == self.user.id, Resume.is_active.is_(True))
             )
         )
         self.assertEqual(active_ids, [self.resume_b.id])
@@ -122,9 +120,7 @@ class MultiProfileApiTest(unittest.TestCase):
         self.db.refresh(other)
         try:
             with self.assertRaises(HTTPException) as ctx:
-                activate_resume_endpoint(
-                    resume_id=self.resume_a.id, current_user=other, db=self.db
-                )
+                activate_resume_endpoint(resume_id=self.resume_a.id, current_user=other, db=self.db)
             self.assertEqual(ctx.exception.status_code, 404)
         finally:
             self.db.execute(delete(User).where(User.id == other.id))
