@@ -1978,9 +1978,9 @@ export default function DashboardPage() {
                           : 'border-[var(--color-border)] shadow-[var(--shadow-xs)]',
                       ].join(' ')}
                     >
-                      <div className="flex justify-between gap-3 items-start flex-wrap">
-                        <div className="flex flex-col gap-0.5">
-                          <h3 className="text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.03em]">
+                      <div className="flex justify-between gap-3 items-start">
+                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                          <h3 className="text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.03em] break-words">
                             {resume.analysis
                               ? (asText(resume.analysis.target_role, '') || resume.original_filename)
                               : resume.original_filename}
@@ -1988,14 +1988,14 @@ export default function DashboardPage() {
                               <span className="resume-active-tag ml-2">активный</span>
                             ) : null}
                           </h3>
-                          <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]">{resume.original_filename}</span>
+                          <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] break-words">{resume.original_filename}</span>
                           {resume.status === 'failed' || resume.status === 'processing' ? (
                             <span className={`status ${resume.status}`}>
                               {statusLabels[resume.status]}
                             </span>
                           ) : null}
                         </div>
-                        <div className="inline-flex gap-2 flex-wrap justify-end">
+                        <div className="inline-flex gap-2 items-center justify-end shrink-0">
                           {!resume.is_active ? (
                             <button
                               type="button"
