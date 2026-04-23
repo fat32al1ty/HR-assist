@@ -13,7 +13,7 @@ Instead, send a private report via GitHub's "Report a vulnerability" flow on thi
 In the report, include as much of the following as you can:
 
 - a clear description of the issue and suspected impact
-- exact steps to reproduce (including requests, payloads, or screenshots)
+- exact steps to reproduce (including requests and payloads)
 - the affected endpoint, component, or code path
 - any suggested remediation
 

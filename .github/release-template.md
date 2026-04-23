@@ -50,4 +50,3 @@ One or two lines on what is queued immediately after this release. Links to an i
 - [ ] CI is green on `master` for the tagged commit.
 - [ ] Local quality gate run: ruff format / check, backend pytest, frontend tsc + eslint.
 - [ ] No secrets committed (run `git diff <previous-tag>..HEAD` and scan).
-- [ ] Screenshots in `docs/screenshots/` updated if visible UI changed.

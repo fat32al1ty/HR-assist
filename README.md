@@ -212,19 +212,6 @@ Full-stack AI product — retrieval, LLM orchestration, evaluation, UX, ops — 
 - **Time-decayed feedback** — last month's preferences should outweigh last year's; a linear aggregate does not.
 - **Thin frontend, thick backend** — the UI holds no business logic; everything testable lives behind the FastAPI boundary.
 
-## Screenshots
-
-*(Image files will be committed under `docs/screenshots/` in a follow-up — placeholders below describe the expected content.)*
-
-- **Resume upload** — `docs/screenshots/01-resume-upload.png`
-  Landing workspace with the upload drop-zone and the preference profile sidebar.
-- **Resume analysis** — `docs/screenshots/02-resume-analysis.png`
-  Structured profile output after the LLM run: role, grade, skills, strengths, growth zones.
-- **Job matching results** — `docs/screenshots/03-matching-results.png`
-  Ranked shortlist with "why shown" and missing-skills explanation on each card.
-- **Feedback / application workflow** — `docs/screenshots/04-applications-kanban.png`
-  Kanban tracker (Applied → Replied → Interviewing → Rejected) with per-card notes and cover letter.
-
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).

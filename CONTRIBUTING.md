@@ -34,7 +34,7 @@ Open a GitHub issue with:
 - a short description of the bug
 - exact steps to reproduce (commands, payloads, UI interactions)
 - expected vs. actual behaviour
-- relevant logs or screenshots (scrub secrets first)
+- relevant logs (scrub secrets first)
 - your environment: local Docker vs. deployed instance, browser, OS
 
 Minimal reproductions help enormously. If the bug touches matching quality, include the resume snippet (or a minimised fake one) and the vacancy set you saw.
