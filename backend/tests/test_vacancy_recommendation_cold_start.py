@@ -12,7 +12,11 @@ from app.models.user import User
 from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.services.vacancy_pipeline import VacancyDiscoveryMetrics
 from app.services.vacancy_recommendation import (
+    ADMIN_MAX_OPENAI_ANALYZED,
+    ADMIN_MAX_SOURCES_SCANNED,
+    ADMIN_PER_QUERY_CAP,
     COLD_START_MAX_OPENAI_ANALYZED,
+    MAX_DEEP_SCAN_QUERIES,
     WARM_MAX_OPENAI_ANALYZED,
     recommend_vacancies_for_resume,
 )
@@ -153,6 +157,73 @@ class ColdStartLLMBudgetTest(unittest.TestCase):
             mock_discover.call_args.kwargs.get("max_analyzed"),
             COLD_START_MAX_OPENAI_ANALYZED,
         )
+
+    @patch("app.services.vacancy_recommendation.match_vacancies_for_resume")
+    @patch("app.services.vacancy_recommendation.discover_and_index_vacancies")
+    def test_admin_user_gets_wider_scan_and_llm_budget(self, mock_discover, mock_match) -> None:
+        mock_match.return_value = []
+        mock_discover.return_value = SimpleNamespace(metrics=VacancyDiscoveryMetrics())
+
+        # Promote the test user to admin — expect the larger caps to flow
+        # through to discover_and_index_vacancies kwargs.
+        self.user.is_admin = True
+        self.db.add(self.user)
+        self.db.commit()
+
+        recommend_vacancies_for_resume(
+            self.db,
+            resume_id=self.resume.id,
+            user_id=self.user.id,
+            discover_count=40,
+            match_limit=20,
+            deep_scan=True,
+            rf_only=True,
+            use_prefetched_index=False,
+            discover_if_few_matches=True,
+            min_prefetched_matches=5,
+        )
+
+        self.assertGreaterEqual(mock_discover.call_count, 1)
+        first_call = mock_discover.call_args_list[0]
+        # Admin LLM cap is the wide one, not the cold-start 40.
+        self.assertEqual(first_call.kwargs.get("max_analyzed"), ADMIN_MAX_OPENAI_ANALYZED)
+        # Per-query fetch count should be far above the non-admin 150 cap.
+        self.assertGreater(first_call.kwargs.get("count"), 150)
+        self.assertLessEqual(first_call.kwargs.get("count"), ADMIN_PER_QUERY_CAP)
+        # Admin should get the full 6 query variations (interactive cap of 3 lifted).
+        self.assertLessEqual(mock_discover.call_count, MAX_DEEP_SCAN_QUERIES)
+        # Total scan budget across all calls fits under the admin ceiling.
+        total_count = sum(int(call.kwargs.get("count", 0)) for call in mock_discover.call_args_list)
+        self.assertLessEqual(total_count, ADMIN_MAX_SOURCES_SCANNED)
+
+    @patch("app.services.vacancy_recommendation.match_vacancies_for_resume")
+    @patch("app.services.vacancy_recommendation.discover_and_index_vacancies")
+    def test_admin_interactive_flow_skips_three_query_cap(self, mock_discover, mock_match) -> None:
+        """When an admin triggers the normal UI flow (use_prefetched_index=True)
+        they still get the full 6-query deep scan. Non-admins are capped at 3.
+        """
+        mock_match.return_value = []
+        mock_discover.return_value = SimpleNamespace(metrics=VacancyDiscoveryMetrics())
+
+        self.user.is_admin = True
+        self.db.add(self.user)
+        self.db.commit()
+
+        recommend_vacancies_for_resume(
+            self.db,
+            resume_id=self.resume.id,
+            user_id=self.user.id,
+            discover_count=40,
+            match_limit=20,
+            deep_scan=True,
+            rf_only=True,
+            use_prefetched_index=True,
+            discover_if_few_matches=True,
+            min_prefetched_matches=5,
+        )
+
+        # Up to 6 (MAX_DEEP_SCAN_QUERIES), not the interactive 3-cap.
+        self.assertGreater(mock_discover.call_count, 3)
 
 
 if __name__ == "__main__":

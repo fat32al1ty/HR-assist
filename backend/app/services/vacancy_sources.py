@@ -577,7 +577,12 @@ def _search_hh_public_api_vacancies(
     vacancies: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     per_page = min(max(count, 30), 100)
-    max_pages = max(MAX_API_SOURCE_PAGES, 8)
+    # HH public API caps each search at page * per_page ≤ 2000, so with
+    # per_page=100 the hard ceiling is 20 pages. Scale max_pages with the
+    # requested count so admin deep scans (count=2000) can actually reach
+    # page 19; small user counts keep the old 8-page minimum.
+    pages_needed = (count + per_page - 1) // max(1, per_page)
+    max_pages = min(20, max(MAX_API_SOURCE_PAGES, 8, pages_needed + 2))
     first_page = max(0, start_page)
 
     # Fetch the first HH_CONCURRENCY pages in parallel. In the common case

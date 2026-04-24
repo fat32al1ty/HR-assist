@@ -27,11 +27,39 @@ MAX_TOTAL_DISCOVERY_BUDGET = MAX_SOURCES_SCANNED
 COLD_START_MAX_OPENAI_ANALYZED = 40
 WARM_MAX_OPENAI_ANALYZED = 18
 MAX_OPENAI_ANALYZED = WARM_MAX_OPENAI_ANALYZED
+# Admin override — admins ask for as much as HH will return and as much
+# LLM analysis as the per-request/per-user OpenAI budget allows. HH's
+# public API hard-caps each search query at ~2000 items (page*per_page
+# ≤ 2000 with per_page ≤ 100), so we use 2000 per query and up to 6
+# queries. The analyzed cap is a safety-net only — the real brake is
+# `openai_request_budget_usd` + `openai_user_daily_budget_usd`.
+ADMIN_MAX_SOURCES_SCANNED = 3000
+ADMIN_PER_QUERY_CAP = 2000
+ADMIN_MAX_OPENAI_ANALYZED = 1000
 # Overlap window to tolerate HH's eventual-consistency on new postings —
 # a vacancy posted right before our cursor might not be visible yet.
 HH_CURSOR_OVERLAP = timedelta(hours=6)
 INTERACTIVE_MAX_DEEP_QUERIES = 3
 HIGH_QUALITY_MATCH_THRESHOLD = 0.55
+
+
+def _resolve_scan_budgets(user: User | None, *, is_cold_start: bool) -> tuple[int, int, int, int]:
+    """Return (analyzed_budget, sources_scanned_budget, per_query_cap, max_queries).
+
+    Admin accounts (``user.is_admin``) get the wider caps so operators can
+    burn through as much of HH's public API and the per-request OpenAI
+    budget as possible when profiling the full funnel. Everyone else keeps
+    the conservative caps tuned for interactive latency and per-user cost.
+    """
+    if user is not None and getattr(user, "is_admin", False):
+        return (
+            ADMIN_MAX_OPENAI_ANALYZED,
+            ADMIN_MAX_SOURCES_SCANNED,
+            ADMIN_PER_QUERY_CAP,
+            MAX_DEEP_SCAN_QUERIES,
+        )
+    analyzed_budget = COLD_START_MAX_OPENAI_ANALYZED if is_cold_start else WARM_MAX_OPENAI_ANALYZED
+    return analyzed_budget, MAX_SOURCES_SCANNED, 150, MAX_DEEP_SCAN_QUERIES
 
 
 def _as_strings(value: object) -> list[str]:
@@ -272,7 +300,10 @@ def recommend_vacancies_for_resume(
     fetch_started_at = datetime.now(UTC)
 
     is_cold_start = user is None or user.last_hh_seen_at is None
-    analyzed_budget = COLD_START_MAX_OPENAI_ANALYZED if is_cold_start else WARM_MAX_OPENAI_ANALYZED
+    analyzed_budget, sources_scanned_budget, per_query_cap, admin_max_queries = (
+        _resolve_scan_budgets(user, is_cold_start=is_cold_start)
+    )
+    is_admin = user is not None and bool(getattr(user, "is_admin", False))
 
     def _commit_cursor() -> None:
         # Only advance the cursor when we actually hit HH on this call.
@@ -312,23 +343,24 @@ def recommend_vacancies_for_resume(
     else:
         target_match_count = max(1, min(match_limit, min_prefetched_matches))
     if deep_scan:
-        max_queries = MAX_DEEP_SCAN_QUERIES
-        if use_prefetched_index:
+        max_queries = admin_max_queries if is_admin else MAX_DEEP_SCAN_QUERIES
+        if use_prefetched_index and not is_admin:
             # Interactive UI flow: keep deep scan bounded and return faster.
+            # Admins explicitly want maximum coverage, so they skip this cap.
             max_queries = min(max_queries, INTERACTIVE_MAX_DEEP_QUERIES)
         queries = _build_deep_scan_queries(query, rf_only=rf_only, analysis=resume.analysis)[
             :max_queries
         ]
         # Phase 2.1: HH pagination is free; a wider scan lets nichey / senior
-        # resumes reach their real matches on page 2-3. Use MAX_SOURCES_SCANNED
+        # resumes reach their real matches on page 2-3. Use sources_scanned_budget
         # as the upper bound regardless of discover_count, and raise the
         # per-query cap so pagination can actually go deep. LLM budget is
         # separately capped by analyzed_budget — a bigger scan doesn't spend
         # more OpenAI, just finds more candidates to choose from.
         total_budget = min(
-            max(discover_count * len(queries), MAX_SOURCES_SCANNED), MAX_SOURCES_SCANNED
+            max(discover_count * len(queries), sources_scanned_budget), sources_scanned_budget
         )
-        per_query_count = max(10, min(150, total_budget // max(1, len(queries))))
+        per_query_count = max(10, min(per_query_cap, total_budget // max(1, len(queries))))
         collect_start = 55 if use_prefetched_index else 10
         collect_span = 25 if use_prefetched_index else 60
         for index, deep_query in enumerate(queries):
