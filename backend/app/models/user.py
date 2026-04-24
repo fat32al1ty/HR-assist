@@ -33,6 +33,7 @@ class User(Base):
     )
 
     last_hh_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     expected_salary_min: Mapped[int | None] = mapped_column(nullable=True)
     expected_salary_max: Mapped[int | None] = mapped_column(nullable=True)

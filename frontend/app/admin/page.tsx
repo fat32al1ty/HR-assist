@@ -1,19 +1,35 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from '@/lib/session';
 import { apiFetch } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { AdminStatsResponse } from '@/types/admin';
+import type {
+  AdminActiveJob,
+  AdminJobCancelResponse,
+  AdminOverviewResponse,
+  AdminStatsResponse,
+} from '@/types/admin';
 
 export default function AdminPage() {
   const { token, user } = useSession();
   const [stats, setStats] = useState<AdminStatsResponse | null>(null);
+  const [overview, setOverview] = useState<AdminOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  const reloadOverview = useCallback(async () => {
+    if (!token) return;
+    const data = await apiFetch<AdminOverviewResponse>('/api/admin/overview', {
+      token: token ?? undefined,
+    });
+    setOverview(data);
+  }, [token]);
 
   useEffect(() => {
     if (!token || !user?.is_admin) {
@@ -21,14 +37,20 @@ export default function AdminPage() {
       return;
     }
 
-    async function loadStats() {
+    async function loadAll() {
       setLoading(true);
       setError(null);
       try {
-        const data = await apiFetch<AdminStatsResponse>('/api/admin/stats', {
-          token: token ?? undefined,
-        });
-        setStats(data);
+        const [statsData, overviewData] = await Promise.all([
+          apiFetch<AdminStatsResponse>('/api/admin/stats', {
+            token: token ?? undefined,
+          }),
+          apiFetch<AdminOverviewResponse>('/api/admin/overview', {
+            token: token ?? undefined,
+          }),
+        ]);
+        setStats(statsData);
+        setOverview(overviewData);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Не удалось загрузить статистику');
       } finally {
@@ -36,8 +58,28 @@ export default function AdminPage() {
       }
     }
 
-    void loadStats();
+    void loadAll();
   }, [token, user]);
+
+  const handleCancelJob = useCallback(
+    async (jobId: string) => {
+      if (!token) return;
+      setCancellingJobId(jobId);
+      setCancelError(null);
+      try {
+        await apiFetch<AdminJobCancelResponse>(`/api/admin/jobs/${jobId}/cancel`, {
+          method: 'POST',
+          token: token ?? undefined,
+        });
+        await reloadOverview();
+      } catch (err) {
+        setCancelError(err instanceof Error ? err.message : 'Не удалось остановить подбор');
+      } finally {
+        setCancellingJobId(null);
+      }
+    },
+    [token, reloadOverview]
+  );
 
   // Not authenticated — nothing to show (Topbar handles login redirect)
   if (!token) {
@@ -98,6 +140,87 @@ export default function AdminPage() {
       >
         Админ-панель
       </h1>
+
+      {overview ? (
+        <section className="mb-10 space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <OverviewStat label="Пользователей" value={overview.users_total} />
+            <OverviewStat
+              label="Активны за 24 ч"
+              value={overview.users_active_last_day}
+            />
+            <OverviewStat label="Резюме" value={overview.resumes_total} />
+            <OverviewStat
+              label="Вакансий"
+              value={overview.vacancies_total}
+              hint={`индексированы: ${overview.vacancies_indexed}`}
+            />
+          </div>
+
+          <Card className="animate-fade-in">
+            <CardHeader>
+              <CardTitle>Топ ролей по запросам подбора</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {overview.top_searched_roles.length === 0 ? (
+                <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] italic py-2">
+                  Пока нет ни одного подбора.
+                </p>
+              ) : (
+                <dl className="flex flex-col divide-y divide-[var(--color-border)]">
+                  {overview.top_searched_roles.map((row) => (
+                    <StatRow
+                      key={row.role}
+                      label={row.role}
+                      value={row.count}
+                      mono
+                    />
+                  ))}
+                </dl>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="animate-fade-in">
+            <CardHeader>
+              <CardTitle>
+                Активные фоновые подборы
+                <span
+                  className={cn(
+                    'ml-2 text-[length:var(--text-xs)]',
+                    'text-[color:var(--color-ink-secondary)] font-normal'
+                  )}
+                >
+                  ({overview.active_jobs.length})
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {cancelError ? (
+                <p className="text-[length:var(--text-sm)] text-[color:var(--color-danger)] mb-3">
+                  {cancelError}
+                </p>
+              ) : null}
+              {overview.active_jobs.length === 0 ? (
+                <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] italic py-2">
+                  Нет активных подборов.
+                </p>
+              ) : (
+                <ul className="flex flex-col divide-y divide-[var(--color-border)]">
+                  {overview.active_jobs.map((job) => (
+                    <ActiveJobRow
+                      key={job.id}
+                      job={job}
+                      onCancel={handleCancelJob}
+                      isCancelling={cancellingJobId === job.id}
+                    />
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 stagger-children">
         {/* Qdrant card */}
@@ -301,6 +424,93 @@ export default function AdminPage() {
         </p>
       ) : null}
     </main>
+  );
+}
+
+function OverviewStat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: number;
+  hint?: string;
+}) {
+  return (
+    <Card className="animate-fade-in">
+      <CardContent className="py-4">
+        <div
+          className={cn(
+            'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+            'uppercase tracking-[0.1em] font-bold mb-1'
+          )}
+        >
+          {label}
+        </div>
+        <div
+          className={cn(
+            'font-[var(--font-mono)] text-[length:var(--text-3xl)]',
+            'font-semibold text-[color:var(--color-ink)] leading-none'
+          )}
+        >
+          {value}
+        </div>
+        {hint ? (
+          <div
+            className={cn(
+              'mt-1 text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]',
+              'font-[var(--font-mono)]'
+            )}
+          >
+            {hint}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ActiveJobRow({
+  job,
+  onCancel,
+  isCancelling,
+}: {
+  job: AdminActiveJob;
+  onCancel: (jobId: string) => void;
+  isCancelling: boolean;
+}) {
+  const terminal = job.cancel_requested;
+  const created = new Date(job.created_at).toLocaleString('ru-RU');
+  return (
+    <li className="flex flex-wrap items-center gap-3 justify-between py-3">
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <div
+          className={cn(
+            'text-[length:var(--text-sm)] text-[color:var(--color-ink)]',
+            'font-semibold truncate max-w-[60ch]'
+          )}
+        >
+          {job.target_role ?? '— роль не указана —'}
+        </div>
+        <div
+          className={cn(
+            'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+            'font-[var(--font-mono)]'
+          )}
+        >
+          {job.user_email ?? `user ${job.user_id}`} · {job.status}/{job.stage} ·{' '}
+          {job.progress}% · {created}
+        </div>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onCancel(job.id)}
+        disabled={isCancelling || terminal}
+      >
+        {terminal ? 'Остановка…' : isCancelling ? 'Останавливаю…' : 'Остановить'}
+      </Button>
+    </li>
   );
 }
 

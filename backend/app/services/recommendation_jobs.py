@@ -169,6 +169,23 @@ def cancel_job_for_user(*, job_id: str, user_id: int) -> dict | None:
         db.close()
 
 
+def cancel_job_as_admin(*, job_id: str) -> dict | None:
+    """Admin-scoped cancel — flip cancel_requested regardless of owning user.
+
+    Returns the updated snapshot or None if the job doesn't exist. Idempotent
+    on terminal jobs.
+    """
+    db = SessionLocal()
+    try:
+        job = db.scalar(select(RecommendationJob).where(RecommendationJob.id == job_id))
+        if job is None:
+            return None
+        job = request_job_cancel(db, job)
+        return _snapshot_from_job(job)
+    finally:
+        db.close()
+
+
 def get_latest_job_snapshot_for_user(*, user_id: int, resume_id: int | None = None) -> dict | None:
     db = SessionLocal()
     try:

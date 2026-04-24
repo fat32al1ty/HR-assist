@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select, text
@@ -8,12 +8,22 @@ from app.api.deps import require_admin
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.recommendation_job import RecommendationJob
+from app.models.resume import Resume
 from app.models.user import User
 from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
 from app.models.vacancy_profile import VacancyProfile
 from app.repositories.resumes import get_active_resume_for_user, get_resume_for_user
-from app.schemas.admin import AdminDashboardStatsRead, QdrantStatsRead, ResumeStatsRead
+from app.schemas.admin import (
+    AdminActiveJob,
+    AdminDashboardStatsRead,
+    AdminJobCancelResponse,
+    AdminOverviewRead,
+    AdminRoleCount,
+    QdrantStatsRead,
+    ResumeStatsRead,
+)
+from app.services.recommendation_jobs import cancel_job_as_admin
 from app.services.vacancy_warmup import get_vacancy_warmup_status
 from app.services.vector_store import get_vector_store
 
@@ -150,6 +160,96 @@ def admin_stats(
         generated_at=datetime.now(UTC),
         qdrant=qdrant_stats,
         resume=resume_stats,
+    )
+
+
+@router.get("/overview", response_model=AdminOverviewRead)
+def admin_overview(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminOverviewRead:
+    now = datetime.now(UTC)
+    one_day_ago = now - timedelta(days=1)
+
+    users_total = int(db.scalar(select(func.count(User.id))) or 0)
+    users_active_last_day = int(
+        db.scalar(select(func.count(User.id)).where(User.last_login_at >= one_day_ago)) or 0
+    )
+    resumes_total = int(db.scalar(select(func.count(Resume.id))) or 0)
+    vacancies_total = int(db.scalar(select(func.count(Vacancy.id))) or 0)
+    vacancies_indexed = _count_indexed_vacancies(db)
+
+    # Roles searched: for each recommendation_jobs row, take the target_role
+    # from the linked resume's analysis JSON. Group and order by frequency.
+    # Column is sqlalchemy `JSON` (not JSONB), so `.astext` isn't available —
+    # use Postgres' json_extract_path_text which returns TEXT directly.
+    role_expr = func.json_extract_path_text(Resume.analysis, "target_role")
+    role_rows = db.execute(
+        select(role_expr.label("role"), func.count(RecommendationJob.id).label("cnt"))
+        .select_from(RecommendationJob)
+        .join(Resume, Resume.id == RecommendationJob.resume_id)
+        .where(role_expr.isnot(None))
+        .where(func.length(func.trim(role_expr)) > 0)
+        .group_by(role_expr)
+        .order_by(func.count(RecommendationJob.id).desc())
+        .limit(10)
+    ).all()
+    top_searched_roles = [AdminRoleCount(role=str(r.role), count=int(r.cnt)) for r in role_rows]
+
+    active_rows = db.execute(
+        select(RecommendationJob, User.email, Resume.analysis)
+        .join(User, User.id == RecommendationJob.user_id)
+        .join(Resume, Resume.id == RecommendationJob.resume_id)
+        .where(RecommendationJob.status.in_(("queued", "running")))
+        .order_by(RecommendationJob.created_at.desc())
+    ).all()
+    active_jobs: list[AdminActiveJob] = []
+    for job, email, analysis in active_rows:
+        target_role: str | None = None
+        if isinstance(analysis, dict):
+            raw = analysis.get("target_role")
+            if isinstance(raw, str) and raw.strip():
+                target_role = raw.strip()
+        active_jobs.append(
+            AdminActiveJob(
+                id=job.id,
+                user_id=int(job.user_id),
+                user_email=email,
+                resume_id=int(job.resume_id),
+                target_role=target_role,
+                status=job.status,
+                stage=job.stage,
+                progress=int(job.progress or 0),
+                cancel_requested=bool(job.cancel_requested),
+                created_at=job.created_at,
+                started_at=job.started_at,
+            )
+        )
+
+    return AdminOverviewRead(
+        generated_at=now,
+        users_total=users_total,
+        users_active_last_day=users_active_last_day,
+        resumes_total=resumes_total,
+        vacancies_total=vacancies_total,
+        vacancies_indexed=vacancies_indexed,
+        top_searched_roles=top_searched_roles,
+        active_jobs=active_jobs,
+    )
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=AdminJobCancelResponse)
+def admin_cancel_job(
+    job_id: str,
+    current_user: User = Depends(require_admin),
+) -> AdminJobCancelResponse:
+    snapshot = cancel_job_as_admin(job_id=job_id)
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return AdminJobCancelResponse(
+        id=str(snapshot["id"]),
+        status=str(snapshot["status"]),
+        cancel_requested=bool(snapshot.get("cancel_requested", False)),
     )
 
 

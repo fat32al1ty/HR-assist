@@ -36,3 +36,39 @@ class AdminDashboardStatsRead(BaseModel):
     generated_at: datetime
     qdrant: QdrantStatsRead
     resume: ResumeStatsRead | None = None
+
+
+class AdminRoleCount(BaseModel):
+    role: str
+    count: int
+
+
+class AdminActiveJob(BaseModel):
+    id: str
+    user_id: int
+    user_email: str | None = None
+    resume_id: int
+    target_role: str | None = None
+    status: str
+    stage: str
+    progress: int
+    cancel_requested: bool
+    created_at: datetime
+    started_at: datetime | None = None
+
+
+class AdminOverviewRead(BaseModel):
+    generated_at: datetime
+    users_total: int
+    users_active_last_day: int
+    resumes_total: int
+    vacancies_total: int
+    vacancies_indexed: int
+    top_searched_roles: list[AdminRoleCount] = Field(default_factory=list)
+    active_jobs: list[AdminActiveJob] = Field(default_factory=list)
+
+
+class AdminJobCancelResponse(BaseModel):
+    id: str
+    status: str
+    cancel_requested: bool

@@ -45,3 +45,39 @@ export type AdminStatsResponse = {
   last_job: LastJobStats | null;
   warmup: WarmupInternals;
 };
+
+export type AdminRoleCount = {
+  role: string;
+  count: number;
+};
+
+export type AdminActiveJob = {
+  id: string;
+  user_id: number;
+  user_email: string | null;
+  resume_id: number;
+  target_role: string | null;
+  status: string;
+  stage: string;
+  progress: number;
+  cancel_requested: boolean;
+  created_at: string;
+  started_at: string | null;
+};
+
+export type AdminOverviewResponse = {
+  generated_at: string;
+  users_total: number;
+  users_active_last_day: number;
+  resumes_total: number;
+  vacancies_total: number;
+  vacancies_indexed: number;
+  top_searched_roles: AdminRoleCount[];
+  active_jobs: AdminActiveJob[];
+};
+
+export type AdminJobCancelResponse = {
+  id: string;
+  status: string;
+  cancel_requested: boolean;
+};

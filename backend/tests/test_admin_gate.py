@@ -17,6 +17,8 @@ from app.core.security import create_access_token, hash_password
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.auth_otp_code import AuthOtpCode
+from app.models.recommendation_job import RecommendationJob
+from app.models.resume import Resume
 from app.models.user import User
 
 
@@ -95,6 +97,93 @@ class AdminGateTest(unittest.TestCase):
         self.assertIn("analyzed_count", funnel)
         self.assertIn("matched_count", funnel)
         self.assertIn("selected_count", funnel)
+
+    def test_non_admin_gets_403_on_admin_overview(self) -> None:
+        resp = self.client.get("/api/admin/overview", headers=_auth_header(self.user_email))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_admin_overview_shape(self) -> None:
+        resp = self.client.get("/api/admin/overview", headers=_auth_header(self.admin_email))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        for field in (
+            "generated_at",
+            "users_total",
+            "users_active_last_day",
+            "resumes_total",
+            "vacancies_total",
+            "vacancies_indexed",
+            "top_searched_roles",
+            "active_jobs",
+        ):
+            self.assertIn(field, body)
+        self.assertGreaterEqual(body["users_total"], 2)  # admin + non-admin from setUp
+        self.assertIsInstance(body["top_searched_roles"], list)
+        self.assertIsInstance(body["active_jobs"], list)
+
+    def test_admin_can_cancel_other_users_job(self) -> None:
+        resume = Resume(
+            user_id=self.user.id,
+            original_filename="resume.pdf",
+            content_type="application/pdf",
+            status="completed",
+            analysis={"target_role": "Python-разработчик"},
+        )
+        self.db.add(resume)
+        self.db.commit()
+        self.db.refresh(resume)
+
+        job_id = str(uuid.uuid4())
+        job = RecommendationJob(
+            id=job_id,
+            user_id=self.user.id,
+            resume_id=resume.id,
+            status="running",
+            stage="collecting",
+            progress=10,
+        )
+        self.db.add(job)
+        self.db.commit()
+
+        try:
+            # Non-admin can't cancel via the admin endpoint.
+            resp_deny = self.client.post(
+                f"/api/admin/jobs/{job_id}/cancel",
+                headers=_auth_header(self.user_email),
+            )
+            self.assertEqual(resp_deny.status_code, 403)
+
+            # Admin can cancel another user's job.
+            resp = self.client.post(
+                f"/api/admin/jobs/{job_id}/cancel",
+                headers=_auth_header(self.admin_email),
+            )
+            self.assertEqual(resp.status_code, 200)
+            body = resp.json()
+            self.assertEqual(body["id"], job_id)
+            self.assertTrue(body["cancel_requested"])
+
+            # Overview lists it as active with cancel_requested flipped.
+            overview = self.client.get(
+                "/api/admin/overview", headers=_auth_header(self.admin_email)
+            ).json()
+            match = next((j for j in overview["active_jobs"] if j["id"] == job_id), None)
+            self.assertIsNotNone(match)
+            assert match is not None  # narrow for type-checker
+            self.assertTrue(match["cancel_requested"])
+            self.assertEqual(match["user_email"], self.user_email)
+            self.assertEqual(match["target_role"], "Python-разработчик")
+        finally:
+            self.db.execute(delete(RecommendationJob).where(RecommendationJob.id == job_id))
+            self.db.execute(delete(Resume).where(Resume.id == resume.id))
+            self.db.commit()
+
+    def test_admin_cancel_missing_job_returns_404(self) -> None:
+        resp = self.client.post(
+            "/api/admin/jobs/nope-does-not-exist/cancel",
+            headers=_auth_header(self.admin_email),
+        )
+        self.assertEqual(resp.status_code, 404)
 
     def test_system_vacancy_warmup_trimmed_fields(self) -> None:
         resp = self.client.get("/api/system/vacancy-warmup")

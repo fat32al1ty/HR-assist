@@ -41,6 +41,14 @@ def mark_email_verified(db: Session, user: User) -> User:
     return user
 
 
+def touch_last_login(db: Session, user: User) -> User:
+    user.last_login_at = datetime.now(UTC)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def update_preferences(
     db: Session,
     user: User,

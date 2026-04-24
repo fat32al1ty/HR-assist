@@ -19,7 +19,12 @@ from app.repositories.auth_otp_codes import (
     invalidate_active_codes,
     register_failed_attempt,
 )
-from app.repositories.users import create_user, get_user_by_email, mark_email_verified
+from app.repositories.users import (
+    create_user,
+    get_user_by_email,
+    mark_email_verified,
+    touch_last_login,
+)
 from app.schemas.auth import (
     AuthMessageResponse,
     LoginRequest,
@@ -172,6 +177,7 @@ def login(
         )
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is not active")
+    touch_last_login(db, user)
     return TokenResponse(access_token=create_access_token(user.email))
 
 
@@ -223,4 +229,5 @@ def login_verify(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Login code is invalid")
 
     consume_code(db, code_row=code_row)
+    touch_last_login(db, user)
     return TokenResponse(access_token=create_access_token(user.email))
