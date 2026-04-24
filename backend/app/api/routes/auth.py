@@ -19,6 +19,7 @@ from app.repositories.auth_otp_codes import (
     invalidate_active_codes,
     register_failed_attempt,
 )
+from app.repositories.user_login_event import record_login_event
 from app.repositories.users import (
     create_user,
     get_user_by_email,
@@ -178,6 +179,11 @@ def login(
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is not active")
     touch_last_login(db, user)
+    try:
+        record_login_event(db, user_id=user.id)
+        db.commit()
+    except Exception:
+        pass
     return TokenResponse(access_token=create_access_token(user.email))
 
 
@@ -230,4 +236,9 @@ def login_verify(
 
     consume_code(db, code_row=code_row)
     touch_last_login(db, user)
+    try:
+        record_login_event(db, user_id=user.id)
+        db.commit()
+    except Exception:
+        pass
     return TokenResponse(access_token=create_access_token(user.email))

@@ -80,6 +80,19 @@ export type AdminRecentJob = {
   finished_at: string | null;
 };
 
+export type AdminDailyCount = {
+  date: string;
+  count: number;
+};
+
+export type AdminActivity = {
+  signups_per_day: AdminDailyCount[];
+  logins_per_day: AdminDailyCount[];
+  dau: number;
+  wau: number;
+  mau: number;
+};
+
 export type AdminOverviewResponse = {
   generated_at: string;
   users_total: number;
@@ -90,6 +103,7 @@ export type AdminOverviewResponse = {
   top_searched_roles: AdminRoleCount[];
   active_jobs: AdminActiveJob[];
   recent_jobs: AdminRecentJob[];
+  activity?: AdminActivity;
 };
 
 export type AdminJobCancelResponse = {

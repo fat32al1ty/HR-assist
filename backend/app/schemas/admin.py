@@ -72,6 +72,19 @@ class AdminRecentJob(BaseModel):
     finished_at: datetime | None = None
 
 
+class AdminDailyCount(BaseModel):
+    date: str
+    count: int
+
+
+class AdminActivityRead(BaseModel):
+    signups_per_day: list[AdminDailyCount]
+    logins_per_day: list[AdminDailyCount]
+    dau: int
+    wau: int
+    mau: int
+
+
 class AdminOverviewRead(BaseModel):
     generated_at: datetime
     users_total: int
@@ -82,6 +95,7 @@ class AdminOverviewRead(BaseModel):
     top_searched_roles: list[AdminRoleCount] = Field(default_factory=list)
     active_jobs: list[AdminActiveJob] = Field(default_factory=list)
     recent_jobs: list[AdminRecentJob] = Field(default_factory=list)
+    activity: AdminActivityRead
 
 
 class AdminJobCancelResponse(BaseModel):

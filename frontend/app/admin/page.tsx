@@ -16,6 +16,8 @@ import {
 import { cn } from '@/lib/utils';
 import type {
   AdminActiveJob,
+  AdminActivity,
+  AdminDailyCount,
   AdminFunnelStage,
   AdminJobCancelResponse,
   AdminJobFunnel,
@@ -291,6 +293,10 @@ export default function AdminPage() {
               )}
             </CardContent>
           </Card>
+
+          {overview.activity ? (
+            <ActivityCard activity={overview.activity} />
+          ) : null}
         </section>
       ) : null}
 
@@ -848,6 +854,142 @@ function SummaryTile({ label, value }: { label: string; value: number }) {
         {value}
       </div>
     </div>
+  );
+}
+
+function MiniBarChart({ data, label }: { data: AdminDailyCount[]; label: string }) {
+  const maxCount = Math.max(...data.map((d) => d.count), 1);
+  const total = data.reduce((sum, d) => sum + d.count, 0);
+  const CHART_HEIGHT = 40;
+  return (
+    <div className="flex flex-col gap-2">
+      <div
+        className={cn(
+          'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+          'uppercase tracking-[0.1em] font-bold'
+        )}
+      >
+        {label}
+      </div>
+      <div className="flex items-end gap-px" style={{ height: `${CHART_HEIGHT}px` }}>
+        {data.map((d) => {
+          const barH = Math.max(2, Math.round((d.count / maxCount) * CHART_HEIGHT));
+          return (
+            <div
+              key={d.date}
+              title={`${d.date}: ${d.count}`}
+              className="flex-1 rounded-sm bg-primary opacity-70 hover:opacity-100 transition-opacity cursor-default"
+              style={{ height: `${barH}px` }}
+            />
+          );
+        })}
+      </div>
+      <div
+        className={cn(
+          'text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]',
+          'font-[var(--font-mono)]'
+        )}
+      >
+        Итого за 14 дней: {total}
+      </div>
+    </div>
+  );
+}
+
+function ActivityCard({ activity }: { activity: AdminActivity }) {
+  return (
+    <Card className="animate-fade-in">
+      <CardHeader>
+        <CardTitle>Активность пользователей</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="flex flex-col gap-1">
+            <div
+              className={cn(
+                'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+                'uppercase tracking-[0.1em] font-bold'
+              )}
+            >
+              За 24 часа
+            </div>
+            <div
+              className={cn(
+                'font-[var(--font-mono)] text-[length:var(--text-3xl)]',
+                'font-semibold text-[color:var(--color-ink)] leading-none'
+              )}
+            >
+              {activity.dau}
+            </div>
+            <div
+              className={cn(
+                'text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]',
+                'font-[var(--font-mono)]'
+              )}
+            >
+              DAU
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <div
+              className={cn(
+                'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+                'uppercase tracking-[0.1em] font-bold'
+              )}
+            >
+              За неделю
+            </div>
+            <div
+              className={cn(
+                'font-[var(--font-mono)] text-[length:var(--text-3xl)]',
+                'font-semibold text-[color:var(--color-ink)] leading-none'
+              )}
+            >
+              {activity.wau}
+            </div>
+            <div
+              className={cn(
+                'text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]',
+                'font-[var(--font-mono)]'
+              )}
+            >
+              WAU
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <div
+              className={cn(
+                'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+                'uppercase tracking-[0.1em] font-bold'
+              )}
+            >
+              За месяц
+            </div>
+            <div
+              className={cn(
+                'font-[var(--font-mono)] text-[length:var(--text-3xl)]',
+                'font-semibold text-[color:var(--color-ink)] leading-none'
+              )}
+            >
+              {activity.mau}
+            </div>
+            <div
+              className={cn(
+                'text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]',
+                'font-[var(--font-mono)]'
+              )}
+            >
+              MAU
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-[var(--color-border)]">
+          <MiniBarChart data={activity.signups_per_day} label="Регистрации" />
+          <MiniBarChart data={activity.logins_per_day} label="Логины" />
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

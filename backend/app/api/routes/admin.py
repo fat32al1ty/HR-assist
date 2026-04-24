@@ -14,8 +14,15 @@ from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
 from app.models.vacancy_profile import VacancyProfile
 from app.repositories.resumes import get_active_resume_for_user, get_resume_for_user
+from app.repositories.user_login_event import (
+    count_active_users_since,
+    list_logins_by_day,
+    list_signups_by_day,
+)
 from app.schemas.admin import (
     AdminActiveJob,
+    AdminActivityRead,
+    AdminDailyCount,
     AdminDashboardStatsRead,
     AdminFunnelStage,
     AdminJobCancelResponse,
@@ -261,6 +268,16 @@ def admin_overview(
             )
         )
 
+    signups_raw = list_signups_by_day(db, days=14)
+    logins_raw = list_logins_by_day(db, days=14)
+    activity = AdminActivityRead(
+        signups_per_day=[AdminDailyCount(date=r["date"], count=r["count"]) for r in signups_raw],
+        logins_per_day=[AdminDailyCount(date=r["date"], count=r["count"]) for r in logins_raw],
+        dau=count_active_users_since(db, since=now - timedelta(days=1)),
+        wau=count_active_users_since(db, since=now - timedelta(days=7)),
+        mau=count_active_users_since(db, since=now - timedelta(days=30)),
+    )
+
     return AdminOverviewRead(
         generated_at=now,
         users_total=users_total,
@@ -271,6 +288,7 @@ def admin_overview(
         top_searched_roles=top_searched_roles,
         active_jobs=active_jobs,
         recent_jobs=recent_jobs,
+        activity=activity,
     )
 
 

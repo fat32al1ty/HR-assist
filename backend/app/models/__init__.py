@@ -13,6 +13,7 @@ from app.models.resume_profile import ResumeProfile
 from app.models.resume_user_skill import ResumeUserSkill
 from app.models.user import User
 from app.models.user_daily_spend import UserDailySpend
+from app.models.user_login_event import UserLoginEvent
 from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.user_vacancy_seen import UserVacancySeen
 from app.models.vacancy import Vacancy
@@ -34,6 +35,7 @@ __all__ = [
     "ResumeUserSkill",
     "User",
     "UserDailySpend",
+    "UserLoginEvent",
     "UserVacancyFeedback",
     "UserVacancySeen",
     "Vacancy",
