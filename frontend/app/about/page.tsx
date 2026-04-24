@@ -11,7 +11,7 @@ export default function AboutPage() {
             Мы помогаем находить<br />работу быстрее и осознаннее
           </h1>
           <p className="text-[length:var(--text-xl)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)]">
-            HR консультант — персональный AI-проект по анализу резюме и подбору вакансий. Демонстрационный, не коммерческий.
+            AIJobMatch — персональный AI-проект по анализу резюме и подбору вакансий. Демонстрационный, не коммерческий.
           </p>
         </div>
 

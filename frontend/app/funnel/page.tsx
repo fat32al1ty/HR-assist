@@ -20,7 +20,7 @@ export default function FunnelPage() {
             Следите за каждым откликом<br />в одном месте
           </h1>
           <p className="text-[length:var(--text-xl)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)]">
-            Больше не нужно держать таблицу в голове. HR консультант отслеживает статус каждой заявки и подсказывает следующий шаг.
+            Больше не нужно держать таблицу в голове. AIJobMatch отслеживает статус каждой заявки и подсказывает следующий шаг.
           </p>
         </div>
 

@@ -4,8 +4,11 @@ import { SessionProvider } from '@/lib/session';
 import Topbar from '@/components/Topbar';
 
 export const metadata: Metadata = {
-  title: 'HR Помощник',
-  description: 'Умный кабинет для анализа резюме и подбора вакансий',
+  title: 'AIJobMatch — AI-подбор вакансий',
+  description: 'AI-агент по поиску работы: подбор вакансий под резюме с честным fit/gap-анализом и воронкой откликов',
+  icons: {
+    icon: '/brand-preview-assets/aijobmatch-variant2-favicon.ico',
+  },
 };
 
 export const viewport: Viewport = {

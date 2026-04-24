@@ -34,14 +34,14 @@ export default function Topbar() {
       <div className="topbar-shell">
         <div className="topbar-brand">
           <Image
-            src="/hr-assist-logo.svg"
-            alt="HR консультант"
+            src="/brand-preview-assets/aijobmatch-variant2-icon-256.png"
+            alt="AIJobMatch"
             width={30}
             height={30}
             className="topbar-brand-logo"
           />
           <Link href="/" className="topbar-brand-link">
-            HR консультант
+            AIJobMatch
           </Link>
           <a
             href="https://github.com/fat32al1ty/HR-assist/releases"

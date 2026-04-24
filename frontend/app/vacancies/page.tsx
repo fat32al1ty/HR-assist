@@ -68,11 +68,11 @@ export default function VacanciesPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               { label: 'hh.ru', text: 'Сотни вакансий по ключевым словам, 90% — спам' },
-              { label: 'HR консультант', text: 'Только релевантные позиции с объяснением матча' },
+              { label: 'AIJobMatch', text: 'Только релевантные позиции с объяснением матча' },
               { label: 'hh.ru', text: 'Premium не объясняет, почему вакансия подходит' },
-              { label: 'HR консультант', text: 'Каждая вакансия — с аргументом, почему именно вам' },
+              { label: 'AIJobMatch', text: 'Каждая вакансия — с аргументом, почему именно вам' },
               { label: 'hh.ru', text: 'Откликаетесь вслепую, ждёте неделями' },
-              { label: 'HR консультант', text: 'Видите процент совпадения до отклика' },
+              { label: 'AIJobMatch', text: 'Видите процент совпадения до отклика' },
             ].map(({ label, text }, i) => (
               <div
                 key={i}
