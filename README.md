@@ -157,6 +157,7 @@ Closed-beta MVP. The end-to-end flow runs in production on a dedicated server.
 
 Full release log: [`docs/ROADMAP.md`](docs/ROADMAP.md). Recent highlights:
 
+- `v0.9.4` — Funnel pre-analyze drops: `fetched_dropped_analyzed_budget` (LLM budget cap) and `fetched_dedup_within_job` (within-job URL dedup) now counted and surfaced in admin waterfall
 - `v0.9.3` — Admin activity stats: `user_login_events` table, DAU/WAU/MAU, 14-day signup/login sparklines in admin overview
 - `v0.9.2` — Funnel observability: per-job drop taxonomy (26 buckets across pre-filter / LLM / matcher), admin waterfall UI; HH pagination early-break on 90%+ already-indexed saturation; `user_vacancy_seen` dedup excludes vacancies shown in the last 14 days
 - `v0.9.1` — Admin overview: users/resumes/vacancies totals, last-24h active users, top searched roles, live active-jobs list with admin cancel for any user

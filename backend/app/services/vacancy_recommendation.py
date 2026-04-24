@@ -253,6 +253,8 @@ _METRIC_INT_FIELDS = (
     "matcher_drop_hard_non_it",
     "matcher_drop_dedupe",
     "matcher_drop_mmr_dedupe",
+    "fetched_dropped_analyzed_budget",
+    "fetched_dedup_within_job",
 )
 
 

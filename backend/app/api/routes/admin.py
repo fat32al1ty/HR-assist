@@ -305,6 +305,8 @@ _FUNNEL_DROP_STAGES: tuple[tuple[str, str], ...] = (
     ("search_dedup_skipped", "Дубликаты URL в поиске"),
     ("search_strict_rejected", "Отсечено strict-query match"),
     ("enrich_failed", "Не удалось обогатить превью"),
+    ("fetched_dropped_analyzed_budget", "Отброшено из-за бюджета LLM-анализа"),
+    ("fetched_dedup_within_job", "Дубликаты URL внутри job'а"),
     ("already_indexed_skipped", "Уже в индексе"),
     ("filtered_host_not_allowed", "Фильтр: не тот хост"),
     ("filtered_non_rf", "Фильтр: не РФ"),

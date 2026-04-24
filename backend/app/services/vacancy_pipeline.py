@@ -86,6 +86,11 @@ class VacancyDiscoveryMetrics:
     matcher_drop_hard_non_it: int = 0
     matcher_drop_dedupe: int = 0
     matcher_drop_mmr_dedupe: int = 0
+    # Silent-drop counters (Phase v0.9.4): track URLs that vanish before LLM.
+    # fetched_dropped_analyzed_budget — items skipped once max_analyzed is hit.
+    # fetched_dedup_within_job — same URL seen twice across different queries.
+    fetched_dropped_analyzed_budget: int = 0
+    fetched_dedup_within_job: int = 0
 
 
 @dataclass
@@ -289,10 +294,16 @@ def discover_and_index_vacancies(
         nonlocal metrics, stop_processing
         eligible: list[tuple] = []
         for item in found_items:
-            if stop_processing:
-                break
             source_url = item["source_url"]
+            if stop_processing:
+                # Budget exhausted — count unique URLs we are skipping but
+                # do NOT increment fetched (they never entered the pipeline).
+                if source_url not in processed_source_urls:
+                    metrics.fetched_dropped_analyzed_budget += 1
+                    processed_source_urls.add(source_url)
+                continue
             if source_url in processed_source_urls:
+                metrics.fetched_dedup_within_job += 1
                 continue
             processed_source_urls.add(source_url)
             metrics.fetched += 1
@@ -360,7 +371,11 @@ def discover_and_index_vacancies(
 
                 if max_analyzed is not None and metrics.analyzed + len(eligible) >= max_analyzed:
                     stop_processing = True
-                    break
+                    # This item already incremented metrics.fetched above so we
+                    # do NOT also count it as dropped.  Use continue (not break)
+                    # so the remaining items in found_items are iterated and
+                    # counted via the stop_processing branch at the loop top.
+                    continue
 
                 analysis_input = _build_vacancy_analysis_input(
                     title=vacancy.title,
