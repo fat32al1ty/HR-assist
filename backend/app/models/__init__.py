@@ -11,6 +11,7 @@ from app.models.recommendation_job import RecommendationJob
 from app.models.resume import Resume
 from app.models.resume_profile import ResumeProfile
 from app.models.resume_user_skill import ResumeUserSkill
+from app.models.resume_vacancy_score import ResumeVacancyScore
 from app.models.user import User
 from app.models.user_daily_spend import UserDailySpend
 from app.models.user_login_event import UserLoginEvent
@@ -31,6 +32,7 @@ __all__ = [
     "MatchImpression",
     "RecommendationJob",
     "Resume",
+    "ResumeVacancyScore",
     "ResumeProfile",
     "ResumeUserSkill",
     "User",

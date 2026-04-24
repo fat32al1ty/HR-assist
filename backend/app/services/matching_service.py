@@ -2087,6 +2087,126 @@ def _candidate_to_match_dict(cand, *, tier: str, tier_reason: str | None = None)
     }
 
 
+def _run_pipeline_with_score_cache(
+    db: Session,
+    *,
+    state,
+    stages: list,
+    resume_id: int,
+):
+    """Run the matching pipeline with score-cache interposition.
+
+    Phase A — recall: run the first stage (VectorRecallStage) alone so we
+    know which vacancy_ids were recalled before spending on expensive stages.
+
+    If ``settings.matching_score_cache_enabled`` is True, cached candidates
+    bypass the remaining stages (cross-encoder rerank, LLM rerank, etc.).
+    Their ``hybrid_score`` is restored from the cache row. A lightweight
+    ``TierStage`` pass then assigns tiers for the restored candidates.
+
+    Uncached candidates run through the full remaining pipeline as normal.
+    After that run, their final ``hybrid_score`` is upserted into the cache
+    for future calls.
+
+    NOTE: the cache stores the *final* similarity_score including user-level
+    bonuses (title boost, seniority, leadership). Cache invalidation on
+    resume change is handled by ``delete_scores_for_resume`` called from
+    ``persist_resume_profile``. If user-level signals change (feedback,
+    preferences) the cache may serve slightly stale scores until TTL expires
+    or the resume is re-analysed. Disable ``matching_score_cache_enabled``
+    to force full recompute on every request.
+    """
+    from app.repositories.resume_vacancy_score import get_cached_scores, upsert_scores
+
+    from .matching import MatchingState, run_pipeline
+    from .matching.stages.tier import TierStage
+
+    if not stages:
+        return state
+
+    recall_stage = stages[0]
+    rest_stages = stages[1:]
+
+    # Phase A: recall only
+    state = recall_stage.run(state)
+    state.candidates = [c for c in state.candidates if not c.drop_reason]
+
+    if not state.candidates:
+        return state
+
+    if not settings.matching_score_cache_enabled:
+        return run_pipeline(state, rest_stages)
+
+    # Phase B: split cached / uncached
+    recalled_ids = [c.vacancy_id for c in state.candidates]
+    try:
+        cached_map = get_cached_scores(
+            db,
+            resume_id=resume_id,
+            vacancy_ids=recalled_ids,
+            pipeline_version=settings.matching_pipeline_version,
+            ttl_days=settings.matching_score_cache_ttl_days,
+        )
+    except Exception:  # noqa: BLE001
+        cached_map = {}
+
+    uncached_candidates = [c for c in state.candidates if c.vacancy_id not in cached_map]
+    cached_candidates = [c for c in state.candidates if c.vacancy_id in cached_map]
+
+    # Phase C: run expensive pipeline on uncached only
+    uncached_state = MatchingState(
+        resume_context=state.resume_context,
+        candidates=uncached_candidates,
+    )
+    uncached_state = run_pipeline(uncached_state, rest_stages)
+
+    # Upsert newly computed scores for survived uncached candidates
+    scored_rows = [
+        {
+            "vacancy_id": c.vacancy_id,
+            "similarity_score": c.hybrid_score,
+            "vector_score": c.vector_score,
+        }
+        for c in uncached_state.candidates
+        if not c.drop_reason and c.hybrid_score > 0.0
+    ]
+    if scored_rows:
+        try:
+            upsert_scores(
+                db,
+                resume_id=resume_id,
+                pipeline_version=settings.matching_pipeline_version,
+                scores=scored_rows,
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "resume_vacancy_score upsert failed for resume %d — continuing without cache",
+                resume_id,
+            )
+
+    # Phase D: restore cached candidates and assign tiers
+    tier_stage = TierStage()
+    cached_state = MatchingState(
+        resume_context=state.resume_context,
+        candidates=cached_candidates,
+    )
+    for cand in cached_state.candidates:
+        row = cached_map[cand.vacancy_id]
+        cand.hybrid_score = row.similarity_score
+        if row.vector_score is not None:
+            cand.vector_score = row.vector_score
+    cached_state = tier_stage.run(cached_state)
+
+    # Merge: uncached survivors first, then cached (cached may be below threshold)
+    survived_uncached = [c for c in uncached_state.candidates if not c.drop_reason]
+    survived_cached = [c for c in cached_state.candidates if not c.drop_reason]
+    state.candidates = survived_uncached + survived_cached
+    state.diagnostics = uncached_state.diagnostics
+    state.diagnostics.custom["cache_hits"] = len(survived_cached)
+    state.diagnostics.custom["cache_misses"] = len(survived_uncached)
+    return state
+
+
 def _default_matching_stages(db: Session, vector_store, *, search_limit: int) -> list:
     """Build the default stage list. Kept as a helper so eval runners can
     swap stages without recreating the boilerplate.
@@ -2204,7 +2324,7 @@ def match_vacancies_for_resume(
 ) -> list[dict]:
     """Top-level matching entrypoint — thin composition over the
     ``app.services.matching`` stage pipeline."""
-    from .matching import MatchingState, run_pipeline
+    from .matching import MatchingState
 
     resume = get_resume_for_user(db, resume_id=resume_id, user_id=user_id)
     if resume is None:
@@ -2262,7 +2382,7 @@ def match_vacancies_for_resume(
 
     state = MatchingState(resume_context=ctx, candidates=[])
     stages = _default_matching_stages(db, vector_store, search_limit=max(limit * 8, 120))
-    state = run_pipeline(state, stages)
+    state = _run_pipeline_with_score_cache(db, state=state, stages=stages, resume_id=resume_id)
     state.diagnostics.export_to(metrics)
 
     top_matches = _slice_tiered_matches(state.candidates, limit=limit)

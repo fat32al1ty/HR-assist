@@ -1,10 +1,14 @@
+import logging
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.repositories.resume_profiles import create_or_update_resume_profile
+from app.repositories.resume_vacancy_score import delete_scores_for_resume
 from app.services.embeddings import create_embedding
 from app.services.vector_store import get_vector_store
+
+logger = logging.getLogger(__name__)
 
 
 def build_resume_profile_text(profile: dict[str, Any]) -> str:
@@ -64,6 +68,8 @@ def persist_resume_profile(
         qdrant_collection=collection_name,
         qdrant_point_id=point_id,
     )
+    deleted = delete_scores_for_resume(db, resume_id=resume_id)
+    logger.info("Invalidated %d resume_vacancy_scores for resume %d", deleted, resume_id)
 
 
 def delete_resume_profile_vector(*, resume_id: int) -> None:
