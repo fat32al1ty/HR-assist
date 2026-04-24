@@ -35,6 +35,17 @@ jobs:
             git reset --hard origin/${{ github.ref_name }}
             echo "HEAD: $(git rev-parse --short HEAD)"
 
+            echo "== pre-build cleanup =="
+            # Reclaim space before build so we don't hit "no space left on
+            # device" when extracting new image layers. Aggressive: drops
+            # stopped containers + dangling images + unused build cache.
+            # -a (include non-dangling) scoped to images not used by a
+            # running container, so live services are never touched.
+            docker container prune -f || true
+            docker image prune -af --filter "until=24h" || true
+            docker builder prune -af --filter "unused-for=24h" || true
+            df -h /var/lib/docker | tail -1
+
             echo "== build & up =="
             # Pass the git-derived version into the frontend build so the UI
             # shows the exact ref it was built from. git describe falls back
@@ -44,7 +55,7 @@ jobs:
             docker compose pull --ignore-buildable || true
             docker compose up -d --build --remove-orphans
 
-            echo "== prune =="
+            echo "== post-build prune =="
             docker image prune -f
 
             echo "== backfill: vacancy stated salary =="
