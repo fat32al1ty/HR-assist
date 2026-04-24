@@ -97,6 +97,9 @@ class Settings(BaseSettings):
     # same top-N twice while the pool is still small.
     feature_exclude_seen_enabled: bool = True
     feature_exclude_seen_window_days: int = 14
+    feature_superjob_enabled: bool = False
+    feature_habr_enabled: bool = False
+    feature_public_sources_enabled: bool = False
     matching_pipeline_version: str = "3.0"
     matching_score_cache_ttl_days: int = 7
     matching_score_cache_enabled: bool = True

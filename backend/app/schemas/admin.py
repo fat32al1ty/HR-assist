@@ -120,6 +120,20 @@ class AdminFunnelStage(BaseModel):
     kind: str = "flow"
 
 
+class AdminVacancySourceProbeIn(BaseModel):
+    query: str
+
+
+class AdminVacancySourceProbeResult(BaseModel):
+    count: int
+    error: str | None
+
+
+class AdminVacancySourceProbeRead(BaseModel):
+    query: str
+    sources: dict[str, AdminVacancySourceProbeResult]
+
+
 class AdminJobFunnelRead(BaseModel):
     job_id: str
     status: str

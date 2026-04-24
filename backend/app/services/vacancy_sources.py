@@ -791,17 +791,19 @@ def search_vacancies(
     date_from: datetime | None = None,
     already_indexed_probe: Callable[[list[str]], int] | None = None,
 ) -> list[dict[str, Any]]:
-    # Temporary strategy: use only HH API as vacancy source.
-    # Other sources (Habr/SuperJob/public pages/Brave) are intentionally disabled here.
     _ = use_brave_fallback
+    aggregated: list[dict[str, Any]] = []
+
+    # HH API — primary source, always on
     try:
-        aggregated = _search_hh_public_api_vacancies(
+        hh_items = _search_hh_public_api_vacancies(
             query=query,
             count=count,
             start_page=page_offset,
             date_from=date_from,
             already_indexed_probe=already_indexed_probe,
         )
+        aggregated.extend(hh_items)
     except Exception as exc:
         logger.warning(
             "hh_search_failed query=%r count=%s page_offset=%s error=%s",
@@ -810,7 +812,36 @@ def search_vacancies(
             page_offset,
             exc,
         )
-        aggregated = []
+
+    # SuperJob API (feature-gated, needs key)
+    if settings.feature_superjob_enabled and settings.superjob_api_key:
+        try:
+            sj_items = _search_superjob_api_vacancies(
+                query=query, count=count, start_page=page_offset
+            )
+            aggregated.extend(sj_items)
+        except Exception as exc:
+            logger.warning("superjob_search_failed error=%s", exc)
+
+    # Habr Career API (feature-gated, needs token)
+    if settings.feature_habr_enabled and settings.habr_career_api_token:
+        try:
+            habr_items = _search_habr_api_vacancies(
+                query=query, count=count, start_page=page_offset
+            )
+            aggregated.extend(habr_items)
+        except Exception as exc:
+            logger.warning("habr_search_failed error=%s", exc)
+
+    # Public scraped sources (feature-gated, no auth)
+    if settings.feature_public_sources_enabled:
+        try:
+            pub_items = _search_public_sources(
+                query=query, count=max(count, 30), start_page=page_offset
+            )
+            aggregated.extend(pub_items)
+        except Exception as exc:
+            logger.warning("public_sources_failed error=%s", exc)
 
     parse_stats = _PARSE_STATS.get()
     if parse_stats is not None:

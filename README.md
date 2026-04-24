@@ -157,6 +157,7 @@ Closed-beta MVP. The end-to-end flow runs in production on a dedicated server.
 
 Full release log: [`docs/ROADMAP.md`](docs/ROADMAP.md). Recent highlights:
 
+- `v0.10.1` — Vacancy source adapters re-activated behind feature flags (SuperJob / Habr Career / public scrapers, all default off); admin probe endpoint `POST /api/admin/vacancy-sources/probe` reports per-source counts for diagnosis
 - `v0.10.0` — Matcher score cache: `resume_vacancy_scores` table (pipeline-versioned, 7-day TTL, resume-reanalyze invalidation) short-circuits cross-encoder / LLM rerank for already-scored pairs on refresh
 - `v0.9.4` — Funnel pre-analyze drops: `fetched_dropped_analyzed_budget` (LLM budget cap) and `fetched_dedup_within_job` (within-job URL dedup) now counted and surfaced in admin waterfall
 - `v0.9.3` — Admin activity stats: `user_login_events` table, DAU/WAU/MAU, 14-day signup/login sparklines in admin overview

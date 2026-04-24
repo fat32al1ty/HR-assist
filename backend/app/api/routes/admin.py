@@ -30,10 +30,20 @@ from app.schemas.admin import (
     AdminOverviewRead,
     AdminRecentJob,
     AdminRoleCount,
+    AdminVacancySourceProbeIn,
+    AdminVacancySourceProbeRead,
     QdrantStatsRead,
     ResumeStatsRead,
 )
 from app.services.recommendation_jobs import cancel_job_as_admin
+from app.services.vacancy_sources import (
+    _collect_public_habr_vacancies,
+    _collect_public_hh_vacancies,
+    _collect_public_superjob_vacancies,
+    _search_habr_api_vacancies,
+    _search_hh_public_api_vacancies,
+    _search_superjob_api_vacancies,
+)
 from app.services.vacancy_warmup import get_vacancy_warmup_status
 from app.services.vector_store import get_vector_store
 
@@ -454,6 +464,55 @@ def admin_cancel_job(
 @router.get("/warmup")
 def admin_warmup(current_user: User = Depends(require_admin)) -> dict[str, object]:
     return get_vacancy_warmup_status()
+
+
+@router.post("/vacancy-sources/probe", response_model=AdminVacancySourceProbeRead)
+def probe_vacancy_sources(
+    payload: AdminVacancySourceProbeIn,
+    admin: User = Depends(require_admin),
+) -> AdminVacancySourceProbeRead:
+    query = payload.query.strip()
+    if not query:
+        raise HTTPException(400, "query required")
+
+    results: dict[str, dict[str, object]] = {}
+
+    try:
+        items = _search_hh_public_api_vacancies(query=query, count=20, start_page=0)
+        results["hh_api"] = {"count": len(items), "error": None}
+    except Exception as exc:
+        results["hh_api"] = {"count": 0, "error": str(exc)[:200]}
+
+    if settings.superjob_api_key:
+        try:
+            items = _search_superjob_api_vacancies(query=query, count=20, start_page=0)
+            results["superjob_api"] = {"count": len(items), "error": None}
+        except Exception as exc:
+            results["superjob_api"] = {"count": 0, "error": str(exc)[:200]}
+    else:
+        results["superjob_api"] = {"count": 0, "error": "no SUPERJOB_API_KEY"}
+
+    if settings.habr_career_api_token:
+        try:
+            items = _search_habr_api_vacancies(query=query, count=20, start_page=0)
+            results["habr_api"] = {"count": len(items), "error": None}
+        except Exception as exc:
+            results["habr_api"] = {"count": 0, "error": str(exc)[:200]}
+    else:
+        results["habr_api"] = {"count": 0, "error": "no HABR_CAREER_API_TOKEN"}
+
+    for name, fn in [
+        ("hh_public", _collect_public_hh_vacancies),
+        ("habr_public", _collect_public_habr_vacancies),
+        ("superjob_public", _collect_public_superjob_vacancies),
+    ]:
+        try:
+            items = fn(query=query, count=20, start_page=0)
+            results[name] = {"count": len(items), "error": None}
+        except Exception as exc:
+            results[name] = {"count": 0, "error": str(exc)[:200]}
+
+    return AdminVacancySourceProbeRead(query=query, sources=results)  # type: ignore[arg-type]
 
 
 @router.get("/config-check")
