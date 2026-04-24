@@ -16,7 +16,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from app.services import vacancy_pipeline
-from app.services.vacancy_pipeline import discover_and_index_vacancies
+from app.services.vacancy_pipeline import VacancyDiscoveryMetrics, discover_and_index_vacancies
+from app.services.vacancy_recommendation import _METRIC_INT_FIELDS
 
 
 def _make_items(urls: list[str]) -> list[dict]:
@@ -180,6 +181,27 @@ class WithinJobDedupTest(unittest.TestCase):
             2,
             msg=f"Expected 2 dedup drops, got {result.metrics.fetched_dedup_within_job}",
         )
+
+
+class MetricIntFieldsRegistrationTest(unittest.TestCase):
+    def test_cursor_fallback_queries_run_registered(self) -> None:
+        """cursor_fallback_queries_run must appear in _METRIC_INT_FIELDS so
+        _merge_metrics accumulates it across multi-query sweeps."""
+        self.assertIn(
+            "cursor_fallback_queries_run",
+            _METRIC_INT_FIELDS,
+            msg="cursor_fallback_queries_run missing from _METRIC_INT_FIELDS",
+        )
+
+    def test_all_metric_int_fields_exist_on_dataclass(self) -> None:
+        """Every name in _METRIC_INT_FIELDS must be a real attribute of
+        VacancyDiscoveryMetrics so _merge_metrics never raises AttributeError."""
+        instance = VacancyDiscoveryMetrics()
+        for field_name in _METRIC_INT_FIELDS:
+            self.assertTrue(
+                hasattr(instance, field_name),
+                msg=f"_METRIC_INT_FIELDS references missing attribute: {field_name}",
+            )
 
 
 if __name__ == "__main__":

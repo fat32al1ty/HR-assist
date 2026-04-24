@@ -238,13 +238,13 @@ def _run_recommendation_job(job_id: str) -> None:
                     resume_id=resume_id,
                     user_id=user_id,
                     discover_count=int(payload.get("discover_count", 40)),
-                    match_limit=int(payload.get("match_limit", 20)),
+                    match_limit=int(payload.get("match_limit", 40)),
                     deep_scan=bool(payload.get("deep_scan", True)),
                     rf_only=bool(payload.get("rf_only", True)),
                     use_brave_fallback=bool(payload.get("use_brave_fallback", False)),
                     use_prefetched_index=bool(payload.get("use_prefetched_index", True)),
                     discover_if_few_matches=bool(payload.get("discover_if_few_matches", True)),
-                    min_prefetched_matches=int(payload.get("min_prefetched_matches", 8)),
+                    min_prefetched_matches=int(payload.get("min_prefetched_matches", 10)),
                     progress_callback=on_progress,
                     max_runtime_seconds=max(
                         30, int(settings.recommendation_job_timeout_seconds) - 30

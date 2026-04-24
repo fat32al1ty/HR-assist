@@ -91,13 +91,13 @@ class PreferenceOverrides(BaseModel):
 
 class VacancyRecommendRequest(BaseModel):
     discover_count: int = Field(default=40, ge=1, le=100)
-    match_limit: int = Field(default=20, ge=1, le=50)
+    match_limit: int = Field(default=40, ge=1, le=50)
     deep_scan: bool = True
     rf_only: bool = True
     use_brave_fallback: bool = False
     use_prefetched_index: bool = True
     discover_if_few_matches: bool = True
-    min_prefetched_matches: int = Field(default=8, ge=1, le=20)
+    min_prefetched_matches: int = Field(default=10, ge=1, le=20)
     preference_overrides: PreferenceOverrides | None = None
 
 

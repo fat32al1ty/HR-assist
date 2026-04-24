@@ -91,6 +91,7 @@ class VacancyDiscoveryMetrics:
     # fetched_dedup_within_job — same URL seen twice across different queries.
     fetched_dropped_analyzed_budget: int = 0
     fetched_dedup_within_job: int = 0
+    cursor_fallback_queries_run: int = 0
 
 
 @dataclass

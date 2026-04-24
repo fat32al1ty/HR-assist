@@ -6,7 +6,7 @@ export type RecommendationMetrics = {
 
 export function formatRecommendationMetrics(metrics: RecommendationMetrics): string {
   const checked = metrics.fetched || 0;
-  const freshSeen = (metrics.analyzed || 0) + (metrics.indexed || 0);
+  const freshSeen = metrics.indexed || 0;  // только реально добавленные в индекс на этом проходе
   if (checked === 0) {
     return '';
   }
@@ -18,7 +18,7 @@ export function formatRecommendationMetrics(metrics: RecommendationMetrics): str
 
 export function formatRecommendationHeadline(freshCount: number): string {
   if (freshCount > 0) {
-    return `Свежего с прошлого раза: ${freshCount}.`;
+    return `Подобрали лучших: ${freshCount}.`;
   }
-  return 'Рынок пока без свежих для тебя. Обычно новые появляются раз в 6-12 часов.';
+  return 'Рынок пока без подходящих для тебя. Обычно новые появляются раз в 6-12 часов.';
 }

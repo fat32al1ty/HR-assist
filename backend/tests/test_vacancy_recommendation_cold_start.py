@@ -25,7 +25,7 @@ from app.services.vacancy_recommendation import (
 class ColdStartLLMBudgetTest(unittest.TestCase):
     """Phase 2.0 PR A1 — first-run users get a bigger LLM budget.
 
-    The old cap of 18 capped the fresh index at ~14 vacancies. For users whose
+    The old cap of 18 was too tight. For users whose
     `last_hh_seen_at` is still NULL (meaning we've never hit HH for them yet)
     we spend 40 analyses instead, so the very first `Обновить подбор` returns
     a meaningful number of matches rather than 2-5.

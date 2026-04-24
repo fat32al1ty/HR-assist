@@ -21,11 +21,12 @@ MAX_DEEP_SCAN_QUERIES = 6
 MAX_SOURCES_SCANNED = 400
 MAX_TOTAL_DISCOVERY_BUDGET = MAX_SOURCES_SCANNED
 # Phase 2.0 PR A1: spend more LLM budget on cold-start so first-run users
-# actually see results. Warm runs (cursor already populated) keep the
-# tight cap — the index is already seeded and further LLM parses mostly
-# overlap with existing vectors.
+# actually see results. Warm runs (cursor already populated) get a wider
+# cap (50 vs cold=40) — warm is intentionally broader because the majority
+# of newly-fetched URLs are eliminated in already_indexed_skipped and the
+# real LLM spend stays well below the cap.
 COLD_START_MAX_OPENAI_ANALYZED = 40
-WARM_MAX_OPENAI_ANALYZED = 18
+WARM_MAX_OPENAI_ANALYZED = 50
 MAX_OPENAI_ANALYZED = WARM_MAX_OPENAI_ANALYZED
 # Admin override — admins ask for as much as HH will return and as much
 # LLM analysis as the per-request/per-user OpenAI budget allows. HH's
@@ -39,7 +40,7 @@ ADMIN_MAX_OPENAI_ANALYZED = 1000
 # Overlap window to tolerate HH's eventual-consistency on new postings —
 # a vacancy posted right before our cursor might not be visible yet.
 HH_CURSOR_OVERLAP = timedelta(hours=6)
-INTERACTIVE_MAX_DEEP_QUERIES = 3
+INTERACTIVE_MAX_DEEP_QUERIES = 6
 HIGH_QUALITY_MATCH_THRESHOLD = 0.55
 
 
@@ -255,6 +256,7 @@ _METRIC_INT_FIELDS = (
     "matcher_drop_mmr_dedupe",
     "fetched_dropped_analyzed_budget",
     "fetched_dedup_within_job",
+    "cursor_fallback_queries_run",
 )
 
 
@@ -277,7 +279,7 @@ def recommend_vacancies_for_resume(
     resume_id: int,
     user_id: int,
     discover_count: int = 40,
-    match_limit: int = 20,
+    match_limit: int = 40,
     deep_scan: bool = True,
     rf_only: bool = True,
     use_brave_fallback: bool = False,
@@ -480,6 +482,41 @@ def recommend_vacancies_for_resume(
         fetch_succeeded = True
         aggregate_metrics = _merge_metrics(aggregate_metrics, result.metrics)
         report("collecting", 70, aggregate_metrics)
+
+    # Cursor fallback — pull historical postings published before the user's
+    # cursor when the cursor-bounded sweep didn't surface enough high-quality
+    # matches. "Best-of-market" can predate the user's first visit; without
+    # this fallback those postings never enter the index.
+    if (
+        deep_scan
+        and use_prefetched_index
+        and cursor_from is not None
+        and max(0, analyzed_budget - aggregate_metrics.analyzed) > 0
+    ):
+        current_matches = _run_matcher(match_limit)
+        if _count_high_quality_matches(current_matches) < target_match_count:
+            fallback_queries = queries[: min(2, len(queries))]
+            for deep_query in fallback_queries:
+                if max_runtime_seconds is not None:
+                    elapsed = time.monotonic() - started_at
+                    if elapsed >= max_runtime_seconds:
+                        break
+                remaining = max(0, analyzed_budget - aggregate_metrics.analyzed)
+                if remaining <= 0:
+                    break
+                result = discover_and_index_vacancies(
+                    db,
+                    query=deep_query,
+                    count=per_query_count,
+                    rf_only=rf_only,
+                    force_reindex=False,
+                    use_brave_fallback=use_brave_fallback,
+                    max_analyzed=remaining,
+                    date_from=None,
+                )
+                fetch_succeeded = True
+                aggregate_metrics = _merge_metrics(aggregate_metrics, result.metrics)
+                aggregate_metrics.cursor_fallback_queries_run += 1
 
     report("matching", 85, aggregate_metrics)
     matches = _run_matcher(match_limit)

@@ -399,6 +399,7 @@ export default function DashboardPage() {
   const [curatingSkillKey, setCuratingSkillKey] = useState<string | null>(null);
   const [lastSearchAt, setLastSearchAt] = useState<Date | null>(null);
   const [lastAnalyzedCount, setLastAnalyzedCount] = useState<number | null>(null);
+  const [matchesPageSize, setMatchesPageSize] = useState<number>(10);
   const isAdmin = Boolean(user?.is_admin);
   const [dragOver, setDragOver] = useState(false);
 
@@ -584,6 +585,7 @@ export default function DashboardPage() {
         hiddenMatchIds
       );
       setMatches(visibleMatches);
+      setMatchesPageSize(10);
       const metricsInfo = formatMetricsInfo(metrics);
       const headline = formatRecommendationHeadline(visibleMatches.length);
       setMatchingMessage(metricsInfo ? `${headline} ${metricsInfo}` : headline);
@@ -1479,23 +1481,23 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-7 animate-fade-in">
               <div className="inline-flex items-center gap-2.5 w-max">
                 <Image
-                  src="/hr-assist-logo.svg"
-                  alt="HR консультант"
+                  src="/brand-preview-assets/aijobmatch-variant2-icon-256.png"
+                  alt="AIJobMatch"
                   width={36}
                   height={36}
                   className="rounded-[10px] shadow-[var(--shadow-sm)]"
                 />
                 <span className="font-[var(--font-display)] font-bold text-[length:var(--text-xl)] tracking-[-0.02em] text-[color:var(--color-ink)]">
-                  HR консультант
+                  AIJobMatch
                 </span>
               </div>
 
               <div className="flex flex-col gap-4">
                 <span className="inline-flex w-max px-3 py-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[length:var(--text-xs)] font-bold tracking-[0.08em] uppercase text-[color:var(--color-ink-secondary)]">
-                  AI-HR консультант
+                  AI-агент по поиску работы
                 </span>
                 <h1 className="text-[length:var(--text-display)] leading-[var(--leading-tight)] tracking-[-0.035em] font-bold text-[color:var(--color-ink)] max-w-[620px]">
-                  Твой личный HR консультант
+                  AI находит <span className="text-[color:var(--color-accent)]">твои</span> вакансии — и объясняет почему
                 </h1>
                 <p className="text-[length:var(--text-lg)] leading-[var(--leading-relaxed)] text-[color:var(--color-ink-secondary)] max-w-[560px]">
                   Загружаешь резюме — получаешь отранжированный список вакансий,
@@ -2095,7 +2097,7 @@ export default function DashboardPage() {
                       ) : null}
                       {visibleMatches.length > 0 && lastSearchAt ? (
                         <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
-                          {`Топ-${visibleMatches.length}${lastAnalyzedCount ? ` из ${lastAnalyzedCount} просмотренных` : ''} · запуск в ${lastSearchAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
+                          {`Показано ${Math.min(matchesPageSize, visibleMatches.length)} из ${visibleMatches.length}${lastAnalyzedCount ? ` · проверено ${lastAnalyzedCount} новых` : ''} · запуск в ${lastSearchAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
                         </p>
                       ) : null}
                     </div>
@@ -2108,7 +2110,7 @@ export default function DashboardPage() {
                         После запуска здесь появятся подходящие вакансии.
                       </p>
                     ) : null}
-                    {visibleMatches.map((match, matchIndex) => {
+                    {visibleMatches.slice(0, matchesPageSize).map((match, matchIndex) => {
                       const showTierDivider =
                         match.tier === 'maybe' &&
                         (matchIndex === 0 || visibleMatches[matchIndex - 1]?.tier !== 'maybe');
@@ -2371,6 +2373,16 @@ export default function DashboardPage() {
                       );
                     })}
                   </div>
+                  {visibleMatches.length > matchesPageSize ? (
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      className="w-full"
+                      onClick={() => setMatchesPageSize((prev) => Math.min(prev + 10, visibleMatches.length))}
+                    >
+                      Показать ещё 10
+                    </Button>
+                  ) : null}
                 </CardContent>
               </Card>
 
@@ -2552,8 +2564,8 @@ export default function DashboardPage() {
             {/* Brand */}
             <div className="flex flex-col gap-2 max-w-[260px]">
               <div className="flex items-center gap-2">
-                <Image src="/hr-assist-logo.svg" alt="HR консультант" width={24} height={24} className="rounded-[6px] shadow-[var(--shadow-sm)]" />
-                <span className="font-bold text-[length:var(--text-sm)] tracking-[-0.02em] text-[color:var(--color-ink)]">HR консультант</span>
+                <Image src="/brand-preview-assets/aijobmatch-variant2-icon-256.png" alt="AIJobMatch" width={24} height={24} className="rounded-[6px] shadow-[var(--shadow-sm)]" />
+                <span className="font-bold text-[length:var(--text-sm)] tracking-[-0.02em] text-[color:var(--color-ink)]">AIJobMatch</span>
               </div>
               <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)]">
                 AI-ассистент для соискателей — умный подбор вакансий и воронка откликов.
@@ -2632,7 +2644,7 @@ export default function DashboardPage() {
 
           {/* Bottom bar */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 border-t border-[var(--color-border)] text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
-            <span>© {new Date().getFullYear()} HR консультант.</span>
+            <span>© {new Date().getFullYear()} AIJobMatch · aijobmatch.ru</span>
           </div>
 
         </div>
