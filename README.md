@@ -157,6 +157,7 @@ Closed-beta MVP. The end-to-end flow runs in production on a dedicated server.
 
 Full release log: [`docs/ROADMAP.md`](docs/ROADMAP.md). Recent highlights:
 
+- `v0.9.1` — Admin overview: users/resumes/vacancies totals, last-24h active users, top searched roles, live active-jobs list with admin cancel for any user
 - `v0.9.0` — Privacy minimization (Level A): PII scrubber, no raw resume text persisted, uploaded file deleted after analysis, no identifiers in Qdrant payload — see [`PRIVACY.md`](PRIVACY.md)
 - `v0.8.x` — Design-system rewrite (Tailwind v4 + shadcn), admin panel, linear workspace flow, UI/UX polish
 - `v0.7.0` — Matching quality overhaul: multi-stage matcher, MMR diversity, ESCO role gate, cross-encoder rerank, eval harness with CI floors
