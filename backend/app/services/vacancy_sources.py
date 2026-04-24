@@ -4,6 +4,7 @@ import html
 import logging
 import re
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -37,6 +38,11 @@ class VacancyFetchError(RuntimeError):
 @dataclass
 class VacancyParseStats:
     skipped_parse_errors: int = 0
+    hh_fetched_raw: int = 0
+    search_dedup_skipped: int = 0
+    search_strict_rejected: int = 0
+    enrich_failed: int = 0
+    pages_truncated_by_indexed: int = 0
     samples: list[dict[str, str]] = field(default_factory=list)
 
     def record_skip(self, *, source: str, url: str, reason: str) -> None:
@@ -45,6 +51,21 @@ class VacancyParseStats:
         # actually fail without blowing up the job record.
         if len(self.samples) < 10:
             self.samples.append({"source": source, "url": url, "reason": reason})
+
+    def record_hh_fetched(self, delta: int) -> None:
+        self.hh_fetched_raw += max(0, delta)
+
+    def record_dedup(self) -> None:
+        self.search_dedup_skipped += 1
+
+    def record_strict_reject(self) -> None:
+        self.search_strict_rejected += 1
+
+    def record_enrich_fail(self) -> None:
+        self.enrich_failed += 1
+
+    def record_page_truncated_by_indexed(self) -> None:
+        self.pages_truncated_by_indexed += 1
 
 
 _PARSE_STATS: ContextVar[VacancyParseStats | None] = ContextVar("vacancy_parse_stats", default=None)
@@ -68,6 +89,13 @@ def _record_parse_skip(*, source: str, url: str, reason: str) -> None:
     stats.record_skip(source=source, url=url, reason=reason)
 
 
+def _record_enrich_fail() -> None:
+    stats = _PARSE_STATS.get()
+    if stats is None:
+        return
+    stats.record_enrich_fail()
+
+
 REQUEST_HEADERS = {
     "User-Agent": "HR-Assist-Bot/1.0 (+https://github.com/fat32al1ty/HR-assist)",
     "Accept-Language": "ru,en;q=0.9",
@@ -79,6 +107,12 @@ FETCH_TIMEOUT_SECONDS = 4
 ENRICH_TIME_BUDGET_SECONDS = 4
 HH_PUBLIC_API_URL = "https://api.hh.ru/vacancies"
 HH_CONCURRENCY = 3
+# Level 2 D1: stop HH pagination once the already-indexed ratio on a page
+# crosses this threshold. Further pages are extremely likely to return the
+# same stale inventory — keep API round-trips bounded and surface the event
+# in the funnel via ``pages_truncated_by_indexed``.
+ALREADY_INDEXED_BREAK_RATIO = 0.9
+ALREADY_INDEXED_BREAK_MIN_PAGE_SIZE = 20
 ALLOWED_JOB_HOSTS = (
     "hh.ru",
     "career.habr.com",
@@ -573,6 +607,7 @@ def _search_hh_public_api_vacancies(
     count: int,
     start_page: int = 0,
     date_from: datetime | None = None,
+    already_indexed_probe: Callable[[list[str]], int] | None = None,
 ) -> list[dict[str, Any]]:
     vacancies: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
@@ -584,6 +619,27 @@ def _search_hh_public_api_vacancies(
     pages_needed = (count + per_page - 1) // max(1, per_page)
     max_pages = min(20, max(MAX_API_SOURCE_PAGES, 8, pages_needed + 2))
     first_page = max(0, start_page)
+
+    def _should_truncate_by_indexed(page_vacancies: list[dict[str, Any]]) -> bool:
+        if already_indexed_probe is None:
+            return False
+        if len(page_vacancies) < ALREADY_INDEXED_BREAK_MIN_PAGE_SIZE:
+            return False
+        urls = [str(v["source_url"]) for v in page_vacancies if v.get("source_url")]
+        if not urls:
+            return False
+        try:
+            known = int(already_indexed_probe(urls))
+        except Exception as exc:  # pragma: no cover — defensive, probe must not break paging
+            logger.warning("hh_already_indexed_probe_failed error=%s", exc)
+            return False
+        ratio = known / len(urls)
+        if ratio < ALREADY_INDEXED_BREAK_RATIO:
+            return False
+        stats = _PARSE_STATS.get()
+        if stats is not None:
+            stats.record_page_truncated_by_indexed()
+        return True
 
     # Fetch the first HH_CONCURRENCY pages in parallel. In the common case
     # (count=40, per_page=100) the first wave satisfies the request; the
@@ -619,7 +675,12 @@ def _search_hh_public_api_vacancies(
             last_wave_empty = True
             continue
         last_wave_empty = False
-        if _parse_hh_items(items, vacancies=vacancies, seen_urls=seen_urls, count=count):
+        before_count = len(vacancies)
+        full = _parse_hh_items(items, vacancies=vacancies, seen_urls=seen_urls, count=count)
+        if full:
+            return vacancies
+        page_vacancies = vacancies[before_count:]
+        if _should_truncate_by_indexed(page_vacancies):
             return vacancies
 
     # Only continue sequentially if the first wave produced results on its
@@ -631,7 +692,12 @@ def _search_hh_public_api_vacancies(
         items = _fetch_hh_page(query=query, per_page=per_page, page=page, date_from=date_from)
         if not items:
             break
-        if _parse_hh_items(items, vacancies=vacancies, seen_urls=seen_urls, count=count):
+        before_count = len(vacancies)
+        full = _parse_hh_items(items, vacancies=vacancies, seen_urls=seen_urls, count=count)
+        if full:
+            return vacancies
+        page_vacancies = vacancies[before_count:]
+        if _should_truncate_by_indexed(page_vacancies):
             return vacancies
     return vacancies
 
@@ -709,8 +775,9 @@ def _enrich_preview(vacancies: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     item["raw_text"] = description
             except VacancyFetchError as error:
                 _record_parse_skip(source=error.source, url=error.url, reason=error.reason)
+                _record_enrich_fail()
             except Exception:
-                pass
+                _record_enrich_fail()
         enriched.append(item)
     return enriched
 
@@ -722,6 +789,7 @@ def search_vacancies(
     use_brave_fallback: bool = False,
     page_offset: int = 0,
     date_from: datetime | None = None,
+    already_indexed_probe: Callable[[list[str]], int] | None = None,
 ) -> list[dict[str, Any]]:
     # Temporary strategy: use only HH API as vacancy source.
     # Other sources (Habr/SuperJob/public pages/Brave) are intentionally disabled here.
@@ -732,6 +800,7 @@ def search_vacancies(
             count=count,
             start_page=page_offset,
             date_from=date_from,
+            already_indexed_probe=already_indexed_probe,
         )
     except Exception as exc:
         logger.warning(
@@ -743,6 +812,10 @@ def search_vacancies(
         )
         aggregated = []
 
+    parse_stats = _PARSE_STATS.get()
+    if parse_stats is not None:
+        parse_stats.record_hh_fetched(len(aggregated))
+
     deduplicated: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     for item in aggregated:
@@ -751,9 +824,13 @@ def search_vacancies(
             continue
         key = source_url.strip().lower()
         if not key or key in seen_urls:
+            if parse_stats is not None and key:
+                parse_stats.record_dedup()
             continue
         source_name = _to_str(item.get("source")) or ""
         if source_name in STRICT_QUERY_MATCH_SOURCES and not _query_matches_item(query, item):
+            if parse_stats is not None:
+                parse_stats.record_strict_reject()
             continue
         seen_urls.add(key)
         deduplicated.append(item)
@@ -768,5 +845,6 @@ def search_vacancies(
             use_brave_fallback=False,
             page_offset=0,
             date_from=date_from,
+            already_indexed_probe=already_indexed_probe,
         )
     return deduplicated

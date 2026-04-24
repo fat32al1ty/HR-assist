@@ -57,6 +57,21 @@ class AdminActiveJob(BaseModel):
     started_at: datetime | None = None
 
 
+class AdminRecentJob(BaseModel):
+    id: str
+    user_id: int
+    user_email: str | None = None
+    resume_id: int
+    target_role: str | None = None
+    status: str
+    stage: str
+    progress: int
+    query: str | None = None
+    matches_count: int = 0
+    created_at: datetime
+    finished_at: datetime | None = None
+
+
 class AdminOverviewRead(BaseModel):
     generated_at: datetime
     users_total: int
@@ -66,9 +81,48 @@ class AdminOverviewRead(BaseModel):
     vacancies_indexed: int
     top_searched_roles: list[AdminRoleCount] = Field(default_factory=list)
     active_jobs: list[AdminActiveJob] = Field(default_factory=list)
+    recent_jobs: list[AdminRecentJob] = Field(default_factory=list)
 
 
 class AdminJobCancelResponse(BaseModel):
     id: str
     status: str
     cancel_requested: bool
+
+
+class AdminFunnelStage(BaseModel):
+    """One row of the admin waterfall.
+
+    ``value`` is the count for the stage. ``kind`` lets the UI distinguish
+    between cumulative counters that a vacancy passes through (``flow``),
+    exclusive drop buckets (``drop``), and meta counters (``meta`` — e.g.
+    matcher_runs_total). ``key`` is the raw metrics-dict key so the UI can
+    link back to the full metrics blob for debugging.
+    """
+
+    key: str
+    label: str
+    value: int
+    kind: str = "flow"
+
+
+class AdminJobFunnelRead(BaseModel):
+    job_id: str
+    status: str
+    stage: str
+    user_id: int
+    user_email: str | None = None
+    resume_id: int
+    target_role: str | None = None
+    query: str | None = None
+    stages: list[AdminFunnelStage] = Field(default_factory=list)
+    drops: list[AdminFunnelStage] = Field(default_factory=list)
+    matcher_stages: list[AdminFunnelStage] = Field(default_factory=list)
+    shown_to_user: int
+    fetched_raw: int
+    total_drops: int
+    residual: int
+    metrics: dict[str, int] = Field(default_factory=dict)
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None

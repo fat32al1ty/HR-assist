@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     storage_dir: str = "storage"
     max_upload_size_mb: int = 10
     cors_origins: list[str] = ["http://localhost:3000"]
+    # Level 2 D2: exclude vacancies already shown to the user within a
+    # rolling window from matcher recall. Keeps the user from seeing the
+    # same top-N twice while the pool is still small.
+    feature_exclude_seen_enabled: bool = True
+    feature_exclude_seen_window_days: int = 14
 
     @field_validator(
         "openai_api_key",

@@ -65,6 +65,21 @@ export type AdminActiveJob = {
   started_at: string | null;
 };
 
+export type AdminRecentJob = {
+  id: string;
+  user_id: number;
+  user_email: string | null;
+  resume_id: number;
+  target_role: string | null;
+  status: string;
+  stage: string;
+  progress: number;
+  query: string | null;
+  matches_count: number;
+  created_at: string;
+  finished_at: string | null;
+};
+
 export type AdminOverviewResponse = {
   generated_at: string;
   users_total: number;
@@ -74,10 +89,40 @@ export type AdminOverviewResponse = {
   vacancies_indexed: number;
   top_searched_roles: AdminRoleCount[];
   active_jobs: AdminActiveJob[];
+  recent_jobs: AdminRecentJob[];
 };
 
 export type AdminJobCancelResponse = {
   id: string;
   status: string;
   cancel_requested: boolean;
+};
+
+export type AdminFunnelStage = {
+  key: string;
+  label: string;
+  value: number;
+  kind: string;
+};
+
+export type AdminJobFunnel = {
+  job_id: string;
+  status: string;
+  stage: string;
+  user_id: number;
+  user_email: string | null;
+  resume_id: number;
+  target_role: string | null;
+  query: string | null;
+  stages: AdminFunnelStage[];
+  drops: AdminFunnelStage[];
+  matcher_stages: AdminFunnelStage[];
+  shown_to_user: number;
+  fetched_raw: number;
+  total_drops: number;
+  residual: number;
+  metrics: Record<string, number>;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
 };

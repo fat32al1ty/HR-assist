@@ -17,8 +17,11 @@ from app.repositories.resumes import get_active_resume_for_user, get_resume_for_
 from app.schemas.admin import (
     AdminActiveJob,
     AdminDashboardStatsRead,
+    AdminFunnelStage,
     AdminJobCancelResponse,
+    AdminJobFunnelRead,
     AdminOverviewRead,
+    AdminRecentJob,
     AdminRoleCount,
     QdrantStatsRead,
     ResumeStatsRead,
@@ -226,6 +229,38 @@ def admin_overview(
             )
         )
 
+    recent_rows = db.execute(
+        select(RecommendationJob, User.email, Resume.analysis)
+        .join(User, User.id == RecommendationJob.user_id)
+        .join(Resume, Resume.id == RecommendationJob.resume_id)
+        .order_by(RecommendationJob.created_at.desc())
+        .limit(10)
+    ).all()
+    recent_jobs: list[AdminRecentJob] = []
+    for job, email, analysis in recent_rows:
+        target_role_r: str | None = None
+        if isinstance(analysis, dict):
+            raw = analysis.get("target_role")
+            if isinstance(raw, str) and raw.strip():
+                target_role_r = raw.strip()
+        matches_count = len(job.matches) if isinstance(job.matches, list) else 0
+        recent_jobs.append(
+            AdminRecentJob(
+                id=job.id,
+                user_id=int(job.user_id),
+                user_email=email,
+                resume_id=int(job.resume_id),
+                target_role=target_role_r,
+                status=job.status,
+                stage=job.stage,
+                progress=int(job.progress or 0),
+                query=job.query,
+                matches_count=matches_count,
+                created_at=job.created_at,
+                finished_at=job.finished_at,
+            )
+        )
+
     return AdminOverviewRead(
         generated_at=now,
         users_total=users_total,
@@ -235,6 +270,149 @@ def admin_overview(
         vacancies_indexed=vacancies_indexed,
         top_searched_roles=top_searched_roles,
         active_jobs=active_jobs,
+        recent_jobs=recent_jobs,
+    )
+
+
+_FUNNEL_FLOW_STAGES: tuple[tuple[str, str], ...] = (
+    ("hh_fetched_raw", "Получено от HH (до дедупа)"),
+    ("fetched", "После дедупа и strict-match"),
+    ("prefiltered", "Дошло до pre-filter (host/RF/archived/listing)"),
+    ("analyzed", "Передано в LLM"),
+    ("indexed", "Добавлено в индекс"),
+    ("matcher_recall_count", "В матчер (recall)"),
+)
+
+_FUNNEL_DROP_STAGES: tuple[tuple[str, str], ...] = (
+    ("search_dedup_skipped", "Дубликаты URL в поиске"),
+    ("search_strict_rejected", "Отсечено strict-query match"),
+    ("enrich_failed", "Не удалось обогатить превью"),
+    ("already_indexed_skipped", "Уже в индексе"),
+    ("filtered_host_not_allowed", "Фильтр: не тот хост"),
+    ("filtered_non_rf", "Фильтр: не РФ"),
+    ("filtered_non_vacancy_page", "Фильтр: не страница вакансии"),
+    ("filtered_archived", "Фильтр: архив"),
+    ("filtered_listing", "Фильтр: листинг/агрегатор"),
+    ("filtered_non_vacancy_llm", "LLM: не вакансия"),
+    ("failed", "Ошибка обработки"),
+    ("skipped_parse_errors", "Ошибка парсинга источника"),
+    ("hard_filter_drop_work_format", "Матчер: формат работы"),
+    ("hard_filter_drop_geo", "Матчер: география"),
+    ("hard_filter_drop_no_skill_overlap", "Матчер: нет пересечения навыков"),
+    ("hard_filter_drop_domain_mismatch", "Матчер: другой домен"),
+    ("archived_at_match_time", "Матчер: архив на момент подбора"),
+    ("matcher_drop_listing_page", "Матчер: листинг"),
+    ("matcher_drop_non_vacancy_page", "Матчер: не вакансия"),
+    ("matcher_drop_host_not_allowed", "Матчер: не тот хост"),
+    ("matcher_drop_unlikely_stack", "Матчер: неподходящий стек"),
+    ("matcher_drop_business_role", "Матчер: бизнес-роль"),
+    ("matcher_drop_hard_non_it", "Матчер: не-IT"),
+    ("matcher_drop_dedupe", "Матчер: дубликат"),
+    ("matcher_drop_mmr_dedupe", "Матчер: MMR-дедуп"),
+)
+
+_FUNNEL_MATCHER_META: tuple[tuple[str, str], ...] = (
+    ("matcher_runs_total", "Прогонов матчера"),
+    ("seniority_penalty_applied", "Применён seniority-штраф"),
+    ("title_boost_applied", "Применён title-boost"),
+    ("pages_truncated_by_indexed", "HH-пагинация: обрезано по already_indexed"),
+)
+
+
+def _build_funnel_stages(
+    metrics: dict[str, int],
+    shown_to_user: int,
+) -> tuple[list[AdminFunnelStage], list[AdminFunnelStage], list[AdminFunnelStage]]:
+    def _get(key: str) -> int:
+        value = metrics.get(key, 0)
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    flow = [
+        AdminFunnelStage(key=key, label=label, value=_get(key), kind="flow")
+        for key, label in _FUNNEL_FLOW_STAGES
+    ]
+    flow.append(
+        AdminFunnelStage(
+            key="shown_to_user", label="Показано юзеру", value=shown_to_user, kind="flow"
+        )
+    )
+    drops = [
+        AdminFunnelStage(key=key, label=label, value=_get(key), kind="drop")
+        for key, label in _FUNNEL_DROP_STAGES
+    ]
+    matcher_meta = [
+        AdminFunnelStage(key=key, label=label, value=_get(key), kind="meta")
+        for key, label in _FUNNEL_MATCHER_META
+    ]
+    return flow, drops, matcher_meta
+
+
+@router.get("/jobs/{job_id}/funnel", response_model=AdminJobFunnelRead)
+def admin_job_funnel(
+    job_id: str,
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminJobFunnelRead:
+    row = db.execute(
+        select(RecommendationJob, User.email, Resume.analysis)
+        .join(User, User.id == RecommendationJob.user_id)
+        .join(Resume, Resume.id == RecommendationJob.resume_id)
+        .where(RecommendationJob.id == job_id)
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job, email, analysis = row
+
+    metrics_raw: dict[str, int] = {}
+    if isinstance(job.metrics, dict):
+        for key, value in job.metrics.items():
+            if not isinstance(key, str):
+                continue
+            try:
+                metrics_raw[key] = int(value or 0)
+            except (TypeError, ValueError):
+                continue
+
+    shown_to_user = 0
+    if isinstance(job.matches, list):
+        shown_to_user = len(job.matches)
+
+    flow, drops, matcher_meta = _build_funnel_stages(metrics_raw, shown_to_user)
+    fetched_raw = int(metrics_raw.get("hh_fetched_raw", 0) or 0) or int(
+        metrics_raw.get("fetched", 0) or 0
+    )
+    total_drops = sum(stage.value for stage in drops)
+    residual = max(0, fetched_raw - shown_to_user - total_drops)
+
+    target_role: str | None = None
+    if isinstance(analysis, dict):
+        raw = analysis.get("target_role")
+        if isinstance(raw, str) and raw.strip():
+            target_role = raw.strip()
+
+    return AdminJobFunnelRead(
+        job_id=str(job.id),
+        status=str(job.status),
+        stage=str(job.stage),
+        user_id=int(job.user_id),
+        user_email=email,
+        resume_id=int(job.resume_id),
+        target_role=target_role,
+        query=job.query,
+        stages=flow,
+        drops=drops,
+        matcher_stages=matcher_meta,
+        shown_to_user=shown_to_user,
+        fetched_raw=fetched_raw,
+        total_drops=total_drops,
+        residual=residual,
+        metrics=metrics_raw,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
     )
 
 

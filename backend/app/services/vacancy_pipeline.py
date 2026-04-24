@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlparse
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.vacancy import Vacancy
 from app.repositories.vacancies import create_vacancy, get_vacancy_by_source_url, update_vacancy
 from app.services.openai_usage import OpenAIBudgetExceeded
 from app.services.vacancy_analyzer import analyze_vacancy_text
@@ -48,12 +50,42 @@ class VacancyDiscoveryMetrics:
     already_indexed_skipped: int = 0
     skipped_parse_errors: int = 0
     sources: list[str] | None = None
+    # Funnel observability (Phase 3.2): raw-fetch counters from
+    # ``VacancyParseStats`` get copied in at the end of the discovery
+    # scope, so the admin waterfall can show drops that happen BEFORE
+    # a candidate reaches ``_collect_eligible``.
+    hh_fetched_raw: int = 0
+    search_dedup_skipped: int = 0
+    search_strict_rejected: int = 0
+    enrich_failed: int = 0
+    # D1: HH pagination stopped early because ≥90% of a page was already
+    # in our index. Count of such early-breaks across all queries in one run.
+    pages_truncated_by_indexed: int = 0
+    # Reason-split of the single ``filtered`` counter — each exclusive.
+    filtered_host_not_allowed: int = 0
+    filtered_non_rf: int = 0
+    filtered_non_vacancy_page: int = 0
+    filtered_archived: int = 0
+    filtered_listing: int = 0
+    filtered_non_vacancy_llm: int = 0
+    # Matcher-sourced counters (populated by state.export_to).
     hard_filter_drop_work_format: int = 0
     hard_filter_drop_geo: int = 0
     hard_filter_drop_no_skill_overlap: int = 0
+    hard_filter_drop_domain_mismatch: int = 0
     seniority_penalty_applied: int = 0
     archived_at_match_time: int = 0
     title_boost_applied: int = 0
+    matcher_runs_total: int = 0
+    matcher_recall_count: int = 0
+    matcher_drop_listing_page: int = 0
+    matcher_drop_non_vacancy_page: int = 0
+    matcher_drop_host_not_allowed: int = 0
+    matcher_drop_unlikely_stack: int = 0
+    matcher_drop_business_role: int = 0
+    matcher_drop_hard_non_it: int = 0
+    matcher_drop_dedupe: int = 0
+    matcher_drop_mmr_dedupe: int = 0
 
 
 @dataclass
@@ -232,7 +264,7 @@ def discover_and_index_vacancies(
     processed_source_urls: set[str] = set()
     stop_processing = False
 
-    def _mark_filtered(vacancy, reason: str) -> None:
+    def _mark_filtered(vacancy, reason: str, bucket: str) -> None:
         vacancy.status = "filtered"
         vacancy.error_message = reason
         db.add(vacancy)
@@ -240,6 +272,16 @@ def discover_and_index_vacancies(
         db.refresh(vacancy)
         metrics.prefiltered += 1
         metrics.filtered += 1
+        if bucket == "host_not_allowed":
+            metrics.filtered_host_not_allowed += 1
+        elif bucket == "non_rf":
+            metrics.filtered_non_rf += 1
+        elif bucket == "non_vacancy_page":
+            metrics.filtered_non_vacancy_page += 1
+        elif bucket == "archived":
+            metrics.filtered_archived += 1
+        elif bucket == "listing":
+            metrics.filtered_listing += 1
 
     def _collect_eligible(found_items: list[dict]) -> list[tuple]:
         """Prefilter + upsert rows. Returns (vacancy, analysis_input) ready
@@ -297,23 +339,23 @@ def discover_and_index_vacancies(
                     continue
 
                 if not _host_allowed_for_matching(vacancy.source_url):
-                    _mark_filtered(vacancy, "Filtered as non-target source")
+                    _mark_filtered(vacancy, "Filtered as non-target source", "host_not_allowed")
                     continue
                 if rf_only and not _looks_like_rf_vacancy(
                     vacancy.source_url, vacancy.title, vacancy.raw_text, vacancy.location
                 ):
-                    _mark_filtered(vacancy, "Filtered as non-RF vacancy")
+                    _mark_filtered(vacancy, "Filtered as non-RF vacancy", "non_rf")
                     continue
                 if _looks_non_vacancy_page(vacancy.source_url):
-                    _mark_filtered(vacancy, "Filtered as non-vacancy page")
+                    _mark_filtered(vacancy, "Filtered as non-vacancy page", "non_vacancy_page")
                     continue
                 if _looks_archived_vacancy_strict(
                     vacancy.source_url, vacancy.title, vacancy.raw_text
                 ):
-                    _mark_filtered(vacancy, "Filtered as archived vacancy")
+                    _mark_filtered(vacancy, "Filtered as archived vacancy", "archived")
                     continue
                 if _looks_like_listing_page(vacancy.source_url, vacancy.title):
-                    _mark_filtered(vacancy, "Filtered as listing/aggregator page")
+                    _mark_filtered(vacancy, "Filtered as listing/aggregator page", "listing")
                     continue
 
                 if max_analyzed is not None and metrics.analyzed + len(eligible) >= max_analyzed:
@@ -397,6 +439,7 @@ def discover_and_index_vacancies(
                     db.commit()
                     db.refresh(vacancy)
                     metrics.filtered += 1
+                    metrics.filtered_non_vacancy_llm += 1
                     continue
                 persist_vacancy_profile(
                     db,
@@ -426,6 +469,23 @@ def discover_and_index_vacancies(
         analyzed = _analyze_parallel(pending_analysis)
         _persist_analysis(analyzed)
 
+    def _already_indexed_probe(urls: list[str]) -> int:
+        """Bulk-count how many of ``urls`` are already stored as indexed
+        vacancies. Used by HH pagination to stop fetching once a page
+        crosses the saturation threshold."""
+        if not urls:
+            return 0
+        try:
+            rows = db.execute(
+                select(Vacancy.source_url).where(
+                    Vacancy.source_url.in_(urls),
+                    Vacancy.status == "indexed",
+                )
+            ).all()
+        except Exception:
+            return 0
+        return len(rows)
+
     parse_stats = VacancyParseStats()
     with vacancy_parse_stats_scope(parse_stats):
         first_pass_items = search_vacancies(
@@ -434,6 +494,7 @@ def discover_and_index_vacancies(
             use_brave_fallback=use_brave_fallback,
             page_offset=0,
             date_from=date_from,
+            already_indexed_probe=_already_indexed_probe,
         )
         process_items(first_pass_items)
 
@@ -453,10 +514,16 @@ def discover_and_index_vacancies(
                         query=query, count=expanded_count, attempt=attempt
                     ),
                     date_from=date_from,
+                    already_indexed_probe=_already_indexed_probe,
                 )
                 process_items(second_pass_items)
                 if metrics.indexed >= 5:
                     break
 
     metrics.skipped_parse_errors = parse_stats.skipped_parse_errors
+    metrics.hh_fetched_raw = parse_stats.hh_fetched_raw
+    metrics.search_dedup_skipped = parse_stats.search_dedup_skipped
+    metrics.search_strict_rejected = parse_stats.search_strict_rejected
+    metrics.enrich_failed = parse_stats.enrich_failed
+    metrics.pages_truncated_by_indexed = parse_stats.pages_truncated_by_indexed
     return VacancyDiscoveryResult(indexed_vacancies=indexed, metrics=metrics)

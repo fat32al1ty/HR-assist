@@ -57,6 +57,7 @@ class MatchingRelaxedFallbackTest(unittest.TestCase):
             ),
             patch("app.services.matching_service.list_disliked_vacancy_ids", return_value=[]),
             patch("app.services.matching_service.list_liked_vacancy_ids", return_value=[]),
+            patch("app.services.matching_service.list_seen_vacancy_ids", return_value=set()),
             patch("app.services.matching_service.list_added_skill_texts", return_value=[]),
             patch("app.services.matching_service.list_rejected_skill_texts", return_value=[]),
             patch("app.services.matching_service.get_vacancy_by_id", return_value=vacancy),

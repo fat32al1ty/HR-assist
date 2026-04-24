@@ -112,6 +112,11 @@ class MatchingDiagnostics:
     def export_to(self, metrics: dict[str, int] | None) -> None:
         """Copy the historical counter names into a caller-provided dict.
 
+        Values are accumulated, not overwritten, so interim matcher runs
+        during a single ``recommend_vacancies_for_resume`` call (one per
+        deep-scan iteration) stay visible in the final admin funnel
+        snapshot instead of being silently stomped by the last run.
+
         Preserves the public metric keys the existing endpoint tests
         assert on (``hard_filter_drop_*``, ``seniority_penalty_applied``,
         ``archived_at_match_time``, ``title_boost_applied``). Anything
@@ -119,15 +124,28 @@ class MatchingDiagnostics:
         """
         if metrics is None:
             return
-        metrics["hard_filter_drop_work_format"] = self.drop_work_format
-        metrics["hard_filter_drop_geo"] = self.drop_geo
-        metrics["hard_filter_drop_no_skill_overlap"] = self.drop_no_skill_overlap
-        metrics["hard_filter_drop_domain_mismatch"] = self.drop_domain_mismatch
-        metrics["seniority_penalty_applied"] = self.seniority_penalty_applied
-        metrics["archived_at_match_time"] = self.drop_archived
-        metrics["title_boost_applied"] = self.title_boost_applied
+
+        def bump(key: str, value: int) -> None:
+            metrics[key] = metrics.get(key, 0) + int(value)
+
+        bump("hard_filter_drop_work_format", self.drop_work_format)
+        bump("hard_filter_drop_geo", self.drop_geo)
+        bump("hard_filter_drop_no_skill_overlap", self.drop_no_skill_overlap)
+        bump("hard_filter_drop_domain_mismatch", self.drop_domain_mismatch)
+        bump("seniority_penalty_applied", self.seniority_penalty_applied)
+        bump("archived_at_match_time", self.drop_archived)
+        bump("title_boost_applied", self.title_boost_applied)
+        bump("matcher_recall_count", self.recall_count)
+        bump("matcher_drop_listing_page", self.drop_listing_page)
+        bump("matcher_drop_non_vacancy_page", self.drop_non_vacancy_page)
+        bump("matcher_drop_host_not_allowed", self.drop_host_not_allowed)
+        bump("matcher_drop_unlikely_stack", self.drop_unlikely_stack)
+        bump("matcher_drop_business_role", self.drop_business_role)
+        bump("matcher_drop_hard_non_it", self.drop_hard_non_it)
+        bump("matcher_drop_dedupe", self.drop_dedupe)
+        bump("matcher_drop_mmr_dedupe", self.drop_mmr_dedupe)
         for key, value in self.custom.items():
-            metrics[key] = value
+            bump(key, value)
 
 
 @dataclass

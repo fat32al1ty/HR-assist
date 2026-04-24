@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.user import User
 from app.models.vacancy import Vacancy
 from app.repositories.applications import list_applied_vacancy_ids_for_user
@@ -14,6 +15,7 @@ from app.repositories.resume_user_skills import (
 )
 from app.repositories.resumes import get_resume_for_user
 from app.repositories.user_vacancy_feedback import list_disliked_vacancy_ids, list_liked_vacancy_ids
+from app.repositories.user_vacancy_seen import list_seen_vacancy_ids
 from app.repositories.vacancies import (
     get_vacancy_by_id,  # noqa: F401  — re-exported for stages + existing test patches
 )
@@ -2236,6 +2238,17 @@ def match_vacancies_for_resume(
         .union(list_liked_vacancy_ids(db, user_id=user_id, resume_id=resume_id))
         .union(list_applied_vacancy_ids_for_user(db, user_id=user_id, resume_id=resume_id))
     )
+    # Level 2 D2: bolt recently-shown vacancies onto the exclusion set so
+    # the same top-N doesn't ride across repeated "подобрать" clicks while
+    # the inventory is still thin. Gated by ``feature_exclude_seen_enabled``.
+    if settings.feature_exclude_seen_enabled:
+        excluded_set = excluded_set.union(
+            list_seen_vacancy_ids(
+                db,
+                user_id=user_id,
+                within_days=settings.feature_exclude_seen_window_days,
+            )
+        )
 
     ctx = _build_resume_context(
         db,
@@ -2288,6 +2301,7 @@ def _stamp_and_log_impressions(
     """
     import uuid as _uuid  # noqa: PLC0415
 
+    from app.repositories.user_vacancy_seen import upsert_seen_vacancies  # noqa: PLC0415
     from app.services.match_telemetry import log_impressions  # noqa: PLC0415
 
     if not matches:
@@ -2308,4 +2322,16 @@ def _stamp_and_log_impressions(
         # pass a mock ``db`` that raises on rollback, and prod can hit
         # transient DB issues. Swallow and keep the user happy.
         logger.warning("impression telemetry skipped (run=%s): %s", run_id, error)
+    # Level 2 D2: record "shown to this user" so the next run can exclude
+    # these vacancies for ``feature_exclude_seen_window_days``. Also
+    # best-effort — we never want a telemetry write to break the response.
+    if settings.feature_exclude_seen_enabled:
+        try:
+            upsert_seen_vacancies(
+                db,
+                user_id=user_id,
+                vacancy_ids=[m["vacancy_id"] for m in matches if m.get("vacancy_id")],
+            )
+        except Exception as error:  # noqa: BLE001
+            logger.warning("user_vacancy_seen upsert skipped: %s", error)
     return matches

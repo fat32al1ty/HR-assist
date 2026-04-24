@@ -6,11 +6,21 @@ import { useSession } from '@/lib/session';
 import { apiFetch } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import type {
   AdminActiveJob,
+  AdminFunnelStage,
   AdminJobCancelResponse,
+  AdminJobFunnel,
   AdminOverviewResponse,
+  AdminRecentJob,
   AdminStatsResponse,
 } from '@/types/admin';
 
@@ -22,6 +32,9 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [funnelJob, setFunnelJob] = useState<AdminJobFunnel | null>(null);
+  const [funnelLoading, setFunnelLoading] = useState(false);
+  const [funnelError, setFunnelError] = useState<string | null>(null);
 
   const reloadOverview = useCallback(async () => {
     if (!token) return;
@@ -80,6 +93,31 @@ export default function AdminPage() {
     },
     [token, reloadOverview]
   );
+
+  const handleOpenFunnel = useCallback(
+    async (jobId: string) => {
+      if (!token) return;
+      setFunnelLoading(true);
+      setFunnelError(null);
+      setFunnelJob(null);
+      try {
+        const data = await apiFetch<AdminJobFunnel>(`/api/admin/jobs/${jobId}/funnel`, {
+          token: token ?? undefined,
+        });
+        setFunnelJob(data);
+      } catch (err) {
+        setFunnelError(err instanceof Error ? err.message : 'Не удалось загрузить воронку');
+      } finally {
+        setFunnelLoading(false);
+      }
+    },
+    [token]
+  );
+
+  const handleCloseFunnel = useCallback(() => {
+    setFunnelJob(null);
+    setFunnelError(null);
+  }, []);
 
   // Not authenticated — nothing to show (Topbar handles login redirect)
   if (!token) {
@@ -212,7 +250,41 @@ export default function AdminPage() {
                       key={job.id}
                       job={job}
                       onCancel={handleCancelJob}
+                      onOpenFunnel={handleOpenFunnel}
                       isCancelling={cancellingJobId === job.id}
+                    />
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="animate-fade-in">
+            <CardHeader>
+              <CardTitle>
+                Последние подборы
+                <span
+                  className={cn(
+                    'ml-2 text-[length:var(--text-xs)]',
+                    'text-[color:var(--color-ink-secondary)] font-normal'
+                  )}
+                >
+                  ({overview.recent_jobs.length})
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {overview.recent_jobs.length === 0 ? (
+                <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] italic py-2">
+                  Нет данных.
+                </p>
+              ) : (
+                <ul className="flex flex-col divide-y divide-[var(--color-border)]">
+                  {overview.recent_jobs.map((job) => (
+                    <RecentJobRow
+                      key={job.id}
+                      job={job}
+                      onOpenFunnel={handleOpenFunnel}
                     />
                   ))}
                 </ul>
@@ -221,6 +293,13 @@ export default function AdminPage() {
           </Card>
         </section>
       ) : null}
+
+      <FunnelDialog
+        job={funnelJob}
+        loading={funnelLoading}
+        error={funnelError}
+        onClose={handleCloseFunnel}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 stagger-children">
         {/* Qdrant card */}
@@ -473,10 +552,12 @@ function OverviewStat({
 function ActiveJobRow({
   job,
   onCancel,
+  onOpenFunnel,
   isCancelling,
 }: {
   job: AdminActiveJob;
   onCancel: (jobId: string) => void;
+  onOpenFunnel: (jobId: string) => void;
   isCancelling: boolean;
 }) {
   const terminal = job.cancel_requested;
@@ -502,15 +583,271 @@ function ActiveJobRow({
           {job.progress}% · {created}
         </div>
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => onCancel(job.id)}
-        disabled={isCancelling || terminal}
-      >
-        {terminal ? 'Остановка…' : isCancelling ? 'Останавливаю…' : 'Остановить'}
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={() => onOpenFunnel(job.id)}>
+          Воронка
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onCancel(job.id)}
+          disabled={isCancelling || terminal}
+        >
+          {terminal ? 'Остановка…' : isCancelling ? 'Останавливаю…' : 'Остановить'}
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+function RecentJobRow({
+  job,
+  onOpenFunnel,
+}: {
+  job: AdminRecentJob;
+  onOpenFunnel: (jobId: string) => void;
+}) {
+  const created = new Date(job.created_at).toLocaleString('ru-RU');
+  return (
+    <li className="flex flex-wrap items-center gap-3 justify-between py-3">
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <div
+          className={cn(
+            'text-[length:var(--text-sm)] text-[color:var(--color-ink)]',
+            'font-semibold truncate max-w-[60ch]'
+          )}
+        >
+          {job.target_role ?? '— роль не указана —'}
+        </div>
+        <div
+          className={cn(
+            'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+            'font-[var(--font-mono)]'
+          )}
+        >
+          {job.user_email ?? `user ${job.user_id}`} · {job.status} ·{' '}
+          {job.matches_count} матчей · {created}
+        </div>
+      </div>
+      <Button variant="ghost" size="sm" onClick={() => onOpenFunnel(job.id)}>
+        Воронка
       </Button>
     </li>
+  );
+}
+
+function FunnelStageBar({ stage, max }: { stage: AdminFunnelStage; max: number }) {
+  const safeMax = Math.max(1, max);
+  const pct = Math.min(100, Math.round((stage.value / safeMax) * 100));
+  const accent =
+    stage.kind === 'drop'
+      ? 'var(--color-danger)'
+      : stage.kind === 'meta'
+      ? 'var(--color-ink-muted)'
+      : 'var(--color-accent)';
+  return (
+    <div className="flex flex-col gap-1 py-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span
+          className={cn(
+            'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+            'truncate'
+          )}
+        >
+          {stage.label}
+        </span>
+        <span
+          className={cn(
+            'font-[var(--font-mono)] text-[length:var(--text-sm)]',
+            'text-[color:var(--color-ink)] tabular-nums shrink-0'
+          )}
+        >
+          {stage.value}
+        </span>
+      </div>
+      <div
+        className="h-1.5 rounded-full bg-[var(--color-surface-muted)] overflow-hidden"
+        aria-hidden
+      >
+        <div
+          className="h-full rounded-full transition-[width] duration-[var(--duration-normal)]"
+          style={{
+            width: `${pct}%`,
+            backgroundColor: accent,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function FunnelDialog({
+  job,
+  loading,
+  error,
+  onClose,
+}: {
+  job: AdminJobFunnel | null;
+  loading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  const open = loading || job !== null || error !== null;
+  const maxFlow = job
+    ? Math.max(...job.stages.map((s) => s.value), job.fetched_raw, 1)
+    : 1;
+  const maxDrop = job ? Math.max(...job.drops.map((s) => s.value), 1) : 1;
+  const nonZeroDrops = job ? job.drops.filter((d) => d.value > 0) : [];
+  const nonZeroMatcher = job
+    ? job.matcher_stages.filter((s) => s.value > 0)
+    : [];
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
+    >
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Воронка подбора</DialogTitle>
+          {job ? (
+            <DialogDescription>
+              {job.target_role ?? 'роль не указана'} ·{' '}
+              <span className="font-[var(--font-mono)]">{job.status}</span> ·{' '}
+              {job.user_email ?? `user ${job.user_id}`}
+            </DialogDescription>
+          ) : null}
+        </DialogHeader>
+
+        {loading ? (
+          <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
+            Загружаем…
+          </p>
+        ) : error ? (
+          <p className="text-[length:var(--text-sm)] text-[color:var(--color-danger)]">
+            {error}
+          </p>
+        ) : job ? (
+          <div className="flex flex-col gap-5">
+            <div className="grid grid-cols-3 gap-3">
+              <SummaryTile label="Fetched raw" value={job.fetched_raw} />
+              <SummaryTile label="Всего отфильтровано" value={job.total_drops} />
+              <SummaryTile label="Показано юзеру" value={job.shown_to_user} />
+            </div>
+
+            <section>
+              <h3
+                className={cn(
+                  'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+                  'uppercase tracking-[0.1em] font-bold mb-2'
+                )}
+              >
+                Основной поток
+              </h3>
+              <div className="flex flex-col">
+                {job.stages.map((s) => (
+                  <FunnelStageBar key={s.key} stage={s} max={maxFlow} />
+                ))}
+              </div>
+            </section>
+
+            {nonZeroDrops.length > 0 ? (
+              <section>
+                <h3
+                  className={cn(
+                    'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+                    'uppercase tracking-[0.1em] font-bold mb-2'
+                  )}
+                >
+                  Отсев по причинам
+                </h3>
+                <div className="flex flex-col">
+                  {nonZeroDrops.map((s) => (
+                    <FunnelStageBar key={s.key} stage={s} max={maxDrop} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {nonZeroMatcher.length > 0 ? (
+              <section>
+                <h3
+                  className={cn(
+                    'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+                    'uppercase tracking-[0.1em] font-bold mb-2'
+                  )}
+                >
+                  Матчер
+                </h3>
+                <div className="flex flex-col">
+                  {nonZeroMatcher.map((s) => (
+                    <FunnelStageBar key={s.key} stage={s} max={maxDrop} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            <div
+              className={cn(
+                'text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]',
+                'font-[var(--font-mono)]'
+              )}
+            >
+              Остаток (неклассифицированный): {job.residual}
+            </div>
+
+            <details className="text-[length:var(--text-xs)]">
+              <summary
+                className={cn(
+                  'cursor-pointer text-[color:var(--color-ink-secondary)]',
+                  'uppercase tracking-[0.1em] font-bold'
+                )}
+              >
+                Сырые метрики
+              </summary>
+              <pre
+                className={cn(
+                  'mt-2 font-[var(--font-mono)] text-[length:var(--text-xs)]',
+                  'text-[color:var(--color-ink-secondary)]',
+                  'bg-[var(--color-surface-muted)] p-3 rounded-[var(--radius-sm)]',
+                  'overflow-x-auto'
+                )}
+              >
+                {JSON.stringify(job.metrics, null, 2)}
+              </pre>
+            </details>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SummaryTile({ label, value }: { label: string; value: number }) {
+  return (
+    <div
+      className={cn(
+        'bg-[var(--color-surface-muted)] rounded-[var(--radius-md)] px-3 py-2'
+      )}
+    >
+      <div
+        className={cn(
+          'text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]',
+          'uppercase tracking-[0.1em] font-bold mb-1'
+        )}
+      >
+        {label}
+      </div>
+      <div
+        className={cn(
+          'font-[var(--font-mono)] text-[length:var(--text-lg)]',
+          'font-semibold text-[color:var(--color-ink)]'
+        )}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 

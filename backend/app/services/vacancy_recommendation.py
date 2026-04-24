@@ -213,30 +213,54 @@ def _count_high_quality_matches(
 
 
 def _empty_metrics() -> VacancyDiscoveryMetrics:
-    return VacancyDiscoveryMetrics(
-        fetched=0,
-        prefiltered=0,
-        analyzed=0,
-        filtered=0,
-        indexed=0,
-        failed=0,
-        already_indexed_skipped=0,
-        skipped_parse_errors=0,
-        sources=[],
-    )
+    return VacancyDiscoveryMetrics(sources=[])
+
+
+_METRIC_INT_FIELDS = (
+    "fetched",
+    "prefiltered",
+    "analyzed",
+    "filtered",
+    "indexed",
+    "failed",
+    "already_indexed_skipped",
+    "skipped_parse_errors",
+    "hh_fetched_raw",
+    "search_dedup_skipped",
+    "search_strict_rejected",
+    "enrich_failed",
+    "filtered_host_not_allowed",
+    "filtered_non_rf",
+    "filtered_non_vacancy_page",
+    "filtered_archived",
+    "filtered_listing",
+    "filtered_non_vacancy_llm",
+    "pages_truncated_by_indexed",
+    "hard_filter_drop_work_format",
+    "hard_filter_drop_geo",
+    "hard_filter_drop_no_skill_overlap",
+    "hard_filter_drop_domain_mismatch",
+    "seniority_penalty_applied",
+    "archived_at_match_time",
+    "title_boost_applied",
+    "matcher_runs_total",
+    "matcher_recall_count",
+    "matcher_drop_listing_page",
+    "matcher_drop_non_vacancy_page",
+    "matcher_drop_host_not_allowed",
+    "matcher_drop_unlikely_stack",
+    "matcher_drop_business_role",
+    "matcher_drop_hard_non_it",
+    "matcher_drop_dedupe",
+    "matcher_drop_mmr_dedupe",
+)
 
 
 def _merge_metrics(
     target: VacancyDiscoveryMetrics, current: VacancyDiscoveryMetrics
 ) -> VacancyDiscoveryMetrics:
-    target.fetched += current.fetched
-    target.prefiltered += current.prefiltered
-    target.analyzed += current.analyzed
-    target.filtered += current.filtered
-    target.indexed += current.indexed
-    target.failed += current.failed
-    target.already_indexed_skipped += current.already_indexed_skipped
-    target.skipped_parse_errors += current.skipped_parse_errors
+    for name in _METRIC_INT_FIELDS:
+        setattr(target, name, getattr(target, name) + getattr(current, name))
     if target.sources is None:
         target.sources = []
     for source_url in current.sources or []:
@@ -266,20 +290,49 @@ def recommend_vacancies_for_resume(
     started_at = time.monotonic()
     matching_metrics: dict[str, int] = {}
 
+    _matcher_metric_to_field = {
+        "hard_filter_drop_work_format": "hard_filter_drop_work_format",
+        "hard_filter_drop_geo": "hard_filter_drop_geo",
+        "hard_filter_drop_no_skill_overlap": "hard_filter_drop_no_skill_overlap",
+        "hard_filter_drop_domain_mismatch": "hard_filter_drop_domain_mismatch",
+        "seniority_penalty_applied": "seniority_penalty_applied",
+        "archived_at_match_time": "archived_at_match_time",
+        "title_boost_applied": "title_boost_applied",
+        "matcher_runs_total": "matcher_runs_total",
+        "matcher_recall_count": "matcher_recall_count",
+        "matcher_drop_listing_page": "matcher_drop_listing_page",
+        "matcher_drop_non_vacancy_page": "matcher_drop_non_vacancy_page",
+        "matcher_drop_host_not_allowed": "matcher_drop_host_not_allowed",
+        "matcher_drop_unlikely_stack": "matcher_drop_unlikely_stack",
+        "matcher_drop_business_role": "matcher_drop_business_role",
+        "matcher_drop_hard_non_it": "matcher_drop_hard_non_it",
+        "matcher_drop_dedupe": "matcher_drop_dedupe",
+        "matcher_drop_mmr_dedupe": "matcher_drop_mmr_dedupe",
+    }
+
+    def _run_matcher(limit: int) -> list[dict]:
+        # Wrapper around ``match_vacancies_for_resume`` that bumps the run
+        # counter before each call. The matcher itself uses ``metrics.get``
+        # + add for its own drops (see ``state.export_to``), so interim
+        # runs during one deep-scan sweep stay visible in the final
+        # snapshot instead of being overwritten by the last run.
+        matching_metrics["matcher_runs_total"] = matching_metrics.get("matcher_runs_total", 0) + 1
+        return match_vacancies_for_resume(
+            db,
+            resume_id=resume_id,
+            user_id=user_id,
+            limit=limit,
+            preference_overrides=preference_overrides,
+            metrics=matching_metrics,
+        )
+
     def _absorb_matching_metrics(target: VacancyDiscoveryMetrics) -> VacancyDiscoveryMetrics:
-        # Matcher populates counters for the final run only; copy into the
-        # dataclass so the job's stored metrics reflect what the user will
-        # actually see in the returned matches.
-        target.hard_filter_drop_work_format = int(
-            matching_metrics.get("hard_filter_drop_work_format", 0)
-        )
-        target.hard_filter_drop_geo = int(matching_metrics.get("hard_filter_drop_geo", 0))
-        target.hard_filter_drop_no_skill_overlap = int(
-            matching_metrics.get("hard_filter_drop_no_skill_overlap", 0)
-        )
-        target.seniority_penalty_applied = int(matching_metrics.get("seniority_penalty_applied", 0))
-        target.archived_at_match_time = int(matching_metrics.get("archived_at_match_time", 0))
-        target.title_boost_applied = int(matching_metrics.get("title_boost_applied", 0))
+        # The matcher's accumulators live in ``matching_metrics`` and are
+        # updated on every run via state.export_to's ``get+`` pattern, so
+        # a single read here gives the cumulative counters for the whole
+        # ``recommend_vacancies_for_resume`` call.
+        for metric_key, field_name in _matcher_metric_to_field.items():
+            setattr(target, field_name, int(matching_metrics.get(metric_key, 0) or 0))
         return target
 
     def report(stage: str, progress: int, metrics: VacancyDiscoveryMetrics | None = None) -> None:
@@ -323,14 +376,7 @@ def recommend_vacancies_for_resume(
 
     if use_prefetched_index:
         report("matching", 45, aggregate_metrics)
-        prefetched_matches = match_vacancies_for_resume(
-            db,
-            resume_id=resume_id,
-            user_id=user_id,
-            limit=match_limit,
-            preference_overrides=preference_overrides,
-            metrics=matching_metrics,
-        )
+        prefetched_matches = _run_matcher(match_limit)
         target_match_count = max(1, min(match_limit, min_prefetched_matches))
         enough_prefetched = (
             len(prefetched_matches) >= target_match_count
@@ -394,14 +440,7 @@ def recommend_vacancies_for_resume(
                 aggregate_metrics,
             )
             if use_prefetched_index:
-                interim_matches = match_vacancies_for_resume(
-                    db,
-                    resume_id=resume_id,
-                    user_id=user_id,
-                    limit=match_limit,
-                    preference_overrides=preference_overrides,
-                    metrics=matching_metrics,
-                )
+                interim_matches = _run_matcher(match_limit)
                 if (
                     len(interim_matches) >= target_match_count
                     and _count_high_quality_matches(interim_matches) >= target_match_count
@@ -423,14 +462,7 @@ def recommend_vacancies_for_resume(
             elapsed = time.monotonic() - started_at
             if elapsed >= max_runtime_seconds:
                 report("matching", 85, aggregate_metrics)
-                matches = match_vacancies_for_resume(
-                    db,
-                    resume_id=resume_id,
-                    user_id=user_id,
-                    limit=match_limit,
-                    preference_overrides=preference_overrides,
-                    metrics=matching_metrics,
-                )
+                matches = _run_matcher(match_limit)
                 report("finalizing", 95, aggregate_metrics)
                 return query, _absorb_matching_metrics(aggregate_metrics), matches
         result = discover_and_index_vacancies(
@@ -448,14 +480,7 @@ def recommend_vacancies_for_resume(
         report("collecting", 70, aggregate_metrics)
 
     report("matching", 85, aggregate_metrics)
-    matches = match_vacancies_for_resume(
-        db,
-        resume_id=resume_id,
-        user_id=user_id,
-        limit=match_limit,
-        preference_overrides=preference_overrides,
-        metrics=matching_metrics,
-    )
+    matches = _run_matcher(match_limit)
     report("finalizing", 95, aggregate_metrics)
     _commit_cursor()
     return query, _absorb_matching_metrics(aggregate_metrics), matches
