@@ -134,6 +134,22 @@ class AdminVacancySourceProbeRead(BaseModel):
     sources: dict[str, AdminVacancySourceProbeResult]
 
 
+class AdminSalaryPredictorStatus(BaseModel):
+    total_vacancy_profiles: int
+    with_stated_salary_rub: int
+    with_predicted_salary: int
+    lgbm_model_loaded: bool
+    lgbm_model_version: str | None = None
+    baseline_enabled: bool
+    predictor_enabled: bool
+    training_floor: int
+
+
+class AdminSalaryBackfillResult(BaseModel):
+    processed: int
+    updated: int
+
+
 class AdminJobFunnelRead(BaseModel):
     job_id: str
     status: str

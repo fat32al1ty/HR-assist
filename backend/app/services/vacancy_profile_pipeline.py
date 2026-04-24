@@ -1,10 +1,14 @@
+import logging
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.repositories.vacancy_profiles import create_or_update_vacancy_profile
 from app.services.embeddings import create_embedding
 from app.services.vector_store import get_vector_store
+
+logger = logging.getLogger(__name__)
 
 
 def build_vacancy_profile_text(profile: dict[str, Any], *, title: str, company: str | None) -> str:
@@ -79,7 +83,7 @@ def persist_vacancy_profile(
         vector=vector,
         payload=payload,
     )
-    create_or_update_vacancy_profile(
+    vp = create_or_update_vacancy_profile(
         db,
         vacancy_id=vacancy_id,
         profile=profile,
@@ -87,3 +91,14 @@ def persist_vacancy_profile(
         qdrant_collection=collection_name,
         qdrant_point_id=point_id,
     )
+    if settings.feature_salary_predictor_enabled:
+        try:
+            from app.services.salary_pipeline import populate_predicted_salary
+
+            vacancy = vp.vacancy
+            if vacancy is not None:
+                populate_predicted_salary(db, profile=vp, vacancy=vacancy)
+                db.add(vp)
+                db.commit()
+        except Exception as error:
+            logger.warning("salary predictor failed: %s", error)

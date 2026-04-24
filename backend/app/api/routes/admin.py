@@ -30,12 +30,16 @@ from app.schemas.admin import (
     AdminOverviewRead,
     AdminRecentJob,
     AdminRoleCount,
+    AdminSalaryBackfillResult,
+    AdminSalaryPredictorStatus,
     AdminVacancySourceProbeIn,
     AdminVacancySourceProbeRead,
     QdrantStatsRead,
     ResumeStatsRead,
 )
+from app.services import salary_predictor
 from app.services.recommendation_jobs import cancel_job_as_admin
+from app.services.salary_pipeline import populate_predicted_salary
 from app.services.vacancy_sources import (
     _collect_public_habr_vacancies,
     _collect_public_hh_vacancies,
@@ -564,3 +568,73 @@ def admin_config_check(
             "values_exposed": False,
         },
     }
+
+
+@router.get("/salary-predictor/status", response_model=AdminSalaryPredictorStatus)
+def salary_predictor_status(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminSalaryPredictorStatus:
+    total = int(db.scalar(select(func.count(VacancyProfile.id))) or 0)
+    with_stated = int(
+        db.scalar(
+            select(func.count(VacancyProfile.id)).where(
+                VacancyProfile.salary_currency == "RUB",
+                (VacancyProfile.salary_min.isnot(None)) | (VacancyProfile.salary_max.isnot(None)),
+            )
+        )
+        or 0
+    )
+    with_predicted = int(
+        db.scalar(
+            select(func.count(VacancyProfile.id)).where(
+                VacancyProfile.predicted_salary_p50.isnot(None),
+            )
+        )
+        or 0
+    )
+    salary_predictor._load_once()
+    lgbm_loaded = bool(salary_predictor._cache.models)
+    return AdminSalaryPredictorStatus(
+        total_vacancy_profiles=total,
+        with_stated_salary_rub=with_stated,
+        with_predicted_salary=with_predicted,
+        lgbm_model_loaded=lgbm_loaded,
+        lgbm_model_version=salary_predictor._cache.version or None,
+        baseline_enabled=settings.feature_salary_baseline_enabled,
+        predictor_enabled=settings.feature_salary_predictor_enabled,
+        training_floor=1000,
+    )
+
+
+@router.post("/salary-predictor/backfill", response_model=AdminSalaryBackfillResult)
+def salary_predictor_backfill(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AdminSalaryBackfillResult:
+    if not settings.feature_salary_predictor_enabled:
+        raise HTTPException(400, "predictor disabled by feature flag")
+
+    rows = db.scalars(
+        select(VacancyProfile)
+        .join(Vacancy)
+        .where(
+            VacancyProfile.predicted_salary_p50.is_(None),
+            VacancyProfile.salary_min.is_(None),
+            VacancyProfile.salary_max.is_(None),
+        )
+    ).all()
+
+    updated = 0
+    for i, vp in enumerate(rows):
+        vacancy = vp.vacancy
+        if vacancy is None:
+            continue
+        populate_predicted_salary(db, profile=vp, vacancy=vacancy)
+        if vp.predicted_salary_p50 is not None:
+            updated += 1
+        if i % 50 == 49:
+            db.commit()
+    db.commit()
+
+    return AdminSalaryBackfillResult(processed=len(rows), updated=updated)

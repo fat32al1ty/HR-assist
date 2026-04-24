@@ -149,7 +149,7 @@ Closed-beta MVP. The end-to-end flow runs in production on a dedicated server.
 
 ### Planned next
 
-- Salary predictor (field and badge are wired; predictor activates once the vacancy corpus grows)
+- Salary predictor trained on live corpus (scaffolding, baseline, backfill endpoints now live — LightGBM activates at 1k RUB-priced rows)
 - Additional vacancy source adapters switched on in production
 - Public launch (sub-1.0 version is intentional while in closed beta)
 
@@ -157,6 +157,7 @@ Closed-beta MVP. The end-to-end flow runs in production on a dedicated server.
 
 Full release log: [`docs/ROADMAP.md`](docs/ROADMAP.md). Recent highlights:
 
+- `v0.10.2` — Salary predictor wired into vacancy indexing (LightGBM + median-by-role baseline fallback); admin status + backfill endpoints; predicted bands auto-populate once training corpus reaches 1k RUB-priced rows
 - `v0.10.1` — Vacancy source adapters re-activated behind feature flags (SuperJob / Habr Career / public scrapers, all default off); admin probe endpoint `POST /api/admin/vacancy-sources/probe` reports per-source counts for diagnosis
 - `v0.10.0` — Matcher score cache: `resume_vacancy_scores` table (pipeline-versioned, 7-day TTL, resume-reanalyze invalidation) short-circuits cross-encoder / LLM rerank for already-scored pairs on refresh
 - `v0.9.4` — Funnel pre-analyze drops: `fetched_dropped_analyzed_budget` (LLM budget cap) and `fetched_dedup_within_job` (within-job URL dedup) now counted and surfaced in admin waterfall

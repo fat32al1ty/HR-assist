@@ -103,6 +103,8 @@ class Settings(BaseSettings):
     matching_pipeline_version: str = "3.0"
     matching_score_cache_ttl_days: int = 7
     matching_score_cache_enabled: bool = True
+    feature_salary_predictor_enabled: bool = True
+    feature_salary_baseline_enabled: bool = False
 
     @field_validator(
         "openai_api_key",
