@@ -56,6 +56,7 @@ def upsert_scores(
             "similarity_score": s["similarity_score"],
             "vector_score": s.get("vector_score"),
             "scores_json": s.get("scores_json"),
+            "track": s.get("track"),
             "computed_at": now,
         }
         for s in scores
@@ -67,6 +68,7 @@ def upsert_scores(
             "similarity_score": stmt.excluded.similarity_score,
             "vector_score": stmt.excluded.vector_score,
             "scores_json": stmt.excluded.scores_json,
+            "track": stmt.excluded.track,
             "computed_at": stmt.excluded.computed_at,
         },
     )

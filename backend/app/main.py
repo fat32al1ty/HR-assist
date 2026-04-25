@@ -15,6 +15,7 @@ from app.api.routes import (
     resumes,
     system,
     telemetry,
+    track_gaps,
     users,
     vacancies,
 )
@@ -55,5 +56,6 @@ app.include_router(resumes.router, prefix="/api/resumes", tags=["resumes"])
 app.include_router(resume_audit.router, prefix="/api/resumes", tags=["resume-audit"])
 app.include_router(onboarding.router, prefix="/api/resumes", tags=["onboarding"])
 app.include_router(vacancies.router, prefix="/api/vacancies", tags=["vacancies"])
+app.include_router(track_gaps.router, prefix="/api", tags=["track-gaps"])
 app.include_router(applications.router, prefix="/api/applications", tags=["applications"])
 app.include_router(telemetry.router, prefix="/api/telemetry", tags=["telemetry"])

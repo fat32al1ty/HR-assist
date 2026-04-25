@@ -74,6 +74,28 @@
   /* Skill gap bar — distinct from accent so it reads as "gap, not CTA" */
   --color-skill-gap-bar:     oklch(0.60 0.13 250);      /* steady blue                */
 
+  /* ── Track segmentation tokens (Phase 5.1) ────────────────────────────
+     Three-tier vacancy classification: match / grow / stretch.
+     Rule: use only for track-specific UI (section header, rule, surface).
+     Never reuse as generic status colours.
+     ──────────────────────────────────────────────────────────────────── */
+  /* match — calm, no decoration; inherits neutral surface */
+  --color-track-match-rule:    var(--color-border);                             /* hairline divider, neutral */
+  --color-track-match-label:   var(--color-ink-secondary);                      /* section label text        */
+
+  /* grow — slight upward signal, blue-tinted */
+  --color-track-grow-rule:     oklch(0.58 0.12 250);                            /* 2px left border rule      */
+  --color-track-grow-surface:  oklch(0.97 0.025 250);                           /* very faint blue wash      */
+  --color-track-grow-label:    oklch(0.42 0.13 250);                            /* section label text        */
+
+  /* stretch — aspirational, warm amber; invitation not alarm */
+  --color-track-stretch-rule:   oklch(0.62 0.14 68);                            /* amber left rule           */
+  --color-track-stretch-surface: oklch(0.975 0.03 68);                          /* barely-there amber wash   */
+  --color-track-stretch-label:  oklch(0.46 0.13 68);                            /* section label text        */
+  --color-track-stretch-cta-bg: oklch(0.96 0.05 68);                            /* CTA button background     */
+  --color-track-stretch-cta-border: oklch(0.80 0.10 68);                        /* CTA button border         */
+  --color-track-stretch-cta-ink: oklch(0.40 0.12 68);                           /* CTA button text           */
+
   /* Typography scale — keep as we had */
   --text-xs:   0.75rem;
   --text-sm:   0.875rem;
@@ -186,6 +208,19 @@
 
   /* Skill gap bar (Phase 5.0 — SkillGapsCard) */
   --color-skill-gap-bar:       oklch(0.60 0.13 250);
+
+  /* Track segmentation (Phase 5.1 — vacancy track sections) */
+  --color-track-match-rule:        var(--color-border);
+  --color-track-match-label:       var(--color-ink-secondary);
+  --color-track-grow-rule:         oklch(0.58 0.12 250);
+  --color-track-grow-surface:      oklch(0.97 0.025 250);
+  --color-track-grow-label:        oklch(0.42 0.13 250);
+  --color-track-stretch-rule:      oklch(0.62 0.14 68);
+  --color-track-stretch-surface:   oklch(0.975 0.03 68);
+  --color-track-stretch-label:     oklch(0.46 0.13 68);
+  --color-track-stretch-cta-bg:    oklch(0.96 0.05 68);
+  --color-track-stretch-cta-border: oklch(0.80 0.10 68);
+  --color-track-stretch-cta-ink:   oklch(0.40 0.12 68);
 }
 
 /* ── @layer base — prose + form defaults ─────────────────────────────────*/

@@ -14,6 +14,7 @@ from app.models.resume_clarification import ResumeClarification
 from app.models.resume_profile import ResumeProfile
 from app.models.resume_user_skill import ResumeUserSkill
 from app.models.resume_vacancy_score import ResumeVacancyScore
+from app.models.track_gap_analysis import TrackGapAnalysis
 from app.models.user import User
 from app.models.user_daily_spend import UserDailySpend
 from app.models.user_login_event import UserLoginEvent
@@ -44,6 +45,7 @@ __all__ = [
     "UserLoginEvent",
     "UserVacancyFeedback",
     "UserVacancySeen",
+    "TrackGapAnalysis",
     "Vacancy",
     "VacancyProfile",
 ]

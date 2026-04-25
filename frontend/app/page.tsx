@@ -15,8 +15,10 @@ import {
   formatRecommendationHeadline,
   formatRecommendationMetrics
 } from '../lib/recommendationStats';
-import { createDwellTracker, trackClick } from '../lib/telemetry';
+import { createDwellTracker, trackClick, trackEvent } from '../lib/telemetry';
 import { API_BASE_URL, RESUME_LIMIT, apiFetch } from '@/lib/api';
+import { TrackSegmentView, type TrackSection as TrackSectionShape, type TrackKind, type VacancyMatchStub } from '@/components/recommendations/TrackSegmentView';
+import type { TrackGapAnalysisOut } from '@/types/trackGaps';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/lib/session';
@@ -79,6 +81,8 @@ type VacancyMatch = {
   profile: Record<string, unknown> | null;
   tier?: 'strong' | 'maybe' | null;
   match_run_id?: string | null;
+  track?: TrackKind;
+  track_reason?: string | null;
 };
 
 type CuratedDirection = 'added' | 'rejected';
@@ -397,6 +401,8 @@ export default function DashboardPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
   const [applyingVacancyIds, setApplyingVacancyIds] = useState<Record<number, boolean>>({});
+  const [trackGaps, setTrackGaps] = useState<TrackGapAnalysisOut | null>(null);
+  const [showSofterOnly, setShowSofterOnly] = useState(false);
   const [curatedSkills, setCuratedSkills] = useState<CuratedSkillRead[]>([]);
   const [curatingSkillKey, setCuratingSkillKey] = useState<string | null>(null);
   const [lastSearchAt, setLastSearchAt] = useState<Date | null>(null);
@@ -508,6 +514,65 @@ export default function DashboardPage() {
 
   const visibleMatches = excludeFeedbackVacancies(matches, dislikedVacancies, [...selectedVacancies, ...appliedVacancies], hiddenMatchIds);
 
+  // ── Track section composition ──────────────────────────────────────────────
+  const selectedResume = resumes.find((r) => r.id === selectedResumeId) ?? null;
+  const resumeSkillsSet: Set<string> = new Set(
+    [
+      ...asStringArray(selectedResume?.analysis?.hard_skills),
+      ...asStringArray(selectedResume?.analysis?.soft_skills),
+      ...asStringArray(selectedResume?.analysis?.top_skills),
+    ].map((s) => s.toLowerCase())
+  );
+
+  function buildGapSummary(gapBlock: TrackGapAnalysisOut[keyof TrackGapAnalysisOut] | null): string | null {
+    if (!gapBlock || gapBlock.top_gaps.length === 0) return null;
+    const top = gapBlock.top_gaps[0];
+    const pct = Math.round(top.fraction * 100);
+    return `${pct}% вакансий требуют «${top.skill}»`;
+  }
+
+  const TRACK_LABELS: Record<TrackKind, string> = {
+    match: 'Текущий уровень',
+    grow: 'На вырост',
+    stretch: 'Амбиция',
+  };
+
+  const trackSections: TrackSectionShape[] = (['match', 'grow', 'stretch'] as TrackKind[]).map((kind) => {
+    const gapBlock = trackGaps ? trackGaps[kind] : null;
+    const kindMatches = visibleMatches.filter((m) => (m.track ?? 'match') === kind);
+
+    // For stretch: apply softer-only filter when CTA was clicked
+    const displayedMatches =
+      kind === 'stretch' && showSofterOnly
+        ? kindMatches.filter((m) => {
+            const mustHave = asStringArray(m.profile?.must_have_skills);
+            const missing = mustHave.filter((s) => !resumeSkillsSet.has(s.toLowerCase()));
+            return missing.length <= 2;
+          })
+        : kindMatches;
+
+    return {
+      kind,
+      label: TRACK_LABELS[kind],
+      gap_summary: buildGapSummary(gapBlock),
+      softer_subset_count: gapBlock?.softer_subset_count ?? 0,
+      vacancies: displayedMatches.map((m) => ({
+        vacancy_id: m.vacancy_id,
+        title: m.title,
+        company: m.company,
+        location: m.location,
+        similarity_score: m.similarity_score,
+        salary_text: null,
+      } satisfies VacancyMatchStub)),
+    } satisfies TrackSectionShape;
+  });
+
+  // Quick lookup for renderCard — map vacancy_id → VacancyMatch with index
+  const matchByIdMap = new Map<number, { match: VacancyMatch; index: number }>();
+  visibleMatches.forEach((m, i) => {
+    matchByIdMap.set(normalizeVacancyId(m.vacancy_id), { match: m, index: i });
+  });
+
   const currentMatchRunId = visibleMatches[0]?.match_run_id ?? null;
   const matchRunIdRef = useRef<string | null>(null);
   matchRunIdRef.current = currentMatchRunId;
@@ -588,6 +653,7 @@ export default function DashboardPage() {
       );
       setMatches(visibleMatches);
       setMatchesPageSize(10);
+      setShowSofterOnly(false);
       const metricsInfo = formatMetricsInfo(metrics);
       const headline = formatRecommendationHeadline(visibleMatches.length);
       setMatchingMessage(metricsInfo ? `${headline} ${metricsInfo}` : headline);
@@ -596,6 +662,10 @@ export default function DashboardPage() {
       setLastSearchAt(new Date());
       const analyzedCount = typeof metrics.analyzed === 'number' ? metrics.analyzed : null;
       if (analyzedCount !== null) setLastAnalyzedCount(analyzedCount);
+      // Load track-gap analysis in parallel — failures degrade gracefully
+      if (selectedResumeId) {
+        void loadTrackGaps(selectedResumeId);
+      }
       return;
     }
 
@@ -631,6 +701,8 @@ export default function DashboardPage() {
     setProfileConfirmed(false);
     setProfileMessage('');
     setApplyingVacancyIds({});
+    setTrackGaps(null);
+    setShowSofterOnly(false);
     if (nextMessage) {
       setMessage(nextMessage);
     }
@@ -1034,6 +1106,16 @@ export default function DashboardPage() {
     }
   }
 
+  async function loadTrackGaps(resumeId: number) {
+    try {
+      const data = await apiFetch<TrackGapAnalysisOut>(`/api/resumes/${resumeId}/track-gaps`, { token });
+      setTrackGaps(data);
+    } catch {
+      // 404 or 500 — fall back gracefully; sections still render without gap line
+      setTrackGaps(null);
+    }
+  }
+
   async function loadDashboardStats(resumeId: number | null) {
     try {
       const suffix = resumeId ? `?resume_id=${resumeId}` : '';
@@ -1361,13 +1443,19 @@ export default function DashboardPage() {
     }
     setApplyingVacancyIds((current) => ({ ...current, [vacancyId]: true }));
     try {
+      const track = vacancy.track ?? 'match';
+      trackEvent('apply_from_track', {
+        resume_id: selectedResumeId ?? undefined,
+        vacancy_id: vacancy.vacancy_id,
+        track,
+      });
       const response = await fetch(`${API_BASE_URL}/api/applications`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ vacancy_id: vacancy.vacancy_id, status: 'applied' }),
+        body: JSON.stringify({ vacancy_id: vacancy.vacancy_id, status: 'applied', track }),
       });
       if (response.status === 401) {
         clearSession('Сессия истекла. Войдите снова.');
@@ -2147,17 +2235,25 @@ export default function DashboardPage() {
                     </div>
                   ) : null}
 
-                  {/* Match cards */}
-                  <div className="flex flex-col gap-3">
-                    {visibleMatches.length === 0 ? (
-                      <p className="text-[color:var(--color-ink-secondary)] text-[length:var(--text-sm)] italic">
-                        После запуска здесь появятся подходящие вакансии.
-                      </p>
-                    ) : null}
-                    {visibleMatches.slice(0, matchesPageSize).map((match, matchIndex) => {
-                      const showTierDivider =
-                        match.tier === 'maybe' &&
-                        (matchIndex === 0 || visibleMatches[matchIndex - 1]?.tier !== 'maybe');
+                  {/* Track-segmented match cards */}
+                  {showSofterOnly ? (
+                    <div className="flex items-center gap-2 text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
+                      <span>Показаны вакансии с мягкими требованиями</span>
+                      <button
+                        type="button"
+                        className="underline text-[color:var(--color-accent)] hover:opacity-70 transition-opacity"
+                        onClick={() => setShowSofterOnly(false)}
+                      >
+                        Сбросить фильтр
+                      </button>
+                    </div>
+                  ) : null}
+                  <TrackSegmentView
+                    tracks={trackSections}
+                    renderCard={(stub) => {
+                      const entry = matchByIdMap.get(stub.vacancy_id);
+                      if (!entry) return null;
+                      const { match, index: matchIndex } = entry;
                       const matchedSkills = matchedSkillsFromMatch(match);
                       const matchedRequirements = matchedRequirementsFromMatch(match);
                       const missingRequirements = missingRequirementsFromMatch(match);
@@ -2185,248 +2281,234 @@ export default function DashboardPage() {
                       const isCurating = (skill: string, direction: CuratedDirection) =>
                         curatingSkillKey === `${match.vacancy_id}::${direction}::${skill.toLowerCase()}`;
                       return (
-                        <Fragment key={match.vacancy_id}>
-                          {showTierDivider ? (
-                            <div className="vacancy-tier-divider">
-                              <h3 className="vacancy-tier-title">Может подойти — проверь</h3>
-                              <p className="vacancy-tier-hint">
-                                Эти вакансии слабее совпадают по профилю, но иногда среди них находится удачное предложение.
-                              </p>
+                        <article
+                          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-4 flex flex-col gap-3 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-shadow duration-[var(--duration-fast)]"
+                          data-vacancy-id={normalizeVacancyId(match.vacancy_id)}
+                          ref={(el) => {
+                            const id = normalizeVacancyId(match.vacancy_id);
+                            if (el) {
+                              cardRefs.current.set(id, el);
+                            } else {
+                              cardRefs.current.delete(id);
+                            }
+                          }}
+                        >
+                          {/* Card header row */}
+                          <div className="flex items-start justify-between gap-3">
+                            <h3 className="min-w-0 text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.025em] text-[color:var(--color-ink)]">
+                              {match.title}
+                            </h3>
+                            {/* Relevance + salary right-aligned, mono */}
+                            <div className="flex flex-col items-end gap-0.5 shrink-0 font-[var(--font-mono)] text-[length:var(--text-sm)]">
+                              <span className="font-semibold text-[color:var(--color-ink)]">
+                                {scoreToPercent(match.similarity_score)}
+                              </span>
+                              <span className="text-[length:var(--text-xs)] font-sans font-normal text-[color:var(--color-ink-muted)]">релевантность</span>
+                              {(() => {
+                                const badge = renderSalaryBadge(match);
+                                if (!badge) return null;
+                                const fitColor =
+                                  badge.fit === 'below'
+                                    ? 'text-[color:var(--color-warning)]'
+                                    : badge.fit === 'above'
+                                      ? 'text-[color:var(--color-success)]'
+                                      : 'text-[color:var(--color-ink-secondary)]';
+                                return (
+                                  <span className={fitColor}>
+                                    {badge.text}
+                                  </span>
+                                );
+                              })()}
                             </div>
+                          </div>
+
+                          {/* Meta */}
+                          <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] m-0">
+                            {match.company || 'Компания не указана'}
+                            {' · '}
+                            {match.location || 'Локация не указана'}
+                          </p>
+
+                          {/* Почему показали */}
+                          {reasonFromMatch(match) ? (
+                            <Collapsible>
+                              <CollapsibleTrigger className="group flex items-center justify-end w-full text-right text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-ink-secondary)] transition-colors py-0.5 gap-1">
+                                <span>Почему показали</span>
+                                <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="data-[state=open]:animate-slide-down">
+                                <p className="match-reason text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-snug)] mt-1">
+                                  {reasonFromMatch(match)}
+                                </p>
+                              </CollapsibleContent>
+                            </Collapsible>
                           ) : null}
-                          {/* Match card using token classes */}
-                          <article
-                            className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-4 flex flex-col gap-3 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-shadow duration-[var(--duration-fast)]"
-                            data-vacancy-id={normalizeVacancyId(match.vacancy_id)}
-                            ref={(el) => {
-                              const id = normalizeVacancyId(match.vacancy_id);
-                              if (el) {
-                                cardRefs.current.set(id, el);
-                              } else {
-                                cardRefs.current.delete(id);
+
+                          {/* Fit grid — pill badges */}
+                          <div className="fit-grid">
+                            <div className="fit-box fit-matched">
+                              <p className="fit-title">Подходишь</p>
+                              {matchedEntries.length > 0 || locallyAddedForMatch.length > 0 ? (
+                                <ul>
+                                  {matchedEntries.map((item) => (
+                                    <li key={`${match.vacancy_id}-match-${item}`}>{item}</li>
+                                  ))}
+                                  {locallyAddedForMatch.map((item) => (
+                                    <li
+                                      key={`${match.vacancy_id}-match-added-${item}`}
+                                      className="fit-item-added"
+                                    >
+                                      {item}
+                                      <span className="curated-badge" title="Добавлено вручную">
+                                        ✓
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="fit-empty">совпадение по ключевым словам</p>
+                              )}
+                            </div>
+                            <div className="fit-box fit-missing">
+                              <p className="fit-title">Не хватает</p>
+                              {visibleMissing.length > 0 ? (
+                                <ul>
+                                  {visibleMissing.map((item) => (
+                                    <li
+                                      key={`${match.vacancy_id}-miss-${item}`}
+                                      className="fit-missing-item"
+                                    >
+                                      <span className="fit-missing-text">{item}</span>
+                                      <span className="fit-missing-actions">
+                                        <button
+                                          type="button"
+                                          className="fit-micro-btn fit-micro-add"
+                                          title="Добавить в профиль"
+                                          aria-label={`Добавить навык «${item}» в профиль`}
+                                          disabled={
+                                            !selectedResumeId ||
+                                            matchingBusy ||
+                                            Boolean(curatingSkillKey)
+                                          }
+                                          onClick={() => void curateMatchSkill(match, item, 'added')}
+                                        >
+                                          {isCurating(item, 'added') ? '…' : '✓'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="fit-micro-btn fit-micro-reject"
+                                          title="Отметить как не моё"
+                                          aria-label={`Отметить «${item}» как не моё`}
+                                          disabled={
+                                            !selectedResumeId ||
+                                            matchingBusy ||
+                                            Boolean(curatingSkillKey)
+                                          }
+                                          onClick={() => void curateMatchSkill(match, item, 'rejected')}
+                                        >
+                                          {isCurating(item, 'rejected') ? '…' : '✗'}
+                                        </button>
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="fit-empty">все требования закрыты</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-2 flex-wrap pt-1">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              disabled={
+                                matchingBusy ||
+                                Boolean(applyingVacancyIds[normalizeVacancyId(match.vacancy_id)])
                               }
-                            }}
-                          >
-                            {/* Card header row */}
-                            <div className="flex items-start justify-between gap-3">
-                              <h3 className="min-w-0 text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.025em] text-[color:var(--color-ink)]">
-                                {match.title}
-                              </h3>
-                              {/* Relevance + salary right-aligned, mono */}
-                              <div className="flex flex-col items-end gap-0.5 shrink-0 font-[var(--font-mono)] text-[length:var(--text-sm)]">
-                                <span className="font-semibold text-[color:var(--color-ink)]">
-                                  {scoreToPercent(match.similarity_score)}
-                                </span>
-                                <span className="text-[length:var(--text-xs)] font-sans font-normal text-[color:var(--color-ink-muted)]">релевантность</span>
-                                {(() => {
-                                  const badge = renderSalaryBadge(match);
-                                  if (!badge) return null;
-                                  const fitColor =
-                                    badge.fit === 'below'
-                                      ? 'text-[color:var(--color-warning)]'
-                                      : badge.fit === 'above'
-                                        ? 'text-[color:var(--color-success)]'
-                                        : 'text-[color:var(--color-ink-secondary)]';
-                                  return (
-                                    <span className={fitColor}>
-                                      {badge.text}
-                                    </span>
-                                  );
-                                })()}
-                              </div>
-                            </div>
-
-                            {/* Meta */}
-                            <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] m-0">
-                              {match.company || 'Компания не указана'}
-                              {' · '}
-                              {match.location || 'Локация не указана'}
-                            </p>
-
-                            {/* Почему показали */}
-                            {reasonFromMatch(match) ? (
-                              <Collapsible>
-                                <CollapsibleTrigger className="group flex items-center justify-end w-full text-right text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-ink-secondary)] transition-colors py-0.5 gap-1">
-                                  <span>Почему показали</span>
-                                  <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
-                                </CollapsibleTrigger>
-                                <CollapsibleContent className="data-[state=open]:animate-slide-down">
-                                  <p className="match-reason text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-snug)] mt-1">
-                                    {reasonFromMatch(match)}
-                                  </p>
-                                </CollapsibleContent>
-                              </Collapsible>
-                            ) : null}
-
-                            {/* Fit grid — pill badges */}
-                            <div className="fit-grid">
-                              <div className="fit-box fit-matched">
-                                <p className="fit-title">Подходишь</p>
-                                {matchedEntries.length > 0 || locallyAddedForMatch.length > 0 ? (
-                                  <ul>
-                                    {matchedEntries.map((item) => (
-                                      <li key={`${match.vacancy_id}-match-${item}`}>{item}</li>
-                                    ))}
-                                    {locallyAddedForMatch.map((item) => (
-                                      <li
-                                        key={`${match.vacancy_id}-match-added-${item}`}
-                                        className="fit-item-added"
-                                      >
-                                        {item}
-                                        <span className="curated-badge" title="Добавлено вручную">
-                                          ✓
-                                        </span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                ) : (
-                                  <p className="fit-empty">совпадение по ключевым словам</p>
-                                )}
-                              </div>
-                              <div className="fit-box fit-missing">
-                                <p className="fit-title">Не хватает</p>
-                                {visibleMissing.length > 0 ? (
-                                  <ul>
-                                    {visibleMissing.map((item) => (
-                                      <li
-                                        key={`${match.vacancy_id}-miss-${item}`}
-                                        className="fit-missing-item"
-                                      >
-                                        <span className="fit-missing-text">{item}</span>
-                                        <span className="fit-missing-actions">
-                                          <button
-                                            type="button"
-                                            className="fit-micro-btn fit-micro-add"
-                                            title="Добавить в профиль"
-                                            aria-label={`Добавить навык «${item}» в профиль`}
-                                            disabled={
-                                              !selectedResumeId ||
-                                              matchingBusy ||
-                                              Boolean(curatingSkillKey)
-                                            }
-                                            onClick={() => void curateMatchSkill(match, item, 'added')}
-                                          >
-                                            {isCurating(item, 'added') ? '…' : '✓'}
-                                          </button>
-                                          <button
-                                            type="button"
-                                            className="fit-micro-btn fit-micro-reject"
-                                            title="Отметить как не моё"
-                                            aria-label={`Отметить «${item}» как не моё`}
-                                            disabled={
-                                              !selectedResumeId ||
-                                              matchingBusy ||
-                                              Boolean(curatingSkillKey)
-                                            }
-                                            onClick={() => void curateMatchSkill(match, item, 'rejected')}
-                                          >
-                                            {isCurating(item, 'rejected') ? '…' : '✗'}
-                                          </button>
-                                        </span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                ) : (
-                                  <p className="fit-empty">все требования закрыты</p>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex items-center gap-2 flex-wrap pt-1">
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                disabled={
-                                  matchingBusy ||
-                                  Boolean(applyingVacancyIds[normalizeVacancyId(match.vacancy_id)])
-                                }
-                                onClick={() => {
-                                  trackClick({
-                                    vacancy_id: normalizeVacancyId(match.vacancy_id),
-                                    click_kind: 'apply',
-                                    match_run_id: match.match_run_id ?? null,
-                                    resume_id: selectedResumeId ?? null,
-                                    position: matchIndex,
-                                  });
-                                  void applyToVacancy(match);
-                                }}
-                              >
-                                {applyingVacancyIds[normalizeVacancyId(match.vacancy_id)]
-                                  ? 'Создаём…'
-                                  : 'Откликнуться'}
-                              </Button>
-                              <button
-                                type="button"
-                                disabled={matchingBusy}
-                                title="Интересно"
-                                onClick={() => {
-                                  trackClick({
-                                    vacancy_id: normalizeVacancyId(match.vacancy_id),
-                                    click_kind: 'like',
-                                    match_run_id: match.match_run_id ?? null,
-                                    resume_id: selectedResumeId ?? null,
-                                    position: matchIndex,
-                                  });
-                                  void likeVacancy(match);
-                                }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-md)] text-[length:var(--text-xs)] font-medium border border-transparent text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] hover:border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] transition-colors disabled:opacity-40"
-                              >
-                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 1v10M1 6h10"/></svg>
-                                Интересно
-                              </button>
-                              <button
-                                type="button"
-                                disabled={matchingBusy}
-                                title="Не подходит"
-                                onClick={() => {
-                                  trackClick({
-                                    vacancy_id: normalizeVacancyId(match.vacancy_id),
-                                    click_kind: 'dislike',
-                                    match_run_id: match.match_run_id ?? null,
-                                    resume_id: selectedResumeId ?? null,
-                                    position: matchIndex,
-                                  });
-                                  void dislikeVacancy(match);
-                                }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-md)] text-[length:var(--text-xs)] font-medium border border-transparent text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-danger)] hover:bg-[var(--color-danger-subtle)] hover:border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] transition-colors disabled:opacity-40"
-                              >
-                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 6h10"/></svg>
-                                Не подходит
-                              </button>
-                              <a
-                                href={match.source_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="ml-auto text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-accent)] transition-colors no-underline font-semibold"
-                                onClick={() =>
-                                  trackClick({
-                                    vacancy_id: normalizeVacancyId(match.vacancy_id),
-                                    click_kind: 'open_source',
-                                    match_run_id: match.match_run_id ?? null,
-                                    resume_id: selectedResumeId ?? null,
-                                    position: matchIndex,
-                                  })
-                                }
-                              >
-                                Источник →
-                              </a>
-                            </div>
-                          </article>
-                        </Fragment>
+                              onClick={() => {
+                                trackClick({
+                                  vacancy_id: normalizeVacancyId(match.vacancy_id),
+                                  click_kind: 'apply',
+                                  match_run_id: match.match_run_id ?? null,
+                                  resume_id: selectedResumeId ?? null,
+                                  position: matchIndex,
+                                });
+                                void applyToVacancy(match);
+                              }}
+                            >
+                              {applyingVacancyIds[normalizeVacancyId(match.vacancy_id)]
+                                ? 'Создаём…'
+                                : 'Откликнуться'}
+                            </Button>
+                            <button
+                              type="button"
+                              disabled={matchingBusy}
+                              title="Интересно"
+                              onClick={() => {
+                                trackClick({
+                                  vacancy_id: normalizeVacancyId(match.vacancy_id),
+                                  click_kind: 'like',
+                                  match_run_id: match.match_run_id ?? null,
+                                  resume_id: selectedResumeId ?? null,
+                                  position: matchIndex,
+                                });
+                                void likeVacancy(match);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-md)] text-[length:var(--text-xs)] font-medium border border-transparent text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-accent)] hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)] hover:border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] transition-colors disabled:opacity-40"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 1v10M1 6h10"/></svg>
+                              Интересно
+                            </button>
+                            <button
+                              type="button"
+                              disabled={matchingBusy}
+                              title="Не подходит"
+                              onClick={() => {
+                                trackClick({
+                                  vacancy_id: normalizeVacancyId(match.vacancy_id),
+                                  click_kind: 'dislike',
+                                  match_run_id: match.match_run_id ?? null,
+                                  resume_id: selectedResumeId ?? null,
+                                  position: matchIndex,
+                                });
+                                void dislikeVacancy(match);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-md)] text-[length:var(--text-xs)] font-medium border border-transparent text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-danger)] hover:bg-[var(--color-danger-subtle)] hover:border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] transition-colors disabled:opacity-40"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 6h10"/></svg>
+                              Не подходит
+                            </button>
+                            <a
+                              href={match.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="ml-auto text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-accent)] transition-colors no-underline font-semibold"
+                              onClick={() =>
+                                trackClick({
+                                  vacancy_id: normalizeVacancyId(match.vacancy_id),
+                                  click_kind: 'open_source',
+                                  match_run_id: match.match_run_id ?? null,
+                                  resume_id: selectedResumeId ?? null,
+                                  position: matchIndex,
+                                })
+                              }
+                            >
+                              Источник →
+                            </a>
+                          </div>
+                        </article>
                       );
-                    })}
-                  </div>
-                  {visibleMatches.length > matchesPageSize ? (
-                    <Button
-                      variant="secondary"
-                      type="button"
-                      className="w-full"
-                      onClick={() => setMatchesPageSize((prev) => Math.min(prev + 10, visibleMatches.length))}
-                    >
-                      Показать ещё 10
-                    </Button>
-                  ) : null}
+                    }}
+                    onSectionExpand={(kind) =>
+                      trackEvent('track_section_expanded', { resume_id: selectedResumeId ?? undefined, track: kind })
+                    }
+                    onShowSofterStretch={() => setShowSofterOnly(true)}
+                    onSofterCtaClick={(count) =>
+                      trackEvent('softer_subset_clicked', { resume_id: selectedResumeId ?? undefined, count })
+                    }
+                  />
                 </CardContent>
               </Card>
 

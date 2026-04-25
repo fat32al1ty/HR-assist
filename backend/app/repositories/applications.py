@@ -20,6 +20,7 @@ def create_application(
     notes: str | None = None,
     cover_letter_text: str | None = None,
     resume_id: int | None = None,
+    track: str | None = None,
 ) -> Application:
     now = datetime.now(UTC)
     application = Application(
@@ -32,6 +33,7 @@ def create_application(
         vacancy_company=vacancy_company,
         notes=notes,
         cover_letter_text=cover_letter_text,
+        track=track,
         last_status_change_at=now,
         applied_at=now if status in APPLIED_STATUSES else None,
     )

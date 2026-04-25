@@ -29,6 +29,16 @@ from app.services.match_telemetry import (
 
 CLICK_RATE_LIMIT = "120/minute"
 DWELL_RATE_LIMIT = "60/minute"
+EVENT_RATE_LIMIT = "120/minute"
+
+ALLOWED_EVENT_NAMES = frozenset(
+    {
+        "track_section_expanded",
+        "track_gap_clicked",
+        "softer_subset_clicked",
+        "apply_from_track",
+    }
+)
 
 router = APIRouter()
 
@@ -39,6 +49,11 @@ class ClickPayload(BaseModel):
     match_run_id: uuid.UUID | None = None
     resume_id: int | None = None
     position: int | None = None
+
+
+class EventPayload(BaseModel):
+    event: str = Field(..., max_length=64)
+    payload: dict = Field(default_factory=dict)
 
 
 class DwellRow(BaseModel):
@@ -85,4 +100,17 @@ def post_dwell(
 ) -> Response:
     entries = [(row.vacancy_id, row.ms) for row in payload.rows if row.ms > 0]
     log_dwell_batch(db, match_run_id=payload.match_run_id, entries=entries)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/event", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(EVENT_RATE_LIMIT)
+def post_event(
+    request: Request,
+    response: Response,
+    payload: EventPayload,
+    current_user: User = Depends(get_current_user),  # noqa: ARG001 — auth gate only
+) -> Response:
+    if payload.event not in ALLOWED_EVENT_NAMES:
+        return Response(status_code=status.HTTP_400_BAD_REQUEST)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

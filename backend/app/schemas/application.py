@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+ApplicationTrack = Literal["match", "grow", "stretch"]
+
 ApplicationStatus = Literal[
     "draft",
     "applied",
@@ -31,6 +33,7 @@ class ApplicationRead(BaseModel):
     vacancy_title: str
     vacancy_company: str | None
     notes: str | None
+    track: ApplicationTrack | None
     cover_letter_text: str | None
     cover_letter_generated_at: datetime | None
     applied_at: datetime | None
@@ -70,6 +73,7 @@ class ApplicationCreateRequest(BaseModel):
     vacancy_company: str | None = Field(default=None, max_length=COMPANY_MAX)
     notes: str | None = Field(default=None, max_length=NOTES_MAX)
     status: ApplicationStatus = "draft"
+    track: ApplicationTrack | None = None
 
     @field_validator("source_url", "vacancy_title", "vacancy_company", "notes")
     @classmethod

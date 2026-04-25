@@ -34,6 +34,7 @@ class Application(Base):
     )
     vacancy_company: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    track: Mapped[str | None] = mapped_column(String(16), nullable=True)
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_status_change_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

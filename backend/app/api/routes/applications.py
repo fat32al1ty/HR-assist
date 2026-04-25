@@ -103,6 +103,7 @@ def create_application_endpoint(
         status=payload.status,
         notes=payload.notes,
         resume_id=active_resume.id if active_resume is not None else None,
+        track=payload.track,
     )
     return ApplicationRead.model_validate(application)
 

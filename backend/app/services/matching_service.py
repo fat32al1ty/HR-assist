@@ -2039,8 +2039,12 @@ def _build_resume_context(
     )
 
 
-def _candidate_to_match_dict(cand, *, tier: str, tier_reason: str | None = None) -> dict:
+def _candidate_to_match_dict(
+    cand, *, tier: str, tier_reason: str | None = None, resume_context=None
+) -> dict:
     """Project a Candidate into the public match-result dict shape."""
+    from app.services.track_classifier import classify as _classify_track  # noqa: PLC0415
+
     vacancy = cand.vacancy
     profile = dict(cand.augmented_profile) if isinstance(cand.augmented_profile, dict) else {}
     if tier_reason is not None:
@@ -2072,6 +2076,40 @@ def _candidate_to_match_dict(cand, *, tier: str, tier_reason: str | None = None)
     salary_min = annotations.get("salary_min")
     salary_max = annotations.get("salary_max")
     salary_currency = annotations.get("salary_currency")
+
+    # Phase 5.1: classify track
+    track = "match"
+    track_reason: str | None = None
+    try:
+        vp = getattr(vacancy, "profile", None)
+        vp_json = (
+            vp.profile
+            if (vp is not None and isinstance(getattr(vp, "profile", None), dict))
+            else {}
+        )
+        vacancy_seniority = vp_json.get("seniority") if vp_json else None
+        vacancy_must_have = vp_json.get("must_have_skills") or [] if vp_json else []
+        if resume_context is not None:
+            resume_analysis = resume_context.analysis or {}
+            resume_seniority = resume_analysis.get("seniority")
+            resume_skills: set[str] = resume_context.resume_skills
+        else:
+            resume_seniority = None
+            resume_skills = set()
+        decision = _classify_track(
+            vector_score=float(cand.vector_score),
+            resume_seniority=resume_seniority,
+            vacancy_seniority=vacancy_seniority,
+            resume_skills=resume_skills,
+            vacancy_must_have_skills=list(vacancy_must_have)
+            if isinstance(vacancy_must_have, list)
+            else [],
+        )
+        track = decision.track
+        track_reason = decision.reason
+    except Exception:  # noqa: BLE001
+        pass
+
     return {
         "vacancy_id": vacancy.id,
         "title": vacancy.title,
@@ -2084,6 +2122,8 @@ def _candidate_to_match_dict(cand, *, tier: str, tier_reason: str | None = None)
         "salary_currency": salary_currency if isinstance(salary_currency, str) else None,
         "profile": profile,
         "tier": tier,
+        "track": track,
+        "track_reason": track_reason,
     }
 
 
@@ -2161,11 +2201,37 @@ def _run_pipeline_with_score_cache(
     uncached_state = run_pipeline(uncached_state, rest_stages)
 
     # Upsert newly computed scores for survived uncached candidates
+    from app.services.track_classifier import classify as _classify_track  # noqa: PLC0415
+
+    _resume_ctx = state.resume_context
+    _resume_analysis = _resume_ctx.analysis or {} if _resume_ctx else {}
+    _resume_seniority = _resume_analysis.get("seniority")
+    _resume_skills: set[str] = _resume_ctx.resume_skills if _resume_ctx else set()
+
+    def _track_for_candidate(c) -> str:
+        try:
+            vp = getattr(c.vacancy, "profile", None)
+            vp_json = (
+                vp.profile
+                if (vp is not None and isinstance(getattr(vp, "profile", None), dict))
+                else {}
+            )
+            return _classify_track(
+                vector_score=float(c.vector_score),
+                resume_seniority=_resume_seniority,
+                vacancy_seniority=vp_json.get("seniority"),
+                resume_skills=_resume_skills,
+                vacancy_must_have_skills=vp_json.get("must_have_skills") or [],
+            ).track
+        except Exception:  # noqa: BLE001
+            return "match"
+
     scored_rows = [
         {
             "vacancy_id": c.vacancy_id,
             "similarity_score": c.hybrid_score,
             "vector_score": c.vector_score,
+            "track": _track_for_candidate(c),
         }
         for c in uncached_state.candidates
         if not c.drop_reason and c.hybrid_score > 0.0
@@ -2246,21 +2312,26 @@ def _default_matching_stages(db: Session, vector_store, *, search_limit: int) ->
     ]
 
 
-def _slice_tiered_matches(candidates: list, *, limit: int) -> list[dict]:
+def _slice_tiered_matches(candidates: list, *, limit: int, resume_context=None) -> list[dict]:
     """Strong → maybe → relaxed-fallback slicing with tier labels."""
     strong = [c for c in candidates if c.tier == "strong"]
     maybe = [c for c in candidates if c.tier == "maybe"]
     relaxed = [c for c in candidates if c.tier == "relaxed"]
 
-    out: list[dict] = [_candidate_to_match_dict(c, tier="strong") for c in strong[:limit]]
+    out: list[dict] = [
+        _candidate_to_match_dict(c, tier="strong", resume_context=resume_context)
+        for c in strong[:limit]
+    ]
     maybe_cap = limit if not strong else max(1, limit // MAYBE_MATCH_CAP_DIVISOR)
     out.extend(
-        _candidate_to_match_dict(c, tier="maybe", tier_reason="below_strict_threshold")
+        _candidate_to_match_dict(
+            c, tier="maybe", tier_reason="below_strict_threshold", resume_context=resume_context
+        )
         for c in maybe[:maybe_cap]
     )
     if not out:
         for cand in relaxed[:limit]:
-            item = _candidate_to_match_dict(cand, tier="maybe")
+            item = _candidate_to_match_dict(cand, tier="maybe", resume_context=resume_context)
             item["profile"]["source"] = "relaxed_fallback"
             item["profile"]["fallback_tier"] = "relaxed"
             out.append(item)
@@ -2385,7 +2456,7 @@ def match_vacancies_for_resume(
     state = _run_pipeline_with_score_cache(db, state=state, stages=stages, resume_id=resume_id)
     state.diagnostics.export_to(metrics)
 
-    top_matches = _slice_tiered_matches(state.candidates, limit=limit)
+    top_matches = _slice_tiered_matches(state.candidates, limit=limit, resume_context=ctx)
     if len(top_matches) >= limit or (ctx.leadership_preferred and top_matches):
         return _stamp_and_log_impressions(
             db,

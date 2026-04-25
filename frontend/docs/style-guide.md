@@ -267,3 +267,74 @@ Error and status messages use: `bg-warning-subtle text-warning border border-war
 
 ### Legacy classes retained in globals.css (still used by other routes)
 `.workspace`, `.workspace-main`, `.panel`, `.vacancy-tier-divider`, `.fit-grid`, `.fit-box`, `.resume-active-tag`, `.status`, `.match-reason`, `.match-salary`, `.salary-range-row`, `.progress-box`, `.progress-*`, `.curated-*`, `.fit-micro-btn`, `.radio-chip`, `.sources-box`. These will be purged in 2.8.8 when the last consumer is migrated.
+
+---
+
+## Track segmentation view (Phase 5.1)
+
+### Direction
+
+Three tracks form **one continuous vertical list**, not three pages. Visual rhythm flows downward. Differentiation is done by a 3px left border rule + a whisper-thin surface wash — not by large colored headers or icons. The user's eye reads track kind instantly from the left edge; it then moves right to the heading. No clutter in the middle.
+
+### Track hierarchy
+
+| Track     | Eyebrow (ru) | Left rule token               | Surface wash token                | Label color token              |
+|-----------|--------------|-------------------------------|-----------------------------------|-------------------------------|
+| `match`   | Точка        | `--color-track-match-rule`    | none (page canvas)                | `--color-track-match-label`   |
+| `grow`    | Вырост       | `--color-track-grow-rule`     | `--color-track-grow-surface`      | `--color-track-grow-label`    |
+| `stretch` | Стрейч       | `--color-track-stretch-rule`  | `--color-track-stretch-surface`   | `--color-track-stretch-label` |
+
+- `match` is **calm**: no background, neutral rule, neutral label. The default state that needs no explanation.
+- `grow` has a **blue left rule** + barely-perceptible blue surface tint. Signals "reach" without alarm. Blue is already used for status-info across the system, making it a familiar directional signal.
+- `stretch` has a **warm amber rule** + amber surface wash. Reads as aspirational — the same hue as `--color-warning` but at much lower chroma, so it never reads as an error. Paired with the amber CTA button it gives stretch its own identity within the single list.
+
+### Section header anatomy
+
+```
+[3px rule]  [eyebrow — xs / bold / tracking / uppercase / labelColor]
+            [section title — 2xl / display font / ink]       [count pill] [▼]
+            [gap summary — sm / italic / ink-muted]   (always visible, not collapsible)
+```
+
+- Eyebrow text is short Russian noun: "Точка", "Вырост", "Стрейч". Never spell out the English track name.
+- Section title uses `--font-display` (Fraunces), `text-2xl`, tracking `-0.03em`. Same as h3 in the type scale.
+- Counter pill: `font-mono text-xs font-semibold rounded-full border`. Background + text = the track's own label color at low opacity (not the global accent).
+- Chevron `▼` rotates 180° via `group-data-[state=open]:rotate-180 transition-transform`. Duration `--duration-fast`.
+- The gap summary line sits **below the header, above the collapsible content**. Always visible (not hidden when collapsed) so the user gets the key fact without opening the section.
+
+### Collapsible behavior
+
+- `match` opens by default on page load. `grow` and `stretch` start collapsed.
+- Open/close uses Radix `<Collapsible>` with `data-[state=open]:animate-slide-down` on `CollapsibleContent`. Matches the existing pattern from 2.8.7.
+- No nesting — one collapsible level per track.
+
+### Vacancy cards inside a track
+
+The card anatomy is **unchanged** from 2.8.7. The track wrapper does not alter card styling. Cards inherit `bg-surface border-border rounded-lg shadow-sm hover:shadow-md`.
+
+### Stretch CTA button
+
+```
+[amber bg] [amber border]  "Показать N вакансий с мягкими требованиями"
+                            sub-line: "Где работодатель пишет «будет плюсом»…"
+```
+
+- Uses `--color-track-stretch-cta-bg`, `--color-track-stretch-cta-border`, `--color-track-stretch-cta-ink`.
+- Full-width, `rounded-lg`, left-aligned text (reads as a link-row, not a submit button).
+- Rendered inside the collapsible body, after the vacancy list.
+- Only shown when `softer_subset_count > 0`. Absent if 0 or null.
+
+### Empty state
+
+One italic sentence per track in `text-sm text-ink-muted`. No illustration. No button (the search trigger lives elsewhere on the page).
+
+### Mobile (≤ 360px)
+
+- Left rule stays. Surface tint stays.
+- Section heading wraps normally — Fraunces at `text-2xl` handles long Russian words cleanly.
+- Count pill and chevron wrap to the same flex row as the heading; they shrink but never disappear.
+- Gap summary truncates at 2 lines (`line-clamp-2`). Full text available via `title` attribute.
+
+### Token rule
+
+Never use `--color-track-*` tokens outside the track section header and CTA. Do not apply them to vacancy cards, status badges, or global navigation.

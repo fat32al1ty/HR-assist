@@ -51,6 +51,9 @@ class VacancyMatchRead(BaseModel):
     # older/lexical-fallback items. The UI groups strong and maybe into
     # separate blocks; null falls through to "maybe".
     tier: str | None = None
+    # Phase 5.1: track segmentation. Default "match" so legacy callers get a sane value.
+    track: Literal["match", "grow", "stretch"] = "match"
+    track_reason: str | None = None
 
 
 class PreferenceOverrides(BaseModel):

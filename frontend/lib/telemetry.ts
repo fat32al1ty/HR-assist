@@ -151,10 +151,10 @@ export function resetTelemetryDedupe(): void {
 }
 
 /**
- * Fire a named event (Phase 5.0.4 telemetry). Best-effort — never throws.
- * Backend route: POST /api/telemetry/event (future). For now, console.debug only.
+ * Fire a named event (Phase 5.1.3 telemetry). Best-effort — never throws.
+ * Backend route: POST /api/telemetry/event, rate-limited 120/min, returns 204.
+ * Fire-and-forget; errors are swallowed silently.
  */
 export function trackEvent(event: string, payload?: Record<string, unknown>): void {
-  console.debug('[telemetry]', event, payload ?? {});
-  // TODO Phase 5.0.4: POST /api/telemetry/event when backend ships the route.
+  void postJson('/api/telemetry/event', { event, payload: payload ?? {} });
 }
