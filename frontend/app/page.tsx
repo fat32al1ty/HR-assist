@@ -1618,13 +1618,13 @@ export default function DashboardPage() {
               <div className="inline-flex items-center gap-2.5 w-max">
                 <Image
                   src="/brand-preview-assets/aijobmatch-variant2-icon-256.png"
-                  alt="AIJobMatch"
+                  alt="AI JobMatch"
                   width={36}
                   height={36}
                   className="rounded-[10px] shadow-[var(--shadow-sm)]"
                 />
                 <span className="font-[var(--font-display)] font-bold text-[length:var(--text-xl)] tracking-[-0.02em] text-[color:var(--color-ink)]">
-                  AIJobMatch
+                  <span className="text-[color:var(--color-accent)]">AI</span> JobMatch
                 </span>
               </div>
 
@@ -2711,8 +2711,8 @@ export default function DashboardPage() {
             {/* Brand */}
             <div className="flex flex-col gap-2 max-w-[260px]">
               <div className="flex items-center gap-2">
-                <Image src="/brand-preview-assets/aijobmatch-variant2-icon-256.png" alt="AIJobMatch" width={24} height={24} className="rounded-[6px] shadow-[var(--shadow-sm)]" />
-                <span className="font-bold text-[length:var(--text-sm)] tracking-[-0.02em] text-[color:var(--color-ink)]">AIJobMatch</span>
+                <Image src="/brand-preview-assets/aijobmatch-variant2-icon-256.png" alt="AI JobMatch" width={24} height={24} className="rounded-[6px] shadow-[var(--shadow-sm)]" />
+                <span className="font-bold text-[length:var(--text-sm)] tracking-[-0.02em] text-[color:var(--color-ink)]"><span className="text-[color:var(--color-accent)]">AI</span> JobMatch</span>
               </div>
               <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-relaxed)]">
                 AI-ассистент для соискателей — умный подбор вакансий и воронка откликов.
@@ -2791,7 +2791,7 @@ export default function DashboardPage() {
 
           {/* Bottom bar */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 border-t border-[var(--color-border)] text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
-            <span>© {new Date().getFullYear()} AIJobMatch · aijobmatch.ru</span>
+            <span>© {new Date().getFullYear()} <span className="text-[color:var(--color-accent)]">AI</span> JobMatch · aijobmatch.ru</span>
           </div>
 
         </div>

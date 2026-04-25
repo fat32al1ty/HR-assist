@@ -35,13 +35,13 @@ export default function Topbar() {
         <div className="topbar-brand">
           <Image
             src="/brand-preview-assets/aijobmatch-variant2-icon-256.png"
-            alt="AIJobMatch"
+            alt="AI JobMatch"
             width={30}
             height={30}
             className="topbar-brand-logo"
           />
           <Link href="/" className="topbar-brand-link">
-            AIJobMatch
+            <span style={{ color: 'var(--color-accent)' }}>AI</span> JobMatch
           </Link>
           <a
             href="https://github.com/fat32al1ty/HR-assist/releases"

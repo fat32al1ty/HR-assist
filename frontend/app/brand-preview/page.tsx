@@ -67,7 +67,7 @@ function LogoStrip() {
       />
       <div className="flex flex-col">
         <span className="text-[length:var(--text-xl)] font-bold leading-none text-[color:var(--color-ink)]">
-          AIJobMatch
+          <span className="text-[color:var(--color-accent)]">AI</span> JobMatch
         </span>
         <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]">aijobmatch.ru</span>
       </div>
