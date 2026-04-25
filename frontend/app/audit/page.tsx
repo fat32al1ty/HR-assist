@@ -98,7 +98,7 @@ function ErrorCard({ message, analysing, onRetry }: ErrorCardProps) {
 const AUTO_RETRY_INTERVAL_MS = 3000;
 const AUTO_RETRY_TIMEOUT_MS  = 30000;
 
-export default function AuditPage() {
+function AuditPageInner() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const { token }    = useSession();
@@ -350,5 +350,19 @@ export default function AuditPage() {
         />
       )}
     </>
+  );
+}
+
+export default function AuditPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <main className="main" aria-label="Аудит резюме">
+          <AuditSkeleton />
+        </main>
+      }
+    >
+      <AuditPageInner />
+    </React.Suspense>
   );
 }
