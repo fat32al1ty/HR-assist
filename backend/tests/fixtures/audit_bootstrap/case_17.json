@@ -1,0 +1,37 @@
+{
+  "case_id": "case_17",
+  "title": "Cross-domain noise — claims software_engineering but mostly marketing skills",
+  "resume_profile": {
+    "role_family": "backend_developer",
+    "seniority": "middle",
+    "seniority_confidence": 0.25,
+    "total_experience_years": 5.0,
+    "skills": ["SEO", "Google Analytics", "Excel", "Photoshop", "HTML", "JavaScript"],
+    "hard_skills": ["SEO", "Google Analytics", "Excel", "Photoshop", "HTML", "JavaScript"],
+    "location": "Москва",
+    "salary_expectation": 110000,
+    "role_is_technical": false,
+    "experience": [
+      {
+        "title": "Digital Marketing Specialist",
+        "company": "Company A",
+        "stack": ["Google Analytics", "SEO", "Excel"],
+        "highlights": ["Grew organic traffic by 150% in 12 months", "Managed ad budget of 2M RUB/month"]
+      },
+      {
+        "title": "Content Manager",
+        "company": "Company B",
+        "stack": ["Photoshop", "HTML"],
+        "highlights": ["Produced 200 articles per year, grew newsletter to 20k subscribers"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "backend_developer",
+    "role_read_primary_seniority": "middle",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": [],
+    "quality_issues_severity_max": "warn",
+    "low_confidence_expected": true
+  }
+}

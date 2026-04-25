@@ -1,0 +1,37 @@
+{
+  "case_id": "case_16",
+  "title": "Ambiguous seniority — 6 years, titled 'developer' not 'senior', DevOps",
+  "resume_profile": {
+    "role_family": "infrastructure_devops",
+    "seniority": "middle",
+    "seniority_confidence": 0.50,
+    "total_experience_years": 6.0,
+    "skills": ["Kubernetes", "Terraform", "Docker", "Linux", "Ansible", "Prometheus"],
+    "hard_skills": ["Kubernetes", "Terraform", "Docker", "Linux", "Ansible", "Prometheus"],
+    "location": "Москва",
+    "salary_expectation": 240000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Platform Engineer",
+        "company": "Company A",
+        "stack": ["Kubernetes", "Terraform", "Prometheus"],
+        "highlights": ["Operated Kubernetes cluster of 300+ nodes", "Reduced MTTR from 4h to 30m"]
+      },
+      {
+        "title": "Infrastructure Engineer",
+        "company": "Company B",
+        "stack": ["Docker", "Linux", "Ansible"],
+        "highlights": ["Automated server provisioning for 200 machines"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "infrastructure_devops",
+    "role_read_primary_seniority": "middle",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Kubernetes", "Terraform", "Docker"],
+    "quality_issues_severity_max": "warn",
+    "onboarding_should_trigger": ["seniority_ambiguous"]
+  }
+}

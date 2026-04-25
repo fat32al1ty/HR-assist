@@ -1,0 +1,37 @@
+{
+  "case_id": "case_20",
+  "title": "Cross-domain noise — IT role claim but mostly non-IT skills",
+  "resume_profile": {
+    "role_family": "backend_developer",
+    "seniority": "middle",
+    "seniority_confidence": 0.30,
+    "total_experience_years": 4.0,
+    "skills": ["MS Office", "1C", "Excel", "Access", "SQL", "Python"],
+    "hard_skills": ["MS Office", "1C", "Excel", "Access", "SQL", "Python"],
+    "location": "Москва",
+    "salary_expectation": 120000,
+    "role_is_technical": false,
+    "experience": [
+      {
+        "title": "Accountant / System Administrator",
+        "company": "Company A",
+        "stack": ["1C", "MS Office", "Excel"],
+        "highlights": ["Maintained accounting system for 50 users", "Automated monthly reports in Excel"]
+      },
+      {
+        "title": "Data Entry Operator",
+        "company": "Company B",
+        "stack": ["Access", "SQL"],
+        "highlights": ["Processed 500 records per day", "Maintained data integrity across 3 databases"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "backend_developer",
+    "role_read_primary_seniority": "middle",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": [],
+    "quality_issues_severity_max": "warn",
+    "low_confidence_expected": true
+  }
+}

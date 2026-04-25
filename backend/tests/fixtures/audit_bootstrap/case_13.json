@@ -1,0 +1,30 @@
+{
+  "case_id": "case_13",
+  "title": "Junior Frontend Developer, 1 year — common pattern",
+  "resume_profile": {
+    "role_family": "frontend_developer",
+    "seniority": "junior",
+    "seniority_confidence": 0.80,
+    "total_experience_years": 1.0,
+    "skills": ["JavaScript", "React", "HTML", "CSS", "Git"],
+    "hard_skills": ["JavaScript", "React", "HTML", "CSS", "Git"],
+    "location": "Москва",
+    "salary_expectation": 85000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Frontend Developer",
+        "company": "Company A",
+        "stack": ["JavaScript", "React", "HTML", "CSS"],
+        "highlights": ["Delivered 8 UI features, improved Lighthouse performance score from 55 to 80"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "frontend_developer",
+    "role_read_primary_seniority": "junior",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["JavaScript", "React", "HTML"],
+    "quality_issues_severity_max": "info"
+  }
+}

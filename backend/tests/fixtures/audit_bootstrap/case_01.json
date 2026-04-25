@@ -1,0 +1,36 @@
+{
+  "case_id": "case_01",
+  "title": "Senior Python backend, 6 years",
+  "resume_profile": {
+    "role_family": "backend_developer",
+    "seniority": "senior",
+    "seniority_confidence": 0.92,
+    "total_experience_years": 6.0,
+    "skills": ["Python", "Django", "PostgreSQL", "Redis", "Docker"],
+    "hard_skills": ["Python", "Django", "PostgreSQL", "Redis", "Docker"],
+    "location": "Москва",
+    "salary_expectation": 250000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Senior Backend Engineer",
+        "company": "Company A",
+        "stack": ["Python", "Django", "PostgreSQL"],
+        "highlights": ["Led team of 5, scaled API to 50k RPS", "Reduced latency by 40%"]
+      },
+      {
+        "title": "Backend Developer",
+        "company": "Company B",
+        "stack": ["Python", "Flask", "Redis"],
+        "highlights": ["Delivered 20 features, decreased error rate by 15%"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "backend_developer",
+    "role_read_primary_seniority": "senior",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Python", "Django", "PostgreSQL", "Redis", "Docker"],
+    "quality_issues_severity_max": "info"
+  }
+}

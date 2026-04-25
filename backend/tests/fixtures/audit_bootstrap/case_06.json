@@ -1,0 +1,36 @@
+{
+  "case_id": "case_06",
+  "title": "Middle Python backend, 3 years — boundary case",
+  "resume_profile": {
+    "role_family": "backend_developer",
+    "seniority": "middle",
+    "seniority_confidence": 0.80,
+    "total_experience_years": 3.0,
+    "skills": ["Python", "FastAPI", "PostgreSQL", "Redis", "Docker"],
+    "hard_skills": ["Python", "FastAPI", "PostgreSQL", "Redis", "Docker"],
+    "location": "Москва",
+    "salary_expectation": 160000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Backend Developer",
+        "company": "Company A",
+        "stack": ["Python", "FastAPI", "PostgreSQL"],
+        "highlights": ["Delivered REST API serving 10k daily users", "Optimised slow query reducing p95 from 500ms to 80ms"]
+      },
+      {
+        "title": "Junior Backend Developer",
+        "company": "Company B",
+        "stack": ["Python", "Flask", "Redis"],
+        "highlights": ["Implemented caching layer, reduced DB load by 40%"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "backend_developer",
+    "role_read_primary_seniority": "middle",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Python", "FastAPI"],
+    "quality_issues_severity_max": "info"
+  }
+}

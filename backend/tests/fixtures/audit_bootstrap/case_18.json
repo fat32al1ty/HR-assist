@@ -1,0 +1,36 @@
+{
+  "case_id": "case_18",
+  "title": "Missing salary expectation — senior backend",
+  "resume_profile": {
+    "role_family": "backend_developer",
+    "seniority": "senior",
+    "seniority_confidence": 0.90,
+    "total_experience_years": 7.0,
+    "skills": ["Go", "PostgreSQL", "gRPC", "Kafka", "Docker", "Kubernetes"],
+    "hard_skills": ["Go", "PostgreSQL", "gRPC", "Kafka", "Docker", "Kubernetes"],
+    "location": "Москва",
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Senior Backend Engineer",
+        "company": "Company A",
+        "stack": ["Go", "gRPC", "Kafka"],
+        "highlights": ["Designed and deployed event-driven architecture for 5 services", "Reduced message processing latency by 70%"]
+      },
+      {
+        "title": "Backend Engineer",
+        "company": "Company B",
+        "stack": ["Go", "PostgreSQL", "Docker"],
+        "highlights": ["Migrated monolith to microservices, 0 downtime", "Achieved 99.95% SLA"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "backend_developer",
+    "role_read_primary_seniority": "senior",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Go", "Docker", "Kubernetes"],
+    "quality_issues_severity_max": "info",
+    "onboarding_should_trigger": ["salary_missing"]
+  }
+}

@@ -1,3 +1,13 @@
+/** Error thrown by apiFetch for non-2xx responses. Includes the HTTP status code. */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   (typeof window !== 'undefined'
@@ -136,7 +146,8 @@ export async function apiFetch<T = unknown>(
   if (!response.ok) {
     const payload: unknown = await response.json().catch(() => ({}));
     const message = extractErrorMessage(payload, fallbackError);
-    throw new Error(message);
+    const err = new ApiError(message, response.status);
+    throw err;
   }
 
   if (response.status === 204) {

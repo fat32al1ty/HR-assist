@@ -1,0 +1,36 @@
+{
+  "case_id": "case_02",
+  "title": "Senior Data Engineer, 8 years",
+  "resume_profile": {
+    "role_family": "data_ml",
+    "seniority": "senior",
+    "seniority_confidence": 0.90,
+    "total_experience_years": 8.0,
+    "skills": ["Python", "Spark", "Kafka", "Airflow", "SQL", "dbt"],
+    "hard_skills": ["Python", "Spark", "Kafka", "Airflow", "SQL", "dbt"],
+    "location": "Санкт-Петербург",
+    "salary_expectation": 280000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Senior Data Engineer",
+        "company": "Company A",
+        "stack": ["Python", "Spark", "Kafka"],
+        "highlights": ["Built pipeline processing 5TB/day", "Reduced p99 latency by 30%"]
+      },
+      {
+        "title": "Data Engineer",
+        "company": "Company B",
+        "stack": ["Airflow", "SQL", "dbt"],
+        "highlights": ["Migrated 10 data marts, saving 200 hours per month"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "data_ml",
+    "role_read_primary_seniority": "senior",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Python", "Spark", "Kafka", "SQL"],
+    "quality_issues_severity_max": "info"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "case_id": "case_07",
+  "title": "Middle Data Scientist, 3 years — boundary case",
+  "resume_profile": {
+    "role_family": "data_ml",
+    "seniority": "middle",
+    "seniority_confidence": 0.78,
+    "total_experience_years": 3.5,
+    "skills": ["Python", "scikit-learn", "pandas", "numpy", "SQL", "Jupyter"],
+    "hard_skills": ["Python", "scikit-learn", "pandas", "numpy", "SQL", "Jupyter"],
+    "location": "Новосибирск",
+    "salary_expectation": 150000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Data Scientist",
+        "company": "Company A",
+        "stack": ["Python", "scikit-learn", "pandas"],
+        "highlights": ["Built churn prediction model with AUC 0.87, saved 12% revenue", "Reduced feature engineering pipeline runtime by 3x"]
+      },
+      {
+        "title": "ML Engineer (intern)",
+        "company": "Company B",
+        "stack": ["Python", "numpy", "SQL"],
+        "highlights": ["Labelled and validated 5000 training samples"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "data_ml",
+    "role_read_primary_seniority": "middle",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Python", "pandas", "SQL"],
+    "quality_issues_severity_max": "info"
+  }
+}

@@ -3,6 +3,7 @@
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   excludeFeedbackVacancies,
@@ -353,6 +354,7 @@ function readStoredJobId(): string | null {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const {
     token,
     user,
@@ -1060,8 +1062,40 @@ export default function DashboardPage() {
       formData.append('file', targetFile);
       const resume = await request<Resume>('/api/resumes', { method: 'POST', body: formData });
       setResumes((current) => [resume, ...current]);
-      setMessage(resume.status === 'completed' ? 'Анализ готов' : resume.error_message || 'Не удалось обработать резюме');
       setFile(null);
+
+      if (resume.status === 'completed') {
+        // Already done — redirect immediately to audit page
+        router.push(`/audit?resume_id=${resume.id}`);
+        return;
+      }
+
+      // Resume is still processing — poll until completed then redirect
+      setMessage('Анализируем резюме…');
+      const MAX_POLL_MS = 120_000;
+      const POLL_INTERVAL_MS = 2_000;
+      const deadline = Date.now() + MAX_POLL_MS;
+
+      while (Date.now() < deadline) {
+        await sleep(POLL_INTERVAL_MS);
+        try {
+          const list = await request<Resume[]>('/api/resumes');
+          const updated = list.find((r) => r.id === resume.id);
+          if (!updated) break;
+          // Keep local state in sync
+          setResumes(list);
+          if (updated.status === 'completed') {
+            router.push(`/audit?resume_id=${updated.id}`);
+            return;
+          }
+          if (updated.status === 'failed') {
+            setMessage(updated.error_message || 'Не удалось обработать резюме');
+            break;
+          }
+        } catch {
+          // Poll failure is non-fatal — keep trying until deadline
+        }
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Не удалось загрузить резюме');
     } finally {

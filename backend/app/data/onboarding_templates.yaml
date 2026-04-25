@@ -1,0 +1,211 @@
+# Onboarding question catalogue — edit freely, bump YAML_VERSION in onboarding_questions.py
+# trigger conditions use simple field checks evaluated against resume profile context dict
+# Supported condition tokens: field_missing, field_value_between, field_contains, seniority_explicit
+
+- id: seniority_ambiguous
+  triggers:
+    - condition: "years_in_role_between_4_and_6 AND NOT seniority_explicit"
+  text: "Считаешь себя middle или senior?"
+  answer_type: choice
+  choices: ["middle", "senior", "не знаю"]
+
+- id: salary_missing
+  triggers:
+    - condition: "salary_expectation_missing"
+  text: "Какую зарплату в месяц на руки ты ищешь? (укажи одно число или диапазон, руб.)"
+  answer_type: number_range
+
+- id: relocation_unclear
+  triggers:
+    - condition: "location_missing OR relocation_missing"
+  text: "Готов к переезду или рассматриваешь только свой город?"
+  answer_type: choice
+  choices: ["только свой город", "готов к переезду в РФ", "готов к релокации за рубеж", "полностью удалённо"]
+
+- id: stack_overlap
+  triggers:
+    - condition: "stack_has_python AND stack_has_go"
+  text: "У тебя в резюме и Python, и Go. Какой стек хочешь развивать дальше?"
+  answer_type: choice
+  choices: ["Python", "Go", "оба одинаково", "другой"]
+
+- id: remote_vs_office
+  triggers:
+    - condition: "work_format_missing"
+  text: "Как ты предпочитаешь работать?"
+  answer_type: choice
+  choices: ["полностью удалённо", "гибрид (2-3 дня офис)", "в офисе", "не принципиально"]
+
+- id: language_of_work
+  triggers:
+    - condition: "role_is_technical AND english_level_missing"
+  text: "На каком языке комфортно вести рабочую переписку и встречи?"
+  answer_type: choice
+  choices: ["только русский", "русский + базовый английский", "свободно на английском", "готов на любом"]
+
+- id: contract_vs_staff
+  triggers:
+    - condition: "employment_type_missing"
+  text: "Какой формат занятости ищешь?"
+  answer_type: choice
+  choices: ["полная занятость (штат)", "контракт / самозанятость", "ИП / B2B", "любой"]
+
+- id: team_size_preference
+  triggers:
+    - condition: "always"
+  text: "В команде какого размера тебе комфортнее всего работать?"
+  answer_type: choice
+  choices: ["стартап до 10 человек", "команда 10-50", "крупная компания 50+", "не принципиально"]
+
+- id: project_type_preference
+  triggers:
+    - condition: "role_is_technical"
+  text: "Какой тип проектов тебе интереснее?"
+  answer_type: choice
+  choices: ["продуктовая разработка", "аутсорс / аутстаф", "внутренние системы корпорации", "open-source / R&D", "не принципиально"]
+
+- id: night_shift_willingness
+  triggers:
+    - condition: "role_family_is_infrastructure_devops OR role_family_is_customer_support"
+  text: "Готов работать в нестандартные часы (дежурства, ночные смены)?"
+  answer_type: choice
+  choices: ["да, готов", "иногда", "нет"]
+
+- id: domain_preference
+  triggers:
+    - condition: "domains_missing OR domains_count_less_than_2"
+  text: "В каком домене хочешь работать?"
+  answer_type: choice
+  choices: ["финтех / банки", "e-commerce", "healthtech", "edtech", "gamedev", "enterprise / B2B", "медиа / контент", "другой / не принципиально"]
+
+- id: seniority_junior_growth
+  triggers:
+    - condition: "seniority_is_junior"
+  text: "Что для тебя важнее на первом этапе?"
+  answer_type: choice
+  choices: ["быстро вырасти технически", "хороший менторинг", "интересная продуктовая область", "высокая зарплата сразу"]
+
+- id: stack_backend_focus
+  triggers:
+    - condition: "role_family_is_software_engineering AND stack_has_python AND NOT stack_has_frontend"
+  text: "Хочешь оставаться бэкенд-разработчиком или открыт к фуллстек?"
+  answer_type: choice
+  choices: ["только бэкенд", "открыт к фуллстек", "интересен DevOps/Platform engineering"]
+
+- id: stack_data_ml_focus
+  triggers:
+    - condition: "role_family_is_data_ml"
+  text: "На чём фокусируешься в ML/Data направлении?"
+  answer_type: choice
+  choices: ["ML-инженерия (обучение моделей)", "MLOps / деплой моделей", "аналитика данных / BI", "data engineering (пайплайны)", "NLP / Computer Vision / LLM"]
+
+- id: leadership_interest
+  triggers:
+    - condition: "seniority_is_senior OR years_in_role_gt_5"
+  text: "Интересно ли тебе двигаться в сторону тимлида или стаф-инженера?"
+  answer_type: choice
+  choices: ["да, хочу в менеджмент", "да, но в техническую сторону (стаф)", "нет, хочу остаться IC", "пока не думал"]
+
+- id: notice_period
+  triggers:
+    - condition: "always"
+  text: "Как быстро можешь выйти на новое место?"
+  answer_type: choice
+  choices: ["сразу", "2 недели", "1 месяц", "2+ месяца"]
+
+- id: interview_format_comfort
+  triggers:
+    - condition: "always"
+  text: "Какой формат собеседований тебе ближе?"
+  answer_type: choice
+  choices: ["живое общение", "тестовые задания", "алгоритмические задачи", "всё ок"]
+
+- id: open_source_activity
+  triggers:
+    - condition: "role_is_technical AND github_missing"
+  text: "Есть ли публичные проекты или контрибьюции в open-source?"
+  answer_type: choice
+  choices: ["да, активно", "есть пара репозиториев", "нет, всё приватное", "нет"]
+
+- id: cloud_experience
+  triggers:
+    - condition: "role_family_is_software_engineering OR role_family_is_infrastructure_devops OR role_family_is_data_ml"
+  text: "С каким облаком есть опыт?"
+  answer_type: choice
+  choices: ["AWS", "GCP", "Azure", "Яндекс.Облако / VK Cloud", "нет облачного опыта", "несколько платформ"]
+
+- id: visa_readiness
+  triggers:
+    - condition: "relocation_ready"
+  text: "Есть ли действующие визы или опыт работы за рубежом?"
+  answer_type: choice
+  choices: ["да, есть виза / разрешение", "есть опыт работы за рубежом", "нет, но готов оформить", "нет"]
+
+- id: preferred_company_stage
+  triggers:
+    - condition: "always"
+  text: "На каком этапе хочешь работать с компанией?"
+  answer_type: choice
+  choices: ["стартап pre-seed/seed", "стартап series A-B", "scale-up (post-series B)", "корпорация", "не принципиально"]
+
+- id: agile_experience
+  triggers:
+    - condition: "role_is_technical AND agile_missing"
+  text: "Есть ли опыт работы по Agile/Scrum/Kanban?"
+  answer_type: choice
+  choices: ["да, Scrum", "да, Kanban", "микс", "нет, работал иначе"]
+
+- id: mentorship_willingness
+  triggers:
+    - condition: "seniority_is_senior OR seniority_is_lead"
+  text: "Готов ментарить джунов и мидлов?"
+  answer_type: choice
+  choices: ["да, с удовольствием", "иногда", "нет, только своими задачами"]
+
+- id: travel_willingness
+  triggers:
+    - condition: "always"
+  text: "Готов к командировкам?"
+  answer_type: choice
+  choices: ["да, редко (1-2 раза в год)", "да, часто", "нет"]
+
+- id: preferred_tech_stack
+  triggers:
+    - condition: "skills_count_less_than_5"
+  text: "Перечисли основные технологии, с которыми работаешь (если их мало в резюме)"
+  answer_type: text
+
+- id: salary_expectation_currency
+  triggers:
+    - condition: "relocation_ready AND salary_expectation_present"
+  text: "В какой валюте ожидаешь зарплату?"
+  answer_type: choice
+  choices: ["RUB", "USD", "EUR", "любая"]
+
+- id: work_life_balance
+  triggers:
+    - condition: "always"
+  text: "Как относишься к переработкам?"
+  answer_type: choice
+  choices: ["строго 8 часов", "иногда можно", "готов в авральные периоды", "не принципиально"]
+
+- id: learning_budget_importance
+  triggers:
+    - condition: "role_is_technical"
+  text: "Насколько важен для тебя бюджет на обучение/конференции?"
+  answer_type: choice
+  choices: ["критично важно", "приятный бонус", "не принципиально"]
+
+- id: side_project_activity
+  triggers:
+    - condition: "seniority_is_junior OR seniority_is_middle"
+  text: "Есть ли pet-проекты или учебные проекты, которые стоит учесть?"
+  answer_type: choice
+  choices: ["да, есть на GitHub", "да, но не публичные", "нет"]
+
+- id: product_vs_outsource_experience
+  triggers:
+    - condition: "experience_count_less_than_3"
+  text: "Весь твой опыт — это продуктовые компании, аутсорс или микс?"
+  answer_type: choice
+  choices: ["продуктовые", "аутсорс / аутстаф", "микс", "фриланс"]

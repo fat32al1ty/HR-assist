@@ -1,0 +1,36 @@
+{
+  "case_id": "case_10",
+  "title": "Middle QA Engineer, 3 years — boundary case",
+  "resume_profile": {
+    "role_family": "qa_testing",
+    "seniority": "middle",
+    "seniority_confidence": 0.76,
+    "total_experience_years": 3.0,
+    "skills": ["Python", "Pytest", "Selenium", "Postman", "SQL", "Git"],
+    "hard_skills": ["Python", "Pytest", "Selenium", "Postman", "SQL", "Git"],
+    "location": "Екатеринбург",
+    "salary_expectation": 130000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "QA Automation Engineer",
+        "company": "Company A",
+        "stack": ["Python", "Pytest", "Selenium"],
+        "highlights": ["Wrote 200 automated UI tests, reduced manual regression by 60%", "Found 30+ critical API bugs before release"]
+      },
+      {
+        "title": "QA Manual Tester",
+        "company": "Company B",
+        "stack": ["Postman", "SQL", "Git"],
+        "highlights": ["Tested 5 major product releases end-to-end"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "qa_testing",
+    "role_read_primary_seniority": "middle",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Python", "Pytest"],
+    "quality_issues_severity_max": "info"
+  }
+}

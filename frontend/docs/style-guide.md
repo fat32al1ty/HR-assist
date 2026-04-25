@@ -181,6 +181,60 @@ DON'T:
 
 ---
 
+## Phase 5.0 token additions (audit screen)
+
+### Status severity tokens — `ResumeQualityCard`
+
+Three dedicated status tokens map to `QualityIssueSeverity` values. These are **intentionally separate** from the global `--color-{success,warning,danger}` aliases so the audit quality panel can be restyled independently.
+
+| Token                        | Value (oklch)          | Use                                     |
+|------------------------------|------------------------|-----------------------------------------|
+| `--color-status-info`        | oklch(0.50 0.14 250)   | `info` severity — calm blue dot + label |
+| `--color-status-info-subtle` | oklch(0.96 0.03 250)   | `info` row background                   |
+| `--color-status-warn`        | oklch(0.58 0.14 68)    | `warn` severity — amber                 |
+| `--color-status-warn-subtle` | oklch(0.97 0.04 68)    | `warn` row background                   |
+| `--color-status-error`       | var(--destructive)     | `error` severity — shares accent red    |
+| `--color-status-error-subtle`| 10% destructive tint   | `error` row background                  |
+
+**Rule:** Never use `--color-status-*` as button colours or backgrounds on large areas. Severity dot + label only.
+
+### Salary band gradient tokens — `MarketSalaryCard`
+
+| Token                      | Value (oklch)        | Use                                      |
+|----------------------------|----------------------|------------------------------------------|
+| `--color-salary-band-low`  | oklch(0.80 0.10 145) | p25 end of track gradient (muted green)  |
+| `--color-salary-band-mid`  | oklch(0.72 0.13 85)  | midpoint transition (warm amber)         |
+| `--color-salary-band-high` | oklch(0.65 0.16 50)  | p75 end of track gradient (deeper amber) |
+| `--color-salary-band-peak` | oklch(0.55 0.18 50)  | Median marker + label text               |
+
+**Rule:** The gradient goes left→right on a horizontal track. Do not reverse it. The p50 marker floats above the track at the calculated midpoint percentage.
+
+### Skill gap bar token — `SkillGapsCard`
+
+| Token                   | Value (oklch)        | Use                                                |
+|-------------------------|----------------------|----------------------------------------------------|
+| `--color-skill-gap-bar` | oklch(0.60 0.13 250) | Frequency bar fill for skills the user doesn't own |
+
+Owned skills use `--color-success` for their bar (green = already have it). Missing skills use `--color-skill-gap-bar` (blue = market demand).
+
+### Audit page layout rules
+
+- **Top row** (Role + Salary): `grid-template-columns: repeat(auto-fit, minmax(340px, 1fr))`. Stacks to 1-col below ~720px.
+- **Bottom row** (Skill gaps + Quality): same pattern, same breakpoint.
+- **Hero salary figure**: `clamp(2.25rem, 5vw, 3.5rem)`, weight 700, tracking −0.04em. This is the editorial number that sells the product.
+- **Questions banner**: appears above the page heading when `triggered_question_ids.length > 0`. Uses `--color-accent-subtle` background. Never blocks the main grid.
+- **Template mode notice**: appears above the banner (if both are present), neutral `--color-surface-muted` background. Not alarming.
+- **CTA**: single `Button variant="primary" size="lg"` at page bottom. One per page, as per the button rule.
+
+### Onboarding modal (`QuestionsModal`)
+
+- Uses standard `Dialog` + `DialogContent` — inherits `--shadow-lg`, `--radius-xl`.
+- Step progress uses pill-shaped dots: active dot is wider (`w-4`) + accent colour; past dots are accent; future dots are muted surface.
+- Choice options are pill buttons (`--radius-full`), selected state reuses `--color-accent-subtle` + `--color-accent` border.
+- `number_range` uses native `<input type="range">` with `accent-[var(--color-accent)]` + a live `aria-live` readout.
+
+---
+
 ## Anchor screen — `/` (slice 2.8.7)
 
 Applied conventions (reference for 2.8.8):

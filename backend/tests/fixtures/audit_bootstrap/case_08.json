@@ -1,0 +1,36 @@
+{
+  "case_id": "case_08",
+  "title": "Middle Android Developer, 4 years — upper boundary",
+  "resume_profile": {
+    "role_family": "mobile_developer",
+    "seniority": "middle",
+    "seniority_confidence": 0.75,
+    "total_experience_years": 4.0,
+    "skills": ["Kotlin", "Java", "Android SDK", "Retrofit", "Room", "Coroutines"],
+    "hard_skills": ["Kotlin", "Java", "Android SDK", "Retrofit", "Room", "Coroutines"],
+    "location": "Казань",
+    "salary_expectation": 170000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Android Developer",
+        "company": "Company A",
+        "stack": ["Kotlin", "Coroutines", "Retrofit"],
+        "highlights": ["Shipped 5 Android app features with 4.5 Play Store rating", "Reduced crash rate by 60%"]
+      },
+      {
+        "title": "Junior Android Developer",
+        "company": "Company B",
+        "stack": ["Java", "Android SDK", "Room"],
+        "highlights": ["Fixed 100+ bugs in legacy codebase, migrated to Kotlin"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "mobile_developer",
+    "role_read_primary_seniority": "middle",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Kotlin", "Android SDK"],
+    "quality_issues_severity_max": "info"
+  }
+}

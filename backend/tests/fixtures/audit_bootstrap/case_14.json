@@ -1,0 +1,37 @@
+{
+  "case_id": "case_14",
+  "title": "Ambiguous seniority — 5 years, no senior keyword, backend",
+  "resume_profile": {
+    "role_family": "backend_developer",
+    "seniority": "middle",
+    "seniority_confidence": 0.55,
+    "total_experience_years": 5.0,
+    "skills": ["Python", "Django", "PostgreSQL", "Redis", "Docker"],
+    "hard_skills": ["Python", "Django", "PostgreSQL", "Redis", "Docker"],
+    "location": "Москва",
+    "salary_expectation": 200000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Backend Developer",
+        "company": "Company A",
+        "stack": ["Python", "Django", "PostgreSQL"],
+        "highlights": ["Maintained high-load system handling 1M daily requests", "Mentored 2 junior developers"]
+      },
+      {
+        "title": "Backend Developer",
+        "company": "Company B",
+        "stack": ["Python", "Redis", "Docker"],
+        "highlights": ["Built microservices architecture from scratch"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "backend_developer",
+    "role_read_primary_seniority": "middle",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Python", "Django"],
+    "quality_issues_severity_max": "info",
+    "onboarding_should_trigger": ["seniority_ambiguous"]
+  }
+}

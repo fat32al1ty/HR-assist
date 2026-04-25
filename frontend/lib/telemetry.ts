@@ -149,3 +149,12 @@ export function createDwellTracker(opts: {
 export function resetTelemetryDedupe(): void {
   clickDedupe.clear();
 }
+
+/**
+ * Fire a named event (Phase 5.0.4 telemetry). Best-effort — never throws.
+ * Backend route: POST /api/telemetry/event (future). For now, console.debug only.
+ */
+export function trackEvent(event: string, payload?: Record<string, unknown>): void {
+  console.debug('[telemetry]', event, payload ?? {});
+  // TODO Phase 5.0.4: POST /api/telemetry/event when backend ships the route.
+}

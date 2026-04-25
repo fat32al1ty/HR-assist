@@ -1,0 +1,36 @@
+{
+  "case_id": "case_05",
+  "title": "Senior iOS Mobile Developer, 6 years",
+  "resume_profile": {
+    "role_family": "mobile_developer",
+    "seniority": "senior",
+    "seniority_confidence": 0.87,
+    "total_experience_years": 6.0,
+    "skills": ["Swift", "SwiftUI", "Objective-C", "Xcode", "CoreData", "UIKit", "RxSwift"],
+    "hard_skills": ["Swift", "SwiftUI", "Objective-C", "Xcode", "CoreData", "UIKit", "RxSwift"],
+    "location": "Москва",
+    "salary_expectation": 300000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Senior iOS Developer",
+        "company": "Company A",
+        "stack": ["Swift", "SwiftUI", "UIKit"],
+        "highlights": ["Led iOS team of 4, shipped 3 major releases with 4.8 App Store rating", "Improved app launch time by 50%"]
+      },
+      {
+        "title": "iOS Developer",
+        "company": "Company B",
+        "stack": ["Objective-C", "CoreData", "RxSwift"],
+        "highlights": ["Migrated 60% codebase from Obj-C to Swift, zero regressions"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "mobile_developer",
+    "role_read_primary_seniority": "senior",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Swift", "SwiftUI", "UIKit"],
+    "quality_issues_severity_max": "info"
+  }
+}

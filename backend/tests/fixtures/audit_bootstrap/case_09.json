@@ -1,0 +1,36 @@
+{
+  "case_id": "case_09",
+  "title": "Middle DevOps Engineer, 2 years — lower boundary",
+  "resume_profile": {
+    "role_family": "infrastructure_devops",
+    "seniority": "middle",
+    "seniority_confidence": 0.72,
+    "total_experience_years": 2.5,
+    "skills": ["Docker", "Kubernetes", "Linux", "Bash", "GitLab CI"],
+    "hard_skills": ["Docker", "Kubernetes", "Linux", "Bash", "GitLab CI"],
+    "location": "Москва",
+    "salary_expectation": 140000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "DevOps Engineer",
+        "company": "Company A",
+        "stack": ["Docker", "Kubernetes", "GitLab CI"],
+        "highlights": ["Set up CI/CD for 15 microservices, deploy time cut from 40m to 5m", "Maintained 99.9% uptime SLA"]
+      },
+      {
+        "title": "System Administrator",
+        "company": "Company B",
+        "stack": ["Linux", "Bash"],
+        "highlights": ["Automated routine tasks saving 10h/week"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "infrastructure_devops",
+    "role_read_primary_seniority": "middle",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Docker", "Kubernetes"],
+    "quality_issues_severity_max": "info"
+  }
+}

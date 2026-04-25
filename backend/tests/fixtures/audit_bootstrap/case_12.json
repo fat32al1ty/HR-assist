@@ -1,0 +1,30 @@
+{
+  "case_id": "case_12",
+  "title": "Junior Data Analyst, 1.5 years",
+  "resume_profile": {
+    "role_family": "data_ml",
+    "seniority": "junior",
+    "seniority_confidence": 0.78,
+    "total_experience_years": 1.5,
+    "skills": ["Python", "SQL", "pandas", "Tableau", "Excel"],
+    "hard_skills": ["Python", "SQL", "pandas", "Tableau", "Excel"],
+    "location": "Санкт-Петербург",
+    "salary_expectation": 80000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Data Analyst",
+        "company": "Company A",
+        "stack": ["Python", "SQL", "pandas", "Tableau"],
+        "highlights": ["Built dashboards for 5 business teams, reduced weekly reporting time by 3h", "Discovered data inconsistencies saving 500k RUB monthly"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "data_ml",
+    "role_read_primary_seniority": "junior",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Python", "SQL"],
+    "quality_issues_severity_max": "info"
+  }
+}

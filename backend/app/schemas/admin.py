@@ -96,6 +96,16 @@ class AdminOverviewRead(BaseModel):
     active_jobs: list[AdminActiveJob] = Field(default_factory=list)
     recent_jobs: list[AdminRecentJob] = Field(default_factory=list)
     activity: AdminActivityRead
+    cost_p95_per_dau_usd: float | None = None
+
+
+class AdminAuditSampleRow(BaseModel):
+    id: int
+    resume_id: int
+    prompt_version: str
+    computed_at: datetime
+    cost_usd: float | None
+    audit_json: dict
 
 
 class AdminJobCancelResponse(BaseModel):

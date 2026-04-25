@@ -1,0 +1,36 @@
+{
+  "case_id": "case_03",
+  "title": "Senior DevOps / SRE, 7 years",
+  "resume_profile": {
+    "role_family": "infrastructure_devops",
+    "seniority": "senior",
+    "seniority_confidence": 0.88,
+    "total_experience_years": 7.0,
+    "skills": ["Kubernetes", "Terraform", "Ansible", "Docker", "Linux", "CI/CD", "Prometheus"],
+    "hard_skills": ["Kubernetes", "Terraform", "Ansible", "Docker", "Linux", "CI/CD", "Prometheus"],
+    "location": "Москва",
+    "salary_expectation": 320000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Senior SRE",
+        "company": "Company A",
+        "stack": ["Kubernetes", "Terraform", "Prometheus"],
+        "highlights": ["Achieved 99.99% uptime across 200 services", "Cut infra costs by 35%"]
+      },
+      {
+        "title": "DevOps Engineer",
+        "company": "Company B",
+        "stack": ["Docker", "Ansible", "CI/CD"],
+        "highlights": ["Automated 80% of release pipeline, reduced deploy time from 2h to 10m"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "infrastructure_devops",
+    "role_read_primary_seniority": "senior",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Kubernetes", "Terraform", "Docker"],
+    "quality_issues_severity_max": "info"
+  }
+}

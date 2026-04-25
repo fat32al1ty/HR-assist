@@ -1,0 +1,36 @@
+{
+  "case_id": "case_04",
+  "title": "Senior QA Automation Engineer, 6 years",
+  "resume_profile": {
+    "role_family": "qa_testing",
+    "seniority": "senior",
+    "seniority_confidence": 0.85,
+    "total_experience_years": 6.0,
+    "skills": ["Python", "Selenium", "Pytest", "Appium", "Allure", "Jenkins", "SQL"],
+    "hard_skills": ["Python", "Selenium", "Pytest", "Appium", "Allure", "Jenkins", "SQL"],
+    "location": "Москва",
+    "salary_expectation": 220000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Senior QA Automation Engineer",
+        "company": "Company A",
+        "stack": ["Python", "Selenium", "Pytest", "Allure"],
+        "highlights": ["Built automation framework from scratch covering 70% of regression suite", "Reduced regression time from 8h to 45m"]
+      },
+      {
+        "title": "QA Engineer",
+        "company": "Company B",
+        "stack": ["Appium", "Jenkins", "SQL"],
+        "highlights": ["Automated 300 test cases for mobile app, found 50+ critical bugs"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "qa_testing",
+    "role_read_primary_seniority": "senior",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Python", "Selenium", "Pytest"],
+    "quality_issues_severity_max": "info"
+  }
+}

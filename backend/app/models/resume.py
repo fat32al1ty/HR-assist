@@ -28,3 +28,6 @@ class Resume(Base):
     profile = relationship(
         "ResumeProfile", back_populates="resume", cascade="all, delete-orphan", uselist=False
     )
+    audit = relationship(
+        "ResumeAudit", back_populates="resume", cascade="all, delete-orphan", uselist=False
+    )

@@ -1,0 +1,37 @@
+{
+  "case_id": "case_15",
+  "title": "Ambiguous seniority — 4 years, no senior keyword, data engineer",
+  "resume_profile": {
+    "role_family": "data_ml",
+    "seniority": "middle",
+    "seniority_confidence": 0.52,
+    "total_experience_years": 4.5,
+    "skills": ["Python", "Spark", "Airflow", "SQL", "dbt"],
+    "hard_skills": ["Python", "Spark", "Airflow", "SQL", "dbt"],
+    "location": "Санкт-Петербург",
+    "salary_expectation": 190000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Data Engineer",
+        "company": "Company A",
+        "stack": ["Python", "Spark", "Airflow"],
+        "highlights": ["Architected data platform processing 2TB/day"]
+      },
+      {
+        "title": "Data Engineer",
+        "company": "Company B",
+        "stack": ["SQL", "dbt"],
+        "highlights": ["Modelled 30 dbt models, reduced query costs by 25%"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "data_ml",
+    "role_read_primary_seniority": "middle",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Python", "Spark", "SQL"],
+    "quality_issues_severity_max": "info",
+    "onboarding_should_trigger": ["seniority_ambiguous"]
+  }
+}

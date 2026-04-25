@@ -157,6 +157,8 @@ Closed-beta MVP. The end-to-end flow runs in production on a dedicated server.
 
 Full release log: [`docs/ROADMAP.md`](docs/ROADMAP.md). Recent highlights:
 
+- `v0.12.0` — Market-grounded resume audit + light Q&A onboarding: new `/audit` page with 4 blocks (Role Read, Market Salary, Skill Gaps, Resume Quality); 30 IT-specific YAML-templated onboarding questions with AND/OR/NOT trigger conditions; 7-day audit cache; cost-cap $0.05/DAU/day with template-mode fallback; admin `cost_p95_per_dau_usd` + audit sample endpoint; 20 self-labeled bootstrap fixtures + LLM-judge regression CI
+- `v0.11.0` — Warm-run widening + best-of-market fallback: deep-scan retries with `date_from=None` when high-quality matches don't fill the target; budgets bumped (analyzed 18→50, deep queries 3→6, match_limit 20→40); paginated UI (10 + "show more" up to 40); honest "Подобрали лучших: N" headline
 - `v0.10.2` — Salary predictor wired into vacancy indexing (LightGBM + median-by-role baseline fallback); admin status + backfill endpoints; predicted bands auto-populate once training corpus reaches 1k RUB-priced rows
 - `v0.10.1` — Vacancy source adapters re-activated behind feature flags (SuperJob / Habr Career / public scrapers, all default off); admin probe endpoint `POST /api/admin/vacancy-sources/probe` reports per-source counts for diagnosis
 - `v0.10.0` — Matcher score cache: `resume_vacancy_scores` table (pipeline-versioned, 7-day TTL, resume-reanalyze invalidation) short-circuits cross-encoder / LLM rerank for already-scored pairs on refresh

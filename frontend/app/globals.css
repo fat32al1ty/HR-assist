@@ -55,6 +55,25 @@
   --color-info:            var(--primary);
   --color-info-subtle:     var(--accent);
 
+  /* Status tokens — used by ResumeQualityCard severity levels.
+     Distinct from the legacy --color-{success,warning,danger} aliases so that
+     the audit quality UI can be restyled independently of global state colours. */
+  --color-status-info:          oklch(0.50 0.14 250);   /* calm blue                  */
+  --color-status-info-subtle:   oklch(0.96 0.03 250);
+  --color-status-warn:          oklch(0.58 0.14 68);    /* amber — matches --color-warning */
+  --color-status-warn-subtle:   oklch(0.97 0.04 68);
+  --color-status-error:         var(--destructive);     /* shares destructive red     */
+  --color-status-error-subtle:  color-mix(in oklch, var(--destructive) 10%, transparent);
+
+  /* Salary band gradient stops — used by MarketSalaryCard track */
+  --color-salary-band-low:   oklch(0.80 0.10 145);      /* muted green at p25         */
+  --color-salary-band-mid:   oklch(0.72 0.13 85);       /* warm amber at mid-range    */
+  --color-salary-band-high:  oklch(0.65 0.16 50);       /* deeper amber at p75        */
+  --color-salary-band-peak:  oklch(0.55 0.18 50);       /* marker + label colour      */
+
+  /* Skill gap bar — distinct from accent so it reads as "gap, not CTA" */
+  --color-skill-gap-bar:     oklch(0.60 0.13 250);      /* steady blue                */
+
   /* Typography scale — keep as we had */
   --text-xs:   0.75rem;
   --text-sm:   0.875rem;
@@ -150,6 +169,23 @@
   --color-danger-subtle:   color-mix(in oklch, var(--destructive) 12%, transparent);
   --color-info:            var(--primary);
   --color-info-subtle:     var(--accent);
+
+  /* Status tokens (Phase 5.0 — audit quality severity) */
+  --color-status-info:         oklch(0.50 0.14 250);
+  --color-status-info-subtle:  oklch(0.96 0.03 250);
+  --color-status-warn:         oklch(0.58 0.14 68);
+  --color-status-warn-subtle:  oklch(0.97 0.04 68);
+  --color-status-error:        var(--destructive);
+  --color-status-error-subtle: color-mix(in oklch, var(--destructive) 10%, transparent);
+
+  /* Salary band gradient (Phase 5.0 — MarketSalaryCard) */
+  --color-salary-band-low:     oklch(0.80 0.10 145);
+  --color-salary-band-mid:     oklch(0.72 0.13 85);
+  --color-salary-band-high:    oklch(0.65 0.16 50);
+  --color-salary-band-peak:    oklch(0.55 0.18 50);
+
+  /* Skill gap bar (Phase 5.0 — SkillGapsCard) */
+  --color-skill-gap-bar:       oklch(0.60 0.13 250);
 }
 
 /* ── @layer base — prose + form defaults ─────────────────────────────────*/

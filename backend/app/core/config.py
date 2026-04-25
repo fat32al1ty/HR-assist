@@ -105,6 +105,11 @@ class Settings(BaseSettings):
     matching_score_cache_enabled: bool = True
     feature_salary_predictor_enabled: bool = True
     feature_salary_baseline_enabled: bool = False
+    feature_resume_audit_enabled: bool = True
+    feature_resume_audit_template_mode_enabled: bool = False
+    feature_onboarding_llm_classifier_enabled: bool = False
+    resume_audit_cost_cap_usd_per_day: float = 0.05
+    resume_audit_cache_ttl_days: int = 7
 
     @field_validator(
         "openai_api_key",

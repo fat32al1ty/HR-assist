@@ -1,0 +1,30 @@
+{
+  "case_id": "case_11",
+  "title": "Junior Python Developer, 1 year",
+  "resume_profile": {
+    "role_family": "backend_developer",
+    "seniority": "junior",
+    "seniority_confidence": 0.82,
+    "total_experience_years": 1.0,
+    "skills": ["Python", "Django", "SQL", "Git"],
+    "hard_skills": ["Python", "Django", "SQL", "Git"],
+    "location": "Москва",
+    "salary_expectation": 90000,
+    "role_is_technical": true,
+    "experience": [
+      {
+        "title": "Junior Backend Developer",
+        "company": "Company A",
+        "stack": ["Python", "Django", "SQL"],
+        "highlights": ["Implemented 10 REST endpoints, fixed 40 bugs in Django monolith"]
+      }
+    ]
+  },
+  "expected_audit": {
+    "role_read_primary_role_family": "backend_developer",
+    "role_read_primary_seniority": "junior",
+    "market_salary_present": false,
+    "skill_gaps_should_not_include": ["Python", "Django"],
+    "quality_issues_severity_max": "info"
+  }
+}

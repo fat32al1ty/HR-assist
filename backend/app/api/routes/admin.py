@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models.recommendation_job import RecommendationJob
 from app.models.resume import Resume
+from app.models.resume_audit import ResumeAudit
 from app.models.user import User
 from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
@@ -22,6 +23,7 @@ from app.repositories.user_login_event import (
 from app.schemas.admin import (
     AdminActiveJob,
     AdminActivityRead,
+    AdminAuditSampleRow,
     AdminDailyCount,
     AdminDashboardStatsRead,
     AdminFunnelStage,
@@ -292,6 +294,8 @@ def admin_overview(
         mau=count_active_users_since(db, since=now - timedelta(days=30)),
     )
 
+    cost_p95 = _compute_cost_p95_per_dau(db, now)
+
     return AdminOverviewRead(
         generated_at=now,
         users_total=users_total,
@@ -303,7 +307,66 @@ def admin_overview(
         active_jobs=active_jobs,
         recent_jobs=recent_jobs,
         activity=activity,
+        cost_p95_per_dau_usd=cost_p95,
     )
+
+
+def _compute_cost_p95_per_dau(db: Session, now: datetime) -> float | None:
+    """Compute P95 of per-user-per-day audit costs over the last 7 days.
+
+    Returns None when fewer than 10 DAU samples are available.
+    Uses resume_audits.cost_usd joined through resumes to get user_id.
+    """
+    seven_days_ago = now - timedelta(days=7)
+    rows = db.execute(
+        text(
+            "SELECT resumes.user_id, "
+            "  date_trunc('day', ra.computed_at) AS day, "
+            "  SUM(ra.cost_usd) AS daily_cost "
+            "FROM resume_audits ra "
+            "JOIN resumes ON resumes.id = ra.resume_id "
+            "WHERE ra.computed_at >= :since AND ra.cost_usd IS NOT NULL "
+            "GROUP BY resumes.user_id, date_trunc('day', ra.computed_at)"
+        ),
+        {"since": seven_days_ago},
+    ).all()
+
+    samples = [float(r.daily_cost) for r in rows if r.daily_cost is not None]
+    if len(samples) < 10:
+        return None
+
+    sorted_samples = sorted(samples)
+    idx = int(len(sorted_samples) * 0.95)
+    idx = min(idx, len(sorted_samples) - 1)
+    return round(sorted_samples[idx], 6)
+
+
+@router.get("/audits/sample", response_model=list[AdminAuditSampleRow])
+def admin_audits_sample(
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[AdminAuditSampleRow]:
+    rows = db.scalars(
+        select(ResumeAudit).order_by(ResumeAudit.computed_at.desc()).limit(limit)
+    ).all()
+
+    result = []
+    for row in rows:
+        # Redact any user-identifying fields from audit_json
+        audit_data = dict(row.audit_json or {})
+        audit_data.pop("resume_hash", None)
+        result.append(
+            AdminAuditSampleRow(
+                id=row.id,
+                resume_id=row.resume_id,
+                prompt_version=row.prompt_version,
+                computed_at=row.computed_at,
+                cost_usd=row.cost_usd,
+                audit_json=audit_data,
+            )
+        )
+    return result
 
 
 _FUNNEL_FLOW_STAGES: tuple[tuple[str, str], ...] = (
