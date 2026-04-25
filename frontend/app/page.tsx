@@ -1633,7 +1633,7 @@ export default function DashboardPage() {
                   AI-агент по поиску работы
                 </span>
                 <h1 className="text-[length:var(--text-display)] leading-[var(--leading-tight)] tracking-[-0.035em] font-bold text-[color:var(--color-ink)] max-w-[620px]">
-                  Твой персональный карьерный <span className="text-[color:var(--color-accent)]">AI</span> консультант.
+                  Твой карьерный <span className="text-[color:var(--color-accent)]">AI</span> консультант.
                 </h1>
                 <p className="text-[length:var(--text-lg)] leading-[var(--leading-relaxed)] text-[color:var(--color-ink-secondary)] max-w-[560px]">
                   Резюме на входе — на выходе аудит под рынок, умный подбор и
