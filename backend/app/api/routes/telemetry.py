@@ -37,6 +37,12 @@ ALLOWED_EVENT_NAMES = frozenset(
         "track_gap_clicked",
         "softer_subset_clicked",
         "apply_from_track",
+        "strategy_view",
+        "strategy_match_highlight_corrected",
+        "strategy_gap_mitigation_corrected",
+        "cover_letter_copied",
+        "cover_letter_edited",
+        "apply_after_strategy_view",
     }
 )
 

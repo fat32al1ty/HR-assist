@@ -11,6 +11,7 @@ from app.api.routes import (
     dashboard,
     health,
     onboarding,
+    recommendation_corrections,
     resume_audit,
     resumes,
     system,
@@ -18,6 +19,7 @@ from app.api.routes import (
     track_gaps,
     users,
     vacancies,
+    vacancy_strategy,
 )
 from app.core.config import settings, validate_runtime_settings
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
@@ -59,3 +61,9 @@ app.include_router(vacancies.router, prefix="/api/vacancies", tags=["vacancies"]
 app.include_router(track_gaps.router, prefix="/api", tags=["track-gaps"])
 app.include_router(applications.router, prefix="/api/applications", tags=["applications"])
 app.include_router(telemetry.router, prefix="/api/telemetry", tags=["telemetry"])
+app.include_router(vacancy_strategy.router, prefix="/api", tags=["vacancy-strategy"])
+app.include_router(
+    recommendation_corrections.router,
+    prefix="/api",
+    tags=["recommendation-corrections"],
+)

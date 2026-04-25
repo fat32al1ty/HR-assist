@@ -338,3 +338,131 @@ One italic sentence per track in `text-sm text-ink-muted`. No illustration. No b
 ### Token rule
 
 Never use `--color-track-*` tokens outside the track section header and CTA. Do not apply them to vacancy cards, status badges, or global navigation.
+
+---
+
+## Strategy view (Phase 5.2) — `/strategy`
+
+### Direction
+
+Three blocks — match highlights, gap mitigations, cover letter editor — form **one continuous vertical flow**, not three sections in a tab or accordion. Visual separation is a hairline gradient rule (`BlockSeparator`), not a heading color change or a full-width divider. The eye travels straight down.
+
+### Entry button on vacancy card (`/`)
+
+The "Стратегия" button belongs in the **card action row** (`flex items-center gap-2 flex-wrap`) that already holds "Откликнуться", "Интересно", and "Не подходит". Place it **between "Откликнуться" and "Интересно"** as a `variant="secondary" size="sm"` button. It renders as a `<Link href={/strategy?resume_id=X&vacancy_id=Y}>` wrapped button, not a `<button onClick>`. This keeps it indexable and avoids a router.push cost. Do not add it as a primary button — "Откликнуться" stays primary.
+
+```
+[Откликнуться]  [Стратегия]  [Интересно +]  [Не подходит ✗]
+```
+
+### Token table
+
+| Token                             | Value (oklch)         | Use                                              |
+|-----------------------------------|-----------------------|--------------------------------------------------|
+| `--color-strategy-match-rule`     | oklch(0.52 0.12 200)  | Left 3px border on highlight cards + ordinal chip |
+| `--color-strategy-gap-rule`       | oklch(0.62 0.12 68)   | Left 3px border on gap cards + dot               |
+| `--color-strategy-gap-surface`    | oklch(0.982 0.018 68) | Card background wash — amber, barely perceptible |
+| `--color-strategy-gap-label`      | oklch(0.46 0.11 68)   | Gap eyebrow + requirement label text             |
+| `--color-strategy-editor-surface` | oklch(0.995 0.008 80) | Cover letter textarea background — warm near-white |
+
+Token scope rule: never use `--color-strategy-*` outside `StrategyView.tsx` and its sub-components.
+
+### Block anatomy
+
+#### Block 1 — Match highlights
+
+```
+[eyebrow: "Ваши аргументы"]
+[h2: "Что совпадает"]
+[sub-line: xs / ink-secondary]
+Grid (auto-fit, minmax 300px, 1fr)
+  ┌─ 3px teal rule ──────────────────────────────────────┐
+  │  COMPANY · xs / mono / uppercase                01   │
+  │  Role title · lg / display / ink                     │
+  │  ╎ Quote line · base / body / ink-secondary          │
+  │  у меня этого нет на самом деле · xs / underline     │
+  └──────────────────────────────────────────────────────┘
+```
+
+- Grid uses `repeat(auto-fit, minmax(min(100%, 300px), 1fr))`. At 360px all three cards stack.
+- On `lg` (≥ 960px) two cards share the first row and the third is alone — this is the auto-fit collapse behavior, not a forced layout. The calm single-column read at medium widths is preferred over forcing a 3-up at all times.
+- Ordinal chip (`01`, `02`, `03`) is `font-mono font-bold text-xs` in `--color-strategy-match-rule` at 70% opacity. Positioned absolute, top-right of card. Screen readers skip it (`aria-hidden`).
+- Quote uses a `<blockquote>` with a 2px left border in `--color-strategy-match-rule` and normal (not italic) font style. Keeps reading character without being typographically fussy.
+- "у меня этого нет на самом деле" is a `<button type="button">` styled as a text link. `xs`, `--color-ink-muted`, underline. Hover lifts to `--color-ink-secondary`. No icon. Fires `onCorrectionEvent('highlight', index)`.
+
+DO:
+- Left rule width: exactly 3px (via `style={{ borderLeftWidth: '3px', borderLeftColor: 'var(--color-strategy-match-rule)' }}`).
+- Use `text-[length:var(--text-lg)]` for role title inside a card — one step smaller than h2.
+
+DON'T:
+- Add a success badge or a checkmark decoration. Calm confidence, not celebration.
+- Use accent red here — the teal rule is intentionally different from the page's primary accent.
+
+#### Block 2 — Gap mitigations
+
+```
+[eyebrow: "Пробелы"]  (color: --color-strategy-gap-label)
+[h2: "Как письмо это обходит"]
+Grid (auto-fit, minmax 280px, 1fr)
+  ┌─ 3px amber rule ─ amber wash bg ────────────────────┐
+  │  ● Requirement text · sm / bold / gap-label          │
+  │  Mitigation paragraph · base / body / ink-secondary  │
+  │  у меня этого нет на самом деле · xs / underline     │
+  └──────────────────────────────────────────────────────┘
+```
+
+- The amber wash (`--color-strategy-gap-surface`) is the key visual distinction from highlight cards. The rule color differs (amber vs teal). No red, no warning icon — this must read as "recovery plan", not "problem report".
+- Requirement text is `sm / bold / --color-strategy-gap-label`. The dot bullet (6px circle) shares the same color at 70% opacity.
+- Mitigation paragraph uses `--leading-relaxed` (1.7) — slightly more open than normal body. It's the longest prose on the page after the cover letter.
+
+DON'T:
+- Use `--color-danger` or `--color-warning` for any gap element. The amber is pre-softened (`oklch(0.62 0.12 68)` vs `--color-warning` at `oklch(0.60 0.14 70)`).
+- Display more than 2 gap cards. The constraint is aesthetic — more would tip the block from "recovery" to "rejection".
+
+#### Block 3 — Cover letter editor
+
+```
+[eyebrow: "Сопроводительное письмо"]
+[h2: "Черновик письма"]
+[description: sm / ink-secondary]
+
+┌── editor surface (--color-strategy-editor-surface) ────┐
+│  <textarea>                                            │
+│   font: body / lg / leading-relaxed                    │
+│   padding: space-6                                     │
+│   min-height: 280px                                    │
+├── ruler (surface-muted bg, border-top) ────────────────┤
+│  [N символов осталось · mono xs]  [N / 1200 · mono xs] │
+└────────────────────────────────────────────────────────┘
+
+[Button variant="primary" size="lg" : "Скопировать"]
+[Link : "Открыть вакансию на источнике ↗"]
+```
+
+Typography rules for the editor:
+- `font-size: var(--text-lg)` — one step above body. Makes the text feel like something being written, not filled in.
+- `line-height: var(--leading-relaxed)` (1.7) — matches long-form writing tools.
+- No padding inside the card header — the textarea IS the surface. The editor surface token gives the faintest warm tint to distinguish from page canvas.
+- The ruler bar (char counter) sits flush at the bottom inside the card. Background `--color-surface-muted`, 1px border-top.
+- Counter turns `--color-danger` + `font-bold` when over 1200 chars. `aria-live="polite"` on the counter span.
+
+CTA row:
+- "Скопировать" is the single primary button on the page. `size="lg"` for weight. Disabled when over limit.
+- "Открыть вакансию на источнике ↗" is a secondary `<a>` link, `sm / font-semibold / ink-secondary / underline`. Never a Button — it's navigation, not action.
+- The two sit in a `flex items-center gap-4 flex-wrap` row. On 360px the link wraps below.
+
+### Block separator
+
+`BlockSeparator` is a 1px `<div>` with a `linear-gradient` from transparent → `--color-border` → transparent. It creates breathing room between the three blocks without adding visual weight. Never use `<hr>` (default browser styling varies). No top/bottom margin on the separator — the parent grid gap (`--space-10`) provides all spacing.
+
+### Motion
+
+All three blocks carry `animate-fade-in` inside the `stagger-children` grid. The parent `stagger-children` stagger gives the template-mode notice → heading → highlights → gaps → editor a sequential reveal at 60ms intervals. This is the one orchestrated motion on the page — no per-card hover animations.
+
+### Mobile (360px)
+
+- All three card grids collapse to single column via `auto-fit + minmax(min(100%, NNNpx), 1fr)`.
+- Ordinal chips remain visible.
+- Editor textarea's `min-height: 280px` holds — do not reduce below 200px even on tiny screens.
+- CTA link wraps below "Скопировать" in the flex row.
+- `--space-10` gap between blocks stays; do not tighten to `--space-6` on mobile — the editorial rhythm depends on it.

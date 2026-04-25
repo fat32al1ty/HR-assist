@@ -110,6 +110,10 @@ class Settings(BaseSettings):
     feature_onboarding_llm_classifier_enabled: bool = False
     resume_audit_cost_cap_usd_per_day: float = 0.05
     resume_audit_cache_ttl_days: int = 7
+    feature_vacancy_strategy_enabled: bool = True
+    feature_vacancy_strategy_template_mode_enabled: bool = False
+    vacancy_strategy_cost_cap_usd_per_day: float = 0.05
+    vacancy_strategy_cache_ttl_days: int = 30
 
     @field_validator(
         "openai_api_key",

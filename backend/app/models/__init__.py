@@ -7,6 +7,7 @@ from app.models.esco import (
     EscoSkillRelation,
 )
 from app.models.match_telemetry import MatchClick, MatchDwell, MatchImpression
+from app.models.recommendation_correction import RecommendationCorrection
 from app.models.recommendation_job import RecommendationJob
 from app.models.resume import Resume
 from app.models.resume_audit import ResumeAudit
@@ -22,6 +23,7 @@ from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.user_vacancy_seen import UserVacancySeen
 from app.models.vacancy import Vacancy
 from app.models.vacancy_profile import VacancyProfile
+from app.models.vacancy_strategy import VacancyStrategy
 
 __all__ = [
     "Application",
@@ -33,6 +35,7 @@ __all__ = [
     "MatchClick",
     "MatchDwell",
     "MatchImpression",
+    "RecommendationCorrection",
     "RecommendationJob",
     "Resume",
     "ResumeAudit",
@@ -48,4 +51,5 @@ __all__ = [
     "TrackGapAnalysis",
     "Vacancy",
     "VacancyProfile",
+    "VacancyStrategy",
 ]

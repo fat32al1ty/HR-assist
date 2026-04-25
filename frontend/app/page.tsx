@@ -1449,6 +1449,20 @@ export default function DashboardPage() {
         vacancy_id: vacancy.vacancy_id,
         track,
       });
+      // Fire apply_after_strategy_view if user already viewed strategy for this pair
+      try {
+        const strategySeen = sessionStorage.getItem(
+          `strategy_seen:${selectedResumeId}:${vacancy.vacancy_id}`
+        );
+        if (strategySeen === '1') {
+          trackEvent('apply_after_strategy_view', {
+            resume_id: selectedResumeId ?? undefined,
+            vacancy_id: vacancy.vacancy_id,
+          });
+        }
+      } catch {
+        // sessionStorage may be blocked — not critical
+      }
       const response = await fetch(`${API_BASE_URL}/api/applications`, {
         method: 'POST',
         headers: {
@@ -2442,6 +2456,13 @@ export default function DashboardPage() {
                                 ? 'Создаём…'
                                 : 'Откликнуться'}
                             </Button>
+                            {selectedResumeId && (
+                              <Link
+                                href={`/strategy?resume_id=${selectedResumeId}&vacancy_id=${match.vacancy_id}`}
+                              >
+                                <Button variant="secondary" size="sm">Стратегия</Button>
+                              </Link>
+                            )}
                             <button
                               type="button"
                               disabled={matchingBusy}

@@ -96,6 +96,21 @@
   --color-track-stretch-cta-border: oklch(0.80 0.10 68);                        /* CTA button border         */
   --color-track-stretch-cta-ink: oklch(0.40 0.12 68);                           /* CTA button text           */
 
+  /* ── Strategy view tokens (Phase 5.2) ────────────────────────────────────
+     Semantic tokens for /strategy page blocks. Intentionally separate from
+     --color-track-* (which belong to vacancy-list sections in /).
+     ──────────────────────────────────────────────────────────────────────── */
+  /* Match highlight block — calm, positive, uses muted blue-green rule */
+  --color-strategy-match-rule:    oklch(0.52 0.12 200);   /* teal-adjacent left rule + ordinal chip */
+
+  /* Gap mitigation block — warm amber, reads as "caution" not "error" */
+  --color-strategy-gap-rule:      oklch(0.62 0.12 68);    /* amber left rule (same hue as --color-warning, lower chroma) */
+  --color-strategy-gap-surface:   oklch(0.982 0.018 68);  /* barely-there amber card wash            */
+  --color-strategy-gap-label:     oklch(0.46 0.11 68);    /* eyebrow + requirement label color        */
+
+  /* Cover letter editor surface — slightly warmer than generic surface */
+  --color-strategy-editor-surface: oklch(0.995 0.008 80); /* near-white with faint warmth            */
+
   /* Typography scale — keep as we had */
   --text-xs:   0.75rem;
   --text-sm:   0.875rem;
@@ -221,6 +236,13 @@
   --color-track-stretch-cta-bg:    oklch(0.96 0.05 68);
   --color-track-stretch-cta-border: oklch(0.80 0.10 68);
   --color-track-stretch-cta-ink:   oklch(0.40 0.12 68);
+
+  /* Strategy view (Phase 5.2 — /strategy page) */
+  --color-strategy-match-rule:        oklch(0.52 0.12 200);
+  --color-strategy-gap-rule:          oklch(0.62 0.12 68);
+  --color-strategy-gap-surface:       oklch(0.982 0.018 68);
+  --color-strategy-gap-label:         oklch(0.46 0.11 68);
+  --color-strategy-editor-surface:    oklch(0.995 0.008 80);
 }
 
 /* ── @layer base — prose + form defaults ─────────────────────────────────*/
