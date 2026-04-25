@@ -18,6 +18,7 @@ ApplicationStatus = Literal[
 
 NOTES_MAX = 2000
 COVER_LETTER_MAX = 6000
+COVER_LETTER_INSTRUCTIONS_MAX = 1500
 TITLE_MAX = 512
 URL_MAX = 2048
 COMPANY_MAX = 255
@@ -76,6 +77,26 @@ class ApplicationCreateRequest(BaseModel):
     track: ApplicationTrack | None = None
 
     @field_validator("source_url", "vacancy_title", "vacancy_company", "notes")
+    @classmethod
+    def _strip_or_null(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+
+class CoverLetterRequest(BaseModel):
+    """Optional body for POST /applications/{id}/cover-letter.
+
+    `extra_instructions` lets the user nudge the model — e.g. "ответь на
+    вопросы анкеты: откуда узнал о вакансии — LinkedIn; готов выйти через
+    2 недели". When non-empty, we always regenerate (skip the 24h cooldown)
+    so a refinement actually takes effect.
+    """
+
+    extra_instructions: str | None = Field(default=None, max_length=COVER_LETTER_INSTRUCTIONS_MAX)
+
+    @field_validator("extra_instructions")
     @classmethod
     def _strip_or_null(cls, value: str | None) -> str | None:
         if value is None:

@@ -23,6 +23,7 @@ from app.schemas.application import (
     ApplicationRead,
     ApplicationStatus,
     ApplicationUpdateRequest,
+    CoverLetterRequest,
     CoverLetterResponse,
 )
 from app.services.cover_letter import (
@@ -169,6 +170,7 @@ def delete_application_endpoint(
 def draft_cover_letter_endpoint(
     application_id: int,
     force: bool = Query(default=False),
+    payload: CoverLetterRequest | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> CoverLetterResponse:
@@ -178,9 +180,15 @@ def draft_cover_letter_endpoint(
     if application is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found")
 
+    extra_instructions = payload.extra_instructions if payload is not None else None
+    # A user-supplied refinement always means "regenerate" — otherwise the
+    # request is ignored when the cooldown is still active and the user is
+    # confused why their nudge had no effect.
+    bypass_cooldown = force or bool(extra_instructions)
+
     # Serve the stored draft if it's fresh — one LLM call per application per day.
     if (
-        not force
+        not bypass_cooldown
         and application.cover_letter_text
         and application.cover_letter_generated_at is not None
         and datetime.now(UTC) - application.cover_letter_generated_at < COVER_LETTER_COOLDOWN
@@ -239,6 +247,7 @@ def draft_cover_letter_endpoint(
             letter_text = generate_cover_letter_text(
                 resume_context=resume_context,
                 vacancy_context=vacancy_context,
+                extra_instructions=extra_instructions,
             )
     except DailyBudgetExceeded as error:
         raise HTTPException(

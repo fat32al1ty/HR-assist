@@ -107,6 +107,7 @@ type CardProps = {
   isBusy: boolean;
   coverLetterOpen: boolean;
   coverLetterDraft: string;
+  coverLetterPrompt: string;
   pendingDelete: boolean;
   onStatusChange: (id: number, status: ApplicationStatus) => void;
   onOpenCoverLetter: (id: number) => void;
@@ -115,6 +116,7 @@ type CardProps = {
   onSaveCoverLetter: (id: number) => void;
   onCopyCoverLetter: (id: number) => void;
   onCoverLetterChange: (id: number, text: string) => void;
+  onCoverLetterPromptChange: (id: number, text: string) => void;
   onDeleteRequest: (id: number) => void;
   onDeleteConfirm: (id: number) => void;
   onDeleteCancel: (id: number) => void;
@@ -125,6 +127,7 @@ function ApplicationCard({
   isBusy,
   coverLetterOpen,
   coverLetterDraft,
+  coverLetterPrompt,
   pendingDelete,
   onStatusChange,
   onOpenCoverLetter,
@@ -133,6 +136,7 @@ function ApplicationCard({
   onSaveCoverLetter,
   onCopyCoverLetter,
   onCoverLetterChange,
+  onCoverLetterPromptChange,
   onDeleteRequest,
   onDeleteConfirm,
   onDeleteCancel,
@@ -240,6 +244,29 @@ function ApplicationCard({
             placeholder="Нажмите «Обновить», чтобы сгенерировать черновик, или введите свой текст."
             onChange={(e) => onCoverLetterChange(row.id, e.target.value)}
           />
+          <details className="group">
+            <summary className="cursor-pointer text-[length:var(--text-xs)] font-semibold text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors select-none">
+              Уточнение для AI <span className="text-[color:var(--color-ink-muted)] font-normal">(анкета, тон, акценты)</span>
+            </summary>
+            <textarea
+              rows={3}
+              maxLength={1500}
+              value={coverLetterPrompt}
+              disabled={isBusy}
+              className={cn(
+                'mt-1.5 w-full resize-vertical min-h-[60px]',
+                'border border-[var(--color-border)] rounded-[var(--radius-md)]',
+                'bg-[var(--color-surface-muted)] text-[color:var(--color-ink)]',
+                'text-[length:var(--text-sm)] leading-[var(--leading-normal)]',
+                'p-2.5 font-[var(--font-body)]'
+              )}
+              placeholder="Напр.: ответь на вопросы анкеты — а) откуда узнал о вакансии: LinkedIn, б) готов выйти через 2 недели; добавь, что готов к командировкам."
+              onChange={(e) => onCoverLetterPromptChange(row.id, e.target.value)}
+            />
+            <p className="mt-1 text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]">
+              При нажатии «Обновить» уточнение учтётся в новой версии письма.
+            </p>
+          </details>
           <div className="flex flex-wrap gap-1.5">
             <Button variant="primary"   size="sm" disabled={isBusy} onClick={() => onGenerateCoverLetter(row.id, true)}>Обновить</Button>
             <Button variant="secondary" size="sm" disabled={isBusy || !coverLetterChanged} onClick={() => onSaveCoverLetter(row.id)}>Сохранить</Button>
@@ -319,6 +346,7 @@ export default function ApplicationsPage() {
   const [busyIds, setBusyIds] = useState<Record<number, boolean>>({});
   const [coverLetterOpenIds, setCoverLetterOpenIds] = useState<Record<number, boolean>>({});
   const [coverLetterDrafts, setCoverLetterDrafts] = useState<Record<number, string>>({});
+  const [coverLetterPrompts, setCoverLetterPrompts] = useState<Record<number, string>>({});
   const [pendingDeleteIds, setPendingDeleteIds] = useState<Record<number, boolean>>({});
   const [mobileOpenCol, setMobileOpenCol] = useState<ColumnId | null>('applied');
 
@@ -374,9 +402,16 @@ export default function ApplicationsPage() {
   async function generateCoverLetter(applicationId: number, force: boolean) {
     setBusy(applicationId, true);
     try {
+      const promptText = (coverLetterPrompts[applicationId] ?? '').trim();
+      const body = promptText ? JSON.stringify({ extra_instructions: promptText }) : undefined;
       const response = await apiFetch<CoverLetterResponse>(
         `/api/applications/${applicationId}/cover-letter${force ? '?force=true' : ''}`,
-        { token, method: 'POST' }
+        {
+          token,
+          method: 'POST',
+          headers: body ? { 'Content-Type': 'application/json' } : undefined,
+          body,
+        }
       );
       setApplications((prev) => prev.map((r) =>
         r.id === applicationId
@@ -465,6 +500,7 @@ export default function ApplicationsPage() {
         isBusy={Boolean(busyIds[row.id])}
         coverLetterOpen={Boolean(coverLetterOpenIds[row.id])}
         coverLetterDraft={coverLetterDrafts[row.id] ?? row.cover_letter_text ?? ''}
+        coverLetterPrompt={coverLetterPrompts[row.id] ?? ''}
         pendingDelete={Boolean(pendingDeleteIds[row.id])}
         onStatusChange={changeApplicationStatus}
         onOpenCoverLetter={openCoverLetter}
@@ -473,6 +509,7 @@ export default function ApplicationsPage() {
         onSaveCoverLetter={saveCoverLetterEdits}
         onCopyCoverLetter={copyCoverLetterToClipboard}
         onCoverLetterChange={(id, text) => setCoverLetterDrafts((prev) => ({ ...prev, [id]: text }))}
+        onCoverLetterPromptChange={(id, text) => setCoverLetterPrompts((prev) => ({ ...prev, [id]: text }))}
         onDeleteRequest={requestDelete}
         onDeleteConfirm={confirmDelete}
         onDeleteCancel={cancelDelete}
