@@ -2032,6 +2032,15 @@ export default function DashboardPage() {
                           ) : null}
                         </div>
                         <div className="inline-flex gap-2 items-center justify-end shrink-0">
+                          {resume.status === 'completed' ? (
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/audit?resume_id=${resume.id}`)}
+                              className="text-[length:var(--text-xs)] font-medium text-[color:var(--color-accent)] hover:opacity-70 transition-opacity"
+                            >
+                              Открыть аудит
+                            </button>
+                          ) : null}
                           {!resume.is_active ? (
                             <button
                               type="button"
