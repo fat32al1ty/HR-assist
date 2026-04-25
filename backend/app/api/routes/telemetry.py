@@ -14,7 +14,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Request, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -60,6 +60,21 @@ class ClickPayload(BaseModel):
 class EventPayload(BaseModel):
     event: str = Field(..., max_length=64)
     payload: dict = Field(default_factory=dict)
+
+    @field_validator("payload")
+    @classmethod
+    def _payload_size_cap(cls, v: dict) -> dict:
+        # Defensive cap so a misbehaving client can't ship a 10 MB blob through
+        # the (already rate-limited) telemetry sink. We only ever read a handful
+        # of well-known keys downstream, so 32 keys of strings/numbers is enough.
+        if len(v) > 32:
+            raise ValueError("payload has too many keys")
+        for key, val in v.items():
+            if isinstance(key, str) and len(key) > 64:
+                raise ValueError("payload key too long")
+            if isinstance(val, str) and len(val) > 256:
+                raise ValueError("payload value too long")
+        return v
 
 
 class DwellRow(BaseModel):

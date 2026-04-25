@@ -124,13 +124,16 @@ def _template_strategy(
     ).lower()
 
     gap_mitigations: list[GapMitigation] = []
+    adjacent_pool = [s for s in user_skills_raw if isinstance(s, str) and s.strip()]
     for req in must_haves:
         if not isinstance(req, str):
             continue
         req_lower = req.lower().strip()
         if req_lower in user_lower or req_lower in all_exp_text:
             continue
-        adjacent = next((s for s in user_skills_raw if isinstance(s, str)), None)
+        adjacent = (
+            adjacent_pool[len(gap_mitigations) % len(adjacent_pool)] if adjacent_pool else None
+        )
         if adjacent:
             mitigation = (
                 f"Прямого опыта с {req} нет, но смежный навык «{adjacent}» "

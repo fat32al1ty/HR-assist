@@ -116,14 +116,20 @@ class DailyUserLlmCostTest(unittest.TestCase):
         self.db.add(audit)
         self.db.commit()
 
-    def _add_strategy(self, resume_id: int, vacancy_id: int, cost: float, at: datetime) -> None:
+    def _add_strategy(
+        self,
+        resume_id: int,
+        vacancy_id: int,
+        cost: float | None,
+        at: datetime,
+    ) -> None:
         row = VacancyStrategy(
             resume_id=resume_id,
             vacancy_id=vacancy_id,
             prompt_version="strategy-v1",
             strategy_json={"match_highlights": [], "gap_mitigations": [], "cover_letter_draft": ""},
             cost_usd=cost,
-            template_mode=False,
+            template_mode=cost is None,
             computed_at=at,
         )
         self.db.add(row)
@@ -158,6 +164,16 @@ class DailyUserLlmCostTest(unittest.TestCase):
         self._add_audit(self.resume2.id, 99.99, now)
         total = daily_user_llm_cost_usd(self.db, self.user1.id, self.today)
         self.assertAlmostEqual(total, 0.0, places=5)
+
+    def test_template_mode_null_cost_counts_as_zero(self) -> None:
+        # Template-mode strategy rows persist `cost_usd=NULL`; they must be
+        # treated as 0 by the helper, not raise / not be skipped.
+        now = datetime.now(UTC)
+        self._add_audit(self.resume1.id, 0.01, now)
+        self._add_strategy(self.resume1.id, self.vacancy.id, None, now)
+
+        total = daily_user_llm_cost_usd(self.db, self.user1.id, self.today)
+        self.assertAlmostEqual(total, 0.01, places=5)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ from app.models.resume_profile import ResumeProfile
 from app.models.user import User
 from app.models.vacancy import Vacancy
 from app.models.vacancy_profile import VacancyProfile
+from app.models.vacancy_strategy import VacancyStrategy
 
 
 def _auth_header(email: str) -> dict[str, str]:
@@ -87,6 +88,17 @@ class RecommendationCorrectionsTest(unittest.TestCase):
         self.user = _make_user(self.db, suffix)
         self.resume = _make_resume(self.db, self.user.id)
         self.vacancy = _make_vacancy(self.db)
+        # Corrections require an existing strategy row for the (resume, vacancy) pair.
+        strategy = VacancyStrategy(
+            resume_id=self.resume.id,
+            vacancy_id=self.vacancy.id,
+            prompt_version="strategy-v1",
+            strategy_json={"match_highlights": [], "gap_mitigations": [], "cover_letter_draft": ""},
+            cost_usd=None,
+            template_mode=True,
+        )
+        self.db.add(strategy)
+        self.db.commit()
         self.headers = _auth_header(self.user.email)
 
     def tearDown(self) -> None:
@@ -94,6 +106,9 @@ class RecommendationCorrectionsTest(unittest.TestCase):
             delete(RecommendationCorrection).where(
                 RecommendationCorrection.resume_id == self.resume.id
             )
+        )
+        self.db.execute(
+            delete(VacancyStrategy).where(VacancyStrategy.resume_id == self.resume.id)
         )
         self.db.execute(delete(Resume).where(Resume.id == self.resume.id))
         self.db.execute(delete(VacancyProfile).where(VacancyProfile.vacancy_id == self.vacancy.id))
@@ -182,6 +197,20 @@ class RecommendationCorrectionsTest(unittest.TestCase):
             json=self._payload(),
         )
         self.assertEqual(resp.status_code, 401, resp.text)
+
+    def test_post_without_existing_strategy_returns_409(self) -> None:
+        # Drop the strategy row to simulate a stray correction with no rendered
+        # strategy in front of the user.
+        self.db.execute(
+            delete(VacancyStrategy).where(VacancyStrategy.resume_id == self.resume.id)
+        )
+        self.db.commit()
+        resp = self.client.post(
+            "/api/recommendation-corrections",
+            json=self._payload(),
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 409, resp.text)
 
 
 if __name__ == "__main__":

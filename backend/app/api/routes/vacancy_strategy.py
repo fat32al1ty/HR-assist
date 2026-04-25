@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.resume import Resume
 from app.models.user import User
@@ -43,7 +44,15 @@ def get_strategy(
     if vacancy is None:
         raise HTTPException(status_code=404, detail="Vacancy not found")
 
-    # Rate limit: 2 strategy computations per hour per user (DB-enforced)
+    # `force` is admin-only. A non-admin caller passing `?force=true` would otherwise
+    # bypass both the cache and the per-hour rate limit, allowing unbounded
+    # template-mode hammering of the vacancy_strategies table.
+    if force and not current_user.is_admin:
+        force = False
+
+    # Rate limit: 2 strategy computations per hour per user (DB-enforced).
+    # Cache hits don't count toward the cap, so the limit only fires on actual
+    # recomputes. Admin `force=True` bypasses both cache and rate limit.
     one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
     user_resume_ids = db.scalars(select(Resume.id).where(Resume.user_id == current_user.id)).all()
     recent_count = db.scalar(
@@ -52,21 +61,17 @@ def get_strategy(
             VacancyStrategy.computed_at >= one_hour_ago,
         )
     )
-    # Only enforce the rate limit when actually recomputing (not serving from cache)
     cached = db.scalar(
         select(VacancyStrategy).where(
             VacancyStrategy.resume_id == resume_id,
             VacancyStrategy.vacancy_id == vacancy_id,
         )
     )
-    from datetime import timedelta as _td
-
-    from app.core.config import settings
 
     is_fresh = False
     if cached:
         age = datetime.now(UTC) - cached.computed_at.replace(tzinfo=UTC)
-        is_fresh = age < _td(days=settings.vacancy_strategy_cache_ttl_days)
+        is_fresh = age < timedelta(days=settings.vacancy_strategy_cache_ttl_days)
 
     if not is_fresh and not force and int(recent_count or 0) >= _RATE_LIMIT_PER_HOUR:
         raise HTTPException(

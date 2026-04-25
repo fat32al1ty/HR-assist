@@ -17,7 +17,7 @@ import * as React from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { StrategyView } from '@/components/strategy/StrategyView';
 import { StrategySkeleton } from './StrategySkeleton';
-import { apiFetch, ApiError, API_BASE_URL } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { trackEvent } from '@/lib/telemetry';
 import { Button } from '@/components/ui/button';
@@ -152,22 +152,10 @@ function StrategyPageInner() {
           return;
         }
         if (err.status === 429) {
-          // Try to read Retry-After from a raw fetch — apiFetch swallows headers
-          let retryAfterSeconds: number | null = null;
-          try {
-            const raw = await fetch(
-              `${API_BASE_URL}/api/resumes/${resumeId}/vacancies/${vacancyId}/strategy`,
-              token ? { headers: { Authorization: `Bearer ${token}` } } : {}
-            );
-            const retryAfter = raw.headers.get('Retry-After');
-            if (retryAfter) {
-              const parsed = parseInt(retryAfter, 10);
-              if (!isNaN(parsed)) retryAfterSeconds = parsed;
-            }
-          } catch {
-            // ignore — we already know it's 429
-          }
-          setStatus({ kind: '429', retryAfterSeconds });
+          // The endpoint sets no Retry-After header on the 2/hour cap, so we
+          // surface a generic message instead of issuing a second request just
+          // to read a header that won't be there.
+          setStatus({ kind: '429', retryAfterSeconds: null });
           return;
         }
       }

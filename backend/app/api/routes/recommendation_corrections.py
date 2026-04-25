@@ -8,6 +8,7 @@ from app.models.recommendation_correction import RecommendationCorrection
 from app.models.resume import Resume
 from app.models.user import User
 from app.models.vacancy import Vacancy
+from app.models.vacancy_strategy import VacancyStrategy
 from app.schemas.recommendation_correction import (
     RecommendationCorrectionCreate,
     RecommendationCorrectionRead,
@@ -38,6 +39,21 @@ def create_correction(
     vacancy = db.get(Vacancy, payload.vacancy_id)
     if vacancy is None:
         raise HTTPException(status_code=404, detail="Vacancy not found")
+
+    # Require an existing strategy for this (resume, vacancy) — corrections only
+    # make sense as a response to a rendered strategy. Without this gate, any
+    # authenticated user could spam corrections against arbitrary vacancy IDs.
+    strategy = db.scalar(
+        select(VacancyStrategy.id).where(
+            VacancyStrategy.resume_id == payload.resume_id,
+            VacancyStrategy.vacancy_id == payload.vacancy_id,
+        )
+    )
+    if strategy is None:
+        raise HTTPException(
+            status_code=409,
+            detail="No strategy exists for this resume/vacancy pair yet.",
+        )
 
     correction = RecommendationCorrection(
         user_id=current_user.id,
