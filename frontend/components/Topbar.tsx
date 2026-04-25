@@ -43,16 +43,6 @@ export default function Topbar() {
           <Link href="/" className="topbar-brand-link">
             <span style={{ color: 'var(--color-accent)' }}>AI</span> JobMatch
           </Link>
-          <a
-            href="https://github.com/fat32al1ty/HR-assist/releases"
-            target="_blank"
-            rel="noreferrer"
-            title="Текущая версия сборки"
-            aria-label="Версия приложения"
-            className="app-version"
-          >
-            {process.env.NEXT_PUBLIC_APP_VERSION ?? 'dev'}
-          </a>
         </div>
 
         <nav className="topbar-nav">

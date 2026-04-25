@@ -2789,6 +2789,16 @@ export default function DashboardPage() {
           {/* Bottom bar */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-4 border-t border-[var(--color-border)] text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
             <span>© {new Date().getFullYear()} <span className="text-[color:var(--color-accent)]">AI</span> JobMatch · aijobmatch.ru</span>
+            <a
+              href="https://github.com/fat32al1ty/HR-assist/releases"
+              target="_blank"
+              rel="noreferrer"
+              title="Текущая версия сборки"
+              aria-label="Версия приложения"
+              className="app-version"
+            >
+              {process.env.NEXT_PUBLIC_APP_VERSION ?? 'dev'}
+            </a>
           </div>
 
         </div>
