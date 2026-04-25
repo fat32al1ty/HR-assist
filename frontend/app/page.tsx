@@ -1629,9 +1629,6 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex flex-col gap-4">
-                <span className="inline-flex w-max px-3 py-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[length:var(--text-xs)] font-bold tracking-[0.08em] uppercase text-[color:var(--color-ink-secondary)]">
-                  AI-агент по поиску работы
-                </span>
                 <h1 className="text-[length:var(--text-display)] leading-[var(--leading-tight)] tracking-[-0.035em] font-bold text-[color:var(--color-ink)] max-w-[620px]">
                   Твой карьерный <span className="text-[color:var(--color-accent)]">AI</span> консультант.
                 </h1>
