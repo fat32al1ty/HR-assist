@@ -157,6 +157,7 @@ Closed-beta MVP. The end-to-end flow runs in production on a dedicated server.
 
 Full release log: [`docs/ROADMAP.md`](docs/ROADMAP.md). Recent highlights:
 
+- `v0.12.1` — Audit data pipe fixes: `_build_skill_gaps` now reads `must_have_skills` (the canonical key vacancy_analyzer writes) instead of looking only for `required_skills`/`skills`; `_build_market_salary` falls back to `salary_baseline.get_baseline_band()` (median-by-role) when LightGBM model isn't trained yet, tagged `model_version="baseline-median-v1"`; `sample_size` now counts the matching `(role_family, seniority)` bucket instead of all vacancy_profiles
 - `v0.12.0` — Market-grounded resume audit + light Q&A onboarding: new `/audit` page with 4 blocks (Role Read, Market Salary, Skill Gaps, Resume Quality); 30 IT-specific YAML-templated onboarding questions with AND/OR/NOT trigger conditions; 7-day audit cache; cost-cap $0.05/DAU/day with template-mode fallback; admin `cost_p95_per_dau_usd` + audit sample endpoint; 20 self-labeled bootstrap fixtures + LLM-judge regression CI
 - `v0.11.0` — Warm-run widening + best-of-market fallback: deep-scan retries with `date_from=None` when high-quality matches don't fill the target; budgets bumped (analyzed 18→50, deep queries 3→6, match_limit 20→40); paginated UI (10 + "show more" up to 40); honest "Подобрали лучших: N" headline
 - `v0.10.2` — Salary predictor wired into vacancy indexing (LightGBM + median-by-role baseline fallback); admin status + backfill endpoints; predicted bands auto-populate once training corpus reaches 1k RUB-priced rows

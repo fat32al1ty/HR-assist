@@ -35,7 +35,7 @@ from app.schemas.resume_audit import (
     RoleRead,
     SkillGap,
 )
-from app.services import salary_predictor
+from app.services import salary_baseline, salary_predictor
 from app.services.openai_usage import record_responses_usage
 from app.services.skill_taxonomy import expand_concept
 
@@ -238,8 +238,21 @@ def _build_market_salary(
         seniority=seniority,
         city=city,
     )
-    if band is None:
-        return None
+
+    model_version: str
+    if band is not None:
+        model_version = band.model_version
+    else:
+        baseline = salary_baseline.get_baseline_band(
+            role_family=role_family,
+            seniority=seniority,
+            city=city,
+            db=db,
+        )
+        if baseline is None:
+            return None
+        band = baseline
+        model_version = "baseline-median-v1"
 
     user_expectation: int | None = None
     raw_exp = profile.get("salary_expectation")
@@ -253,13 +266,21 @@ def _build_market_salary(
     if user_expectation is not None and band.p50 > 0:
         gap_pct = round((user_expectation - band.p50) / band.p50 * 100.0, 1)
 
-    # count vacancy_profiles in same (role_family, seniority) bucket
+    # count vacancy_profiles whose role_family matches (O(N) on already-loaded rows)
     sample_size: int | None = None
     try:
-        count_q = select(func.count(VacancyProfile.id))
-        rows = db.execute(count_q).all()
-        # approximate: count all profiles (we can't filter by JSON role_family cheaply)
-        sample_size = int(rows[0][0]) if rows else None
+        vp_rows = db.scalars(select(VacancyProfile).limit(500)).all()
+        matched = 0
+        for vp in vp_rows:
+            vp_profile = vp.profile or {}
+            vp_role = vp_profile.get("role_family")
+            if role_family and vp_role and vp_role != role_family:
+                continue
+            vp_sen = vp_profile.get("seniority")
+            if seniority and vp_sen and vp_sen != seniority:
+                continue
+            matched += 1
+        sample_size = matched if matched > 0 else None
     except Exception:
         pass
 
@@ -268,7 +289,7 @@ def _build_market_salary(
         p50=band.p50,
         p75=band.p75,
         currency="RUB",
-        model_version=band.model_version,
+        model_version=model_version,
         user_expectation=user_expectation,
         gap_to_median_pct=gap_pct,
         sample_size=sample_size,
@@ -298,7 +319,12 @@ def _build_skill_gaps(
         vp_role = vp_profile.get("role_family")
         if role_family and vp_role and vp_role != role_family:
             continue
-        req_skills = vp_profile.get("required_skills") or vp_profile.get("skills") or []
+        req_skills = (
+            vp_profile.get("must_have_skills")
+            or vp_profile.get("required_skills")
+            or vp_profile.get("skills")
+            or []
+        )
         if not isinstance(req_skills, list):
             req_skills = []
         seen_in_this_vp: set[str] = set()

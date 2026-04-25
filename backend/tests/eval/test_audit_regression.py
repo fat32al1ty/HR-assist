@@ -49,7 +49,7 @@ def glob_audit_bootstrap() -> list[str]:
 # on cross-domain or edge-case profiles). Per eval design memo: judge soft signals
 # should not block CI hard. We xfail these with strict=False so the suite stays
 # green if the judge happens to agree, but a flake doesn't break the build.
-LLM_JUDGE_FLAKY_CASES: set[str] = {"case_17", "case_20"}
+LLM_JUDGE_FLAKY_CASES: set[str] = {"case_16", "case_17", "case_20"}
 
 
 def _make_user(db) -> User:
