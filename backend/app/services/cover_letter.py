@@ -20,7 +20,7 @@ from typing import Any
 from openai import APIConnectionError, APIStatusError, OpenAI
 
 from app.core.config import settings
-from app.services.llm_guard import wrap_untrusted_text
+from app.services.llm_guard import wrap_untrusted_text, wrap_user_nudge
 from app.services.openai_usage import record_responses_usage
 from app.services.resume_analyzer import DEFAULT_OPENAI_BASE_URL
 
@@ -167,10 +167,10 @@ def generate_cover_letter_text(
     guarded_resume = wrap_untrusted_text(resume_context, label="resume")
     guarded_vacancy = wrap_untrusted_text(vacancy_context, label="vacancy")
     instructions_msg: dict[str, str] | None = None
-    if extra_instructions and extra_instructions.strip():
-        guarded_instructions = wrap_untrusted_text(
-            extra_instructions.strip(), label="user_instructions"
-        )
+    # Validator already strips whitespace and nullifies empty strings, so a
+    # truthy `extra_instructions` here is guaranteed to be a real refinement.
+    if extra_instructions:
+        guarded_instructions = wrap_user_nudge(extra_instructions, label="user_instructions")
         instructions_msg = {"role": "user", "content": guarded_instructions}
 
     input_messages: list[dict[str, str]] = [

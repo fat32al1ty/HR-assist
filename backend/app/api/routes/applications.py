@@ -1,10 +1,11 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import settings
+from app.core.rate_limit import COVER_LETTER_LIMIT, limiter
 from app.db.session import get_db
 from app.models.user import User
 from app.repositories.applications import (
@@ -167,7 +168,10 @@ def delete_application_endpoint(
 
 
 @router.post("/{application_id}/cover-letter", response_model=CoverLetterResponse)
+@limiter.limit(COVER_LETTER_LIMIT)
 def draft_cover_letter_endpoint(
+    request: Request,
+    response: Response,
     application_id: int,
     force: bool = Query(default=False),
     payload: CoverLetterRequest | None = None,

@@ -12,25 +12,40 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request, Response
 from sqlalchemy import delete
 
 from app.api.routes.applications import (
     create_application_endpoint,
     draft_cover_letter_endpoint,
 )
+from app.core.rate_limit import limiter
 from app.db.session import SessionLocal
 from app.models.application import Application
 from app.models.resume import Resume
 from app.models.user import User
 from app.models.vacancy import Vacancy
-from app.schemas.application import ApplicationCreateRequest
+from app.schemas.application import ApplicationCreateRequest, CoverLetterRequest
 
 CANNED_LETTER = "Здравствуйте!\n\nЗаинтересовался вашей вакансией...\n\nС уважением."
 
 
+def _make_request() -> Request:
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/applications/0/cover-letter",
+        "headers": [(b"host", b"testserver")],
+        "client": ("127.0.0.1", 0),
+        "query_string": b"",
+    }
+    return Request(scope)
+
+
 class CoverLetterEndpointTest(unittest.TestCase):
     def setUp(self) -> None:
+        self._limiter_was_enabled = limiter.enabled
+        limiter.enabled = False
         self.db = SessionLocal()
         self.suffix = uuid.uuid4().hex[:10]
         self.user = User(
@@ -83,6 +98,7 @@ class CoverLetterEndpointTest(unittest.TestCase):
         self.db.execute(delete(User).where(User.id == self.user.id))
         self.db.commit()
         self.db.close()
+        limiter.enabled = self._limiter_was_enabled
 
     def _make_application(self) -> Application:
         result = create_application_endpoint(
@@ -101,6 +117,8 @@ class CoverLetterEndpointTest(unittest.TestCase):
             return_value=CANNED_LETTER,
         ) as fake:
             response = draft_cover_letter_endpoint(
+                request=_make_request(),
+                response=Response(),
                 application_id=application.id,
                 force=False,
                 current_user=self.user,
@@ -126,6 +144,8 @@ class CoverLetterEndpointTest(unittest.TestCase):
             return_value="fresh letter",
         ) as fake:
             response = draft_cover_letter_endpoint(
+                request=_make_request(),
+                response=Response(),
                 application_id=application.id,
                 force=False,
                 current_user=self.user,
@@ -147,6 +167,8 @@ class CoverLetterEndpointTest(unittest.TestCase):
             return_value="regenerated letter",
         ) as fake:
             response = draft_cover_letter_endpoint(
+                request=_make_request(),
+                response=Response(),
                 application_id=application.id,
                 force=True,
                 current_user=self.user,
@@ -168,6 +190,8 @@ class CoverLetterEndpointTest(unittest.TestCase):
             return_value="new letter",
         ) as fake:
             response = draft_cover_letter_endpoint(
+                request=_make_request(),
+                response=Response(),
                 application_id=application.id,
                 force=False,
                 current_user=self.user,
@@ -192,6 +216,8 @@ class CoverLetterEndpointTest(unittest.TestCase):
         try:
             with self.assertRaises(HTTPException) as ctx:
                 draft_cover_letter_endpoint(
+                    request=_make_request(),
+                    response=Response(),
                     application_id=application.id,
                     force=False,
                     current_user=other,
@@ -214,6 +240,8 @@ class CoverLetterEndpointTest(unittest.TestCase):
         ) as fake:
             with self.assertRaises(HTTPException) as ctx:
                 draft_cover_letter_endpoint(
+                    request=_make_request(),
+                    response=Response(),
                     application_id=application.id,
                     force=False,
                     current_user=self.user,
@@ -245,6 +273,8 @@ class CoverLetterEndpointTest(unittest.TestCase):
         ) as fake:
             with self.assertRaises(HTTPException) as ctx:
                 draft_cover_letter_endpoint(
+                    request=_make_request(),
+                    response=Response(),
                     application_id=row.id,
                     force=False,
                     current_user=self.user,
@@ -252,6 +282,64 @@ class CoverLetterEndpointTest(unittest.TestCase):
                 )
         self.assertEqual(ctx.exception.status_code, 400)
         fake.assert_not_called()
+
+    def test_extra_instructions_bypass_cooldown(self) -> None:
+        # Fresh draft within the cooldown — would normally return cached, but
+        # a non-empty refinement always forces regeneration.
+        application = self._make_application()
+        application.cover_letter_text = CANNED_LETTER
+        application.cover_letter_generated_at = datetime.now(UTC) - timedelta(hours=1)
+        self.db.add(application)
+        self.db.commit()
+
+        with patch(
+            "app.api.routes.applications.generate_cover_letter_text",
+            return_value="refined letter",
+        ) as fake:
+            response = draft_cover_letter_endpoint(
+                request=_make_request(),
+                response=Response(),
+                application_id=application.id,
+                force=False,
+                payload=CoverLetterRequest(
+                    extra_instructions="ответь на вопросы анкеты: откуда узнал — LinkedIn"
+                ),
+                current_user=self.user,
+                db=self.db,
+            )
+        fake.assert_called_once()
+        self.assertFalse(response.cached)
+        self.assertEqual(response.cover_letter_text, "refined letter")
+        kwargs = fake.call_args.kwargs
+        self.assertEqual(
+            kwargs.get("extra_instructions"),
+            "ответь на вопросы анкеты: откуда узнал — LinkedIn",
+        )
+
+    def test_whitespace_only_instructions_does_not_bypass_cooldown(self) -> None:
+        # Validator strips whitespace-only input to None — bypass should not fire.
+        application = self._make_application()
+        application.cover_letter_text = CANNED_LETTER
+        application.cover_letter_generated_at = datetime.now(UTC) - timedelta(hours=1)
+        self.db.add(application)
+        self.db.commit()
+
+        with patch(
+            "app.api.routes.applications.generate_cover_letter_text",
+            return_value="should not be called",
+        ) as fake:
+            response = draft_cover_letter_endpoint(
+                request=_make_request(),
+                response=Response(),
+                application_id=application.id,
+                force=False,
+                payload=CoverLetterRequest(extra_instructions="   \n  \t"),
+                current_user=self.user,
+                db=self.db,
+            )
+        fake.assert_not_called()
+        self.assertTrue(response.cached)
+        self.assertEqual(response.cover_letter_text, CANNED_LETTER)
 
 
 if __name__ == "__main__":

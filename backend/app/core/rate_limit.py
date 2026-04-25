@@ -9,6 +9,7 @@ from slowapi.util import get_remote_address
 AUTH_REGISTER_LIMIT = "10/minute"
 AUTH_LOGIN_LIMIT = "20/minute"
 AUTH_PASSWORD_RESET_LIMIT = "10/minute"
+COVER_LETTER_LIMIT = "10/minute"
 
 limiter = Limiter(key_func=get_remote_address, headers_enabled=True)
 
