@@ -1,57 +1,79 @@
 # HR Assist — Roadmap
 
-**Статус (2026-04-25):** forward plan восстановлен под AI-consultant thesis. См. [`.claude/skills/product-roadmap/SKILL.md`](../.claude/skills/product-roadmap/SKILL.md) для полного плана.
+**Статус (2026-04-25):** IT-MVP закрыт релизом `v0.14.0`. Дальше — `v1.0.0` (Phase 5.3, domain expansion), запускается только после подтверждения PMF в IT.
 
-После релиза `v0.8.0` (Phase 2.8 — Serious product polish) forward-looking часть roadmap была сброшена и **переанкорена 2026-04-24** после экспертной сессии. Новый план — 4 релиза (Phase 5.0 → 5.3 / `v0.12.0` → `v1.0.0`), IT-only MVP, замена практики живого карьерного консультанта.
+Полный план и принципы — в [`.claude/skills/product-roadmap/SKILL.md`](../.claude/skills/product-roadmap/SKILL.md).
 
 ## Для кого продукт
 
-HR Assist — AI-ассистент для **соискателя**. Мы не инструмент для рекрутёров: мы находим подходящие вакансии, объясняем, почему они подходят, помогаем писать отклики и вести воронку.
+HR Assist — AI-ассистент для **соискателя** в IT. Не инструмент для рекрутёров: находит подходящие вакансии, объясняет почему они подходят, помогает писать отклики и вести воронку.
 
-Чем заменяем на рынке:
+Заменяем на рынке:
+- **hh.ru Premium** (~5 000 ₽/мес) — подсветка откликов, advanced-поиск.
+- **Карьерных консультантов** (10–30 000 ₽ разово) — анализ резюме, сопроводительные письма, объяснение требований.
+- **AI-агрегаторы уровня getmatch** — умный ранжир поверх нескольких источников.
 
-- hh.ru Premium (~5 000 ₽/мес) — подсветка откликов, advanced-поиск.
-- Карьерных консультантов (10–30 000 ₽ разово) — анализ резюме, сопроводительные письма, объяснение требований.
-- AI-агрегаторы уровня getmatch — умный ранжир поверх нескольких источников.
+## Последние релизы
 
-Монетизация, маркетинг и миграции инфраструктуры в этот roadmap **не входят** — это отдельные плоскости.
+### `v0.14.0` — Phase 5.2 — Стратегия отклика на конкретную вакансию (2026-04-25)
+По кнопке «Стратегия» открывается страница, где LLM (или template fallback) объясняет: что в твоём опыте релевантно этой вакансии, чего не хватает и как это компенсировать в письме, плюс готовый draft сопроводительного на ≤ 1200 символов. Каждую карточку можно пометить «не я / не правда» — корректировки идут в `recommendation_corrections` для будущего ranker'а. Cost-cap $0.05/DAU/день общий с `/audit`.
+
+### `v0.13.0` — Phase 5.1 — Треки подбора: точка / вырост / стрейч (2026-04-25)
+Подбор больше не плоский список. Каждая вакансия классифицируется детерминированным правилом (vector_score + разница seniority + overlap навыков) в один из 3 треков и попадает в свою collapsible-секцию. Над каждой секцией — editorial-строка вида «70% требуют Kafka — у тебя её нет». В стрейче — CTA «Показать вакансии с мягкими требованиями».
+
+### `v0.12.1` — Phase 5.0.1 — Починка `/audit` (2026-04-25)
+Страница `/audit` перестала быть пустой: skill gaps читал не тот ключ vacancy_profile (`required_skills` вместо `must_have_skills`), market salary падал в `None` без обученного LightGBM (добавлен median-by-role fallback), sample_size считал все вакансии вместо bucket по role+seniority.
+
+### `v0.12.0` — Phase 5.0 — Market-grounded resume audit (2026-04-25)
+Новая страница `/audit`: как мы прочитали резюме (роль/грейд/альтернативы), market-salary band для роли+гео, топ-5 skill gaps от рынка, проблемы качества резюме (правила). 30 IT-специфичных вопросов в YAML с trigger-условиями; LLM-классификатор за флагом, дефолт — детерминированные правила. Cost cap $0.05/DAU/день с template fallback.
+
+### `v0.11.0` — Phase 4.3 — Best-of-market fallback (2026-04-24)
+Подбор не теряет «лучшее историческое»: если warm-run не набирает high-quality target, deep-scan повторяется без `date_from`. Бюджеты warm-run расширены (analyzed 18→50, deep queries 3→6, match_limit 20→40). Фронт переверстан под пагинацию 10+10.
 
 ## Что уже в проде
 
-| # | Фаза | Релиз | Одним предложением |
-|---|------|-------|--------------------|
-| 0 | Foundation | `v0.1.0` (2026-04-21) | Закрыли безопасность, лимиты бюджета и аудит до того, как пошли делать фичи. |
-| 1 | Actionability | `v0.2.0` (2026-04-21) | Превратили «посмотреть 20 вакансий» в «подать отклик, вести воронку, понять почему подходит». |
-| 1.7 | Matching quality + multi-profile | `v0.3.0` (2026-04-21) | Подняли релевантность подбора и разрешили до 2 параллельных профилей-резюме у одного пользователя. |
-| 1.8 | Matching relevance hardening | `v0.4.0` (2026-04-21) | Починили кросс-доменный шум: senior-IT резюме больше не ловит стройку, авто и юристов из-за общих русских слов. |
-| 1.9 | Freshness + accuracy + agency | `v0.5.0` (2026-04-21) | Каждое «Обновить подбор» приносит свежее, «не хватает» перестал врать, юзер может отметить «у меня это есть». |
-| 2.0 | First-run rescue | `v0.6.0` (2026-04-22) | Холодный старт расширен 18 → 40 вакансий + HH и LLM в параллель + two-tier output + одна кнопка вместо трёх. |
-| 2.1–2.7 | Matching quality overhaul | `v0.7.0` (2026-04-22) | Шумовой гейт + eval-харнесс + разбивка матчера на стадии + MMR + ESCO-гейт ролей + cross-encoder/LLM-rerank + телеметрия + скелет зарплатного предиктора. |
-| 2.8 | Serious product polish | `v0.8.0` (2026-04-22) | Полировка продукта до «серьёзно выглядит»: Tailwind+shadcn фундамент, честные auth-ошибки, админ-сплит, роут-сплит, линейный главный поток, Kanban переверстан, дизайн-проход. |
-| 3.0 | Privacy minimization (Level A) | `v0.9.0` (2026-04-23) | PII-scrubber на входе в LLM; `resumes.extracted_text` удалён, оригинальный файл стирается сразу после анализа, `storage_path` обнуляется; из Qdrant payload убраны `candidate_name` и `canonical_text`; `original_filename` санитизируется до `resume.{ext}`. Подробности — [`PRIVACY.md`](../PRIVACY.md). |
-| 3.1 | Admin overview | `v0.9.1` (2026-04-24) | `/api/admin/overview`: всего пользователей / активные за 24 ч / всего резюме / всего вакансий (+индексированные) / топ-10 искомых ролей / список активных фоновых подборов. `POST /api/admin/jobs/{job_id}/cancel` — админ останавливает подбор любого пользователя. `users.last_login_at` + touch на логине. |
-| 3.2 | Funnel observability + dedup | `v0.9.2` (2026-04-24) | Полная воронка подбора без «молчаливых дропов»: 26 причин отсева разложены по трём уровням (пре-фильтр / LLM / матчер), персистятся в `recommendation_jobs.metrics`, визуализируются waterfall-UI в админке (`GET /api/admin/jobs/{id}/funnel`). HH-пагинация рано останавливается, если ≥90% URL на странице уже в индексе (`pages_truncated_by_indexed`). `user_vacancy_seen` (14-дневное окно под флагом `feature_exclude_seen_enabled`) исключает недавно показанные вакансии из нового подбора — повторные «подобрать» не гонят один и тот же топ-N. |
-| 3.3 | Admin activity stats | `v0.9.3` (2026-04-24) | Новая таблица `user_login_events` фиксирует каждый успешный логин; админка показывает DAU/WAU/MAU + 14-дневные графики регистраций и логинов (`activity` в `AdminOverviewRead`). `users.last_login_at` давал только последнюю точку — теперь настоящий time-series. |
-| 3.4 | Funnel pre-analyze drops | `v0.9.4` (2026-04-24) | Закрыты два silent drop'а в `discover_and_index_vacancies`: (а) URL, отброшенные из-за LLM-бюджета `max_analyzed`, теперь считаются в `fetched_dropped_analyzed_budget`; (б) внутри-job дубликаты URL — в `fetched_dedup_within_job`. Оба ключа зарегистрированы в `_METRIC_INT_FIELDS` и появляются в admin waterfall. |
-| 4.0 | ResumeVacancyScore cache | `v0.10.0` (2026-04-24) | Новая таблица `resume_vacancy_scores(resume_id, vacancy_id, pipeline_version, similarity_score, vector_score, computed_at, scores_json)` кэширует финальный hybrid-score матчера. При "Обновить подбор" кандидаты, уже посчитанные в предыдущем прогоне, не гоняются повторно через cross-encoder / LLM rerank — TTL 7 дней, инвалидация на re-analyze резюме. Pipeline version `"3.0"` (bump'ается при breaking changes матчера). |
-| 4.1 | Source adapters re-activation | `v0.10.1` (2026-04-24) | `search_vacancies` перешёл с hardcoded "только HH API" на feature-flag aggregator: `feature_superjob_enabled`, `feature_habr_enabled`, `feature_public_sources_enabled` (все default `False` — безопасный выкат). Админ-эндпоинт `POST /api/admin/vacancy-sources/probe` запускает каждый источник по тестовому запросу и возвращает counts — позволяет убедиться, что адаптер живой, до включения флага. Исключение в одном источнике не роняет остальные. |
-| 4.2 | Salary predictor activation | `v0.10.2` (2026-04-24) | `salary_predictor.predict()` теперь реально вызывается в `persist_vacancy_profile` — как только корпус нарастёт до MIN_CORPUS=1000 и LightGBM будет обучен, `predicted_salary_*` колонки начнут заполняться автоматически. Добавлен baseline (median-by-role, feature_salary_baseline_enabled, default off) на случай когда LightGBM ещё не готов. Админ-эндпоинты: `GET /api/admin/salary-predictor/status` (counts + model version) и `POST /api/admin/salary-predictor/backfill` (применить predictor ко всем существующим профилям без predicted). |
-| 4.3 | Warm-run widening + best-of-market fallback | `v0.11.0` (2026-04-24) | Подбор больше не теряет «лучшую работу из исторических»: когда warm-run не набирает `target_match_count` high-quality совпадений, deep-scan повторяется с `date_from=None` (до 2 запросов) — HH отдаёт вакансии, опубликованные до прошлого захода юзера. Бюджеты warm-run расширены: `WARM_MAX_OPENAI_ANALYZED` 18→50, `INTERACTIVE_MAX_DEEP_QUERIES` 3→6, `match_limit` default 20→40, `min_prefetched_matches` 8→10. Новая метрика `cursor_fallback_queries_run` в воронке. Фронт переверстан под пагинацию: 10 карточек сразу + кнопка «Показать ещё 10» (до 40); заголовок честный `Подобрали лучших: N` вместо вводящего в заблуждение `Свежего с прошлого раза`; в `formatRecommendationMetrics` убран двойной счёт `analyzed + indexed` → только `indexed`. |
-| 5.0 | Market-grounded resume audit + light Q&A onboarding | `v0.12.0` (2026-04-25) | Первый шаг к AI-consultant: новый раздел `/audit` показывает 4 блока — Role Read (как мы прочитали резюме: role_family, seniority, alt-роли), Market Salary (предсказанная вилка для роли+гео), Skill Gaps (топ-5 навыков, требуемых рынком, которых нет в резюме), Resume Quality (правила: пропущенный английский, пустые highlights, контактный пробел). Light hybrid Q&A: 30 IT-специфичных вопросов в `onboarding_templates.yaml` с trigger-условиями (AND/OR/NOT precedence), `feature_onboarding_llm_classifier_enabled=False` по дефолту — детерминированные правила; LLM-классификатор за флагом, с PII-scrubber'ом перед вызовом. Cost cap $0.05/DAU/день с template-mode fallback при превышении. 7-day cache в `resume_audits` (prompt_version=`audit-v1`). Admin: `cost_p95_per_dau_usd` + `GET /api/admin/audits/sample`. Eval-bootstrap: 20 self-labeled fixtures + LLM-judge regression-CI (xfail на soft signals для cross-domain noise edge cases). |
-| 5.0.1 | Audit data pipe fixes | `v0.12.1` (2026-04-25) | `/audit` перестал быть пустой заготовкой: (а) `_build_skill_gaps` читал `required_skills`/`skills` из `vacancy_profile`, но canonical-ключ — `must_have_skills` (так пишет `vacancy_analyzer`); все ~825 production-вакансий проходили через `or []` → пустой histogram → 0 gaps; (б) `_build_market_salary` падал в `None` если LightGBM не обучен (всегда сейчас) — добавлен fallback на `salary_baseline.get_baseline_band()` с `model_version="baseline-median-v1"`; (в) `sample_size` считал ВСЕ vacancy_profiles вместо bucket по role_family+seniority — теперь честный count. Тестовый flaky `case_16` добавлен в `LLM_JUDGE_FLAKY_CASES`. |
-| 5.1 | Track segmentation + market-grounded gap analysis | `v0.13.0` (2026-04-25) | Подбор разложен на 3 трека: **точка** (match — текущий уровень), **вырост** (grow — на ступень выше), **стрейч** (stretch — на 2+ выше). Backend: `track_classifier.classify(...)` — детерминированный rule-based классификатор по `vector_score / seniority_diff / skills_overlap` (без LLM). Поле `track` сохраняется в `resume_vacancy_scores` (миграция 0030). Новый сервис `track_gap_analysis.compute_for_resume()` агрегирует top-5 skill gaps и `softer_subset_count` per track из `vacancy_profiles.must_have_skills` (миграция 0031, кэш 24h в `track_gap_analyses`). API `GET /api/resumes/{resume_id}/track-gaps`. Frontend: главная переверстана в 3 collapsible-секции (точка раскрыта, вырост/стрейч свёрнуты), header каждой показывает counter + одну строку gap-summary («70% требуют Kafka — у тебя её нет»); стрейч-секция получает CTA «Показать N вакансий с мягкими требованиями» (фильтрует на клиенте по `must_have_skills - resume_skills ≤ 2`). Designer выкатил editorial-aesthetic с 3px left-rule на секциях (match=neutral, grow=blue, stretch=amber), 11 новых semantic-токенов в `globals.css`. Telemetry: 4 новых события (`track_section_expanded`, `track_gap_clicked`, `softer_subset_clicked`, `apply_from_track`), `applications.track` колонка (миграция 0032) — теперь видно с какого трека юзер откликается. POST `/api/telemetry/event` заменил `console.debug`-stub. Eval: `test_track_classifier.py` (17 unit-кейсов на 6 граничных случаев), `test_track_gap_analysis.py` (11 DB-кейсов с искусственным корпусом 30 вакансий + cache test), `test_track_gaps_endpoint.py` (4 HTTP-кейса). 584/584 backend tests green. |
-| 5.2 | Per-vacancy strategy + cover letter draft + recommendation corrections | `v0.14.0` (2026-04-25) | Вторая часть AI-consultant-thesis: страница `/strategy/{resume_id}/{vacancy_id}` показывает 3 editorial-блока — `match_highlights` (top-3 опыта, релевантного вакансии), `gap_mitigations` (top-2 требования, которых нет в резюме, + как закрыть), `cover_letter_draft` (3-абзацный draft ≤ 1200 chars). Backend: `vacancy_strategy.compute_strategy()` с двумя путями — LLM (`gpt-4o-mini`-class, `response_format=json_object`, PII-scrubbed input + regex-output sanitizer на email/phone) и template (rule-based `_skill_overlap` + статический skeleton). Cost-cap $0.05/DAU/день шарится с `/audit` через `llm_cost_accounting.daily_user_llm_cost_usd()`; при превышении — fallback на template. Cache 30 days в `vacancy_strategies` (миграция 0033) по `(resume_id, vacancy_id, prompt_version)`. Endpoint `GET /api/resumes/{rid}/vacancies/{vid}/strategy` rate-limited 2/час (DB-counted), `?force=true` обходит cache+rate limit. Feedback loop: `POST /api/recommendation-corrections` (миграция 0034) — юзер помечает «не я / не правда» на каждой карточке strategy-блока, корректировки летят в новую таблицу для будущего ranker'а. Frontend: «Стратегия» кнопка в карточке вакансии на `/`, sessionStorage-flag для apply-after-strategy detection. Telemetry: 6 новых событий (`strategy_view`, `strategy_match_highlight_corrected`, `strategy_gap_mitigation_corrected`, `cover_letter_copied`, `cover_letter_edited`, `apply_after_strategy_view`). Designer: 5 новых tokens (`--color-strategy-{match-rule,gap-rule,gap-surface,gap-label,editor-surface}`). Eval: 54 новых теста (template mode 7 + endpoint 6 + corrections 7 + cost accounting 4 + PII hard guard 30 параметризованных) — 638/638 backend tests green. PII guard: 0 leaks на 30 тестовых пар «email/phone/имя» в template mode. |
+| Фаза | Релиз | Дата | Суть |
+|---|---|---|---|
+| 0 — Foundation | `v0.1.0` | 2026-04-21 | Безопасность, лимиты бюджета, аудит — до фич. |
+| 1 — Actionability | `v0.2.0` | 2026-04-21 | «Посмотреть 20» → «подать, вести, понять». |
+| 1.7 — Matching + multi-profile | `v0.3.0` | 2026-04-21 | ↑ релевантность, до 2 резюме у юзера. |
+| 1.8 — Cross-domain noise gate | `v0.4.0` | 2026-04-21 | Senior-IT не ловит стройку/юристов из-за общих русских слов. |
+| 1.9 — Freshness + agency | `v0.5.0` | 2026-04-21 | «Обновить» приносит свежее, ✓/✗ override на карточке. |
+| 2.0 — First-run rescue | `v0.6.0` | 2026-04-22 | Cold pool 18→40, two-tier output, одна кнопка. |
+| 2.1–2.7 — Matching overhaul | `v0.7.0` | 2026-04-22 | Eval-harness в CI, MMR, ESCO-гейт, cross-encoder/LLM rerank. |
+| 2.8 — Serious product polish | `v0.8.0` | 2026-04-22 | Tailwind+shadcn, admin-сплит, линейный flow, Kanban. |
+| 3.0 — Privacy Level A | `v0.9.0` | 2026-04-23 | PII-scrubber, удаление оригиналов и `extracted_text`. |
+| 3.1 — Admin overview | `v0.9.1` | 2026-04-24 | `/admin/overview`, отмена чужих job'ов, `last_login_at`. |
+| 3.2 — Funnel observability | `v0.9.2` | 2026-04-24 | 26 reasons в waterfall, `user_vacancy_seen` 14d. |
+| 3.3 — Admin activity stats | `v0.9.3` | 2026-04-24 | `user_login_events`, DAU/WAU/MAU + 14d-графики. |
+| 3.4 — Funnel pre-analyze drops | `v0.9.4` | 2026-04-24 | Закрыли 2 silent drop'а в discover. |
+| 4.0 — Matcher score cache | `v0.10.0` | 2026-04-24 | `resume_vacancy_scores` TTL 7d, не гоним rerank повторно. |
+| 4.1 — Source adapters | `v0.10.1` | 2026-04-24 | Feature-flag aggregator + `/admin/vacancy-sources/probe`. |
+| 4.2 — Salary predictor | `v0.10.2` | 2026-04-24 | LightGBM + median-by-role baseline + admin endpoints. |
+| 4.3 — Best-of-market fallback | `v0.11.0` | 2026-04-24 | Cursor-free deep-scan, warm-run бюджеты ↑, пагинация UI. |
+| 5.0 — Market audit + Q&A | `v0.12.0` | 2026-04-25 | `/audit` (4 блока), 30 онбординг-вопросов, cost cap $0.05/DAU. |
+| 5.0.1 — Audit data pipe fixes | `v0.12.1` | 2026-04-25 | Skill gaps / market salary / sample_size перестали быть пустыми. |
+| 5.1 — Track segmentation | `v0.13.0` | 2026-04-25 | 3 трека (точка/вырост/стрейч), gap-analysis из рынка. |
+| 5.2 — Per-vacancy strategy | `v0.14.0` | 2026-04-25 | Стратегия отклика + cover letter + recommendation corrections. |
 
 ## Что дальше
 
-Финальный релиз — `v1.0.0` (Phase 5.3, **domain expansion**, gated on PMF). После v0.14.0 продукт-MVP закрывает thesis «AI-карьерный консультант для IT» end-to-end: подбор → треки → strategy + cover letter → отклик. Полный план и принципы — в [`.claude/skills/product-roadmap/SKILL.md`](../.claude/skills/product-roadmap/SKILL.md).
+**`v1.0.0` — Phase 5.3 — Domain expansion (PMF-gated).** Расширение на Healthcare и Finance: domain classifier (zero-shot LLM), отдельные taxonomy + onboarding YAML на каждый домен, salary baselines, domain-aware UI. Запускается **только после подтверждения PMF в IT**:
+
+- WAU/MAU ≥ 0.35
+- NPS ≥ +20 (N=50)
+- Audit-applied ≥ 40% **и** apply-after-strategy ≥ 30%
+
+Если 2 из 3 не выполнены — фаза откладывается, чиним IT-MVP. С N=1 dogfood'а PMF-gate физически не проходим — ждём реальных юзеров.
+
+После `v1.0.0` продукт выходит из закрытой беты.
 
 ## Как читать этот файл
 
-- Версия `vX.Y.Z` — публичный git-тег, связанный с релизом.
-- История отдельных PR — в CHANGELOG и в комментариях к релизам на GitHub.
+- Версия `vX.Y.Z` — публичный git-тег.
+- Подробные release notes — в `release-notes/vX.Y.Z.md` и в GitHub Releases.
 - Продукт в закрытой бете; версия намеренно меньше 1.0.
 
 ## Вклад в проект
 
-Правила для контрибьюторов: [CONTRIBUTING.md](CONTRIBUTING.md)
+Правила для контрибьюторов: [CONTRIBUTING.md](../CONTRIBUTING.md)

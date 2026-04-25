@@ -17,8 +17,6 @@ import {
 } from '../lib/recommendationStats';
 import { createDwellTracker, trackClick, trackEvent } from '../lib/telemetry';
 import { API_BASE_URL, RESUME_LIMIT, apiFetch } from '@/lib/api';
-import { TrackSegmentView, type TrackSection as TrackSectionShape, type TrackKind, type VacancyMatchStub } from '@/components/recommendations/TrackSegmentView';
-import type { TrackGapAnalysisOut } from '@/types/trackGaps';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/lib/session';
@@ -81,8 +79,6 @@ type VacancyMatch = {
   profile: Record<string, unknown> | null;
   tier?: 'strong' | 'maybe' | null;
   match_run_id?: string | null;
-  track?: TrackKind;
-  track_reason?: string | null;
 };
 
 type CuratedDirection = 'added' | 'rejected';
@@ -401,8 +397,6 @@ export default function DashboardPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
   const [applyingVacancyIds, setApplyingVacancyIds] = useState<Record<number, boolean>>({});
-  const [trackGaps, setTrackGaps] = useState<TrackGapAnalysisOut | null>(null);
-  const [showSofterOnly, setShowSofterOnly] = useState(false);
   const [curatedSkills, setCuratedSkills] = useState<CuratedSkillRead[]>([]);
   const [curatingSkillKey, setCuratingSkillKey] = useState<string | null>(null);
   const [lastSearchAt, setLastSearchAt] = useState<Date | null>(null);
@@ -514,65 +508,6 @@ export default function DashboardPage() {
 
   const visibleMatches = excludeFeedbackVacancies(matches, dislikedVacancies, [...selectedVacancies, ...appliedVacancies], hiddenMatchIds);
 
-  // ── Track section composition ──────────────────────────────────────────────
-  const selectedResume = resumes.find((r) => r.id === selectedResumeId) ?? null;
-  const resumeSkillsSet: Set<string> = new Set(
-    [
-      ...asStringArray(selectedResume?.analysis?.hard_skills),
-      ...asStringArray(selectedResume?.analysis?.soft_skills),
-      ...asStringArray(selectedResume?.analysis?.top_skills),
-    ].map((s) => s.toLowerCase())
-  );
-
-  function buildGapSummary(gapBlock: TrackGapAnalysisOut[keyof TrackGapAnalysisOut] | null): string | null {
-    if (!gapBlock || gapBlock.top_gaps.length === 0) return null;
-    const top = gapBlock.top_gaps[0];
-    const pct = Math.round(top.fraction * 100);
-    return `${pct}% вакансий требуют «${top.skill}»`;
-  }
-
-  const TRACK_LABELS: Record<TrackKind, string> = {
-    match: 'Текущий уровень',
-    grow: 'На вырост',
-    stretch: 'Амбиция',
-  };
-
-  const trackSections: TrackSectionShape[] = (['match', 'grow', 'stretch'] as TrackKind[]).map((kind) => {
-    const gapBlock = trackGaps ? trackGaps[kind] : null;
-    const kindMatches = visibleMatches.filter((m) => (m.track ?? 'match') === kind);
-
-    // For stretch: apply softer-only filter when CTA was clicked
-    const displayedMatches =
-      kind === 'stretch' && showSofterOnly
-        ? kindMatches.filter((m) => {
-            const mustHave = asStringArray(m.profile?.must_have_skills);
-            const missing = mustHave.filter((s) => !resumeSkillsSet.has(s.toLowerCase()));
-            return missing.length <= 2;
-          })
-        : kindMatches;
-
-    return {
-      kind,
-      label: TRACK_LABELS[kind],
-      gap_summary: buildGapSummary(gapBlock),
-      softer_subset_count: gapBlock?.softer_subset_count ?? 0,
-      vacancies: displayedMatches.map((m) => ({
-        vacancy_id: m.vacancy_id,
-        title: m.title,
-        company: m.company,
-        location: m.location,
-        similarity_score: m.similarity_score,
-        salary_text: null,
-      } satisfies VacancyMatchStub)),
-    } satisfies TrackSectionShape;
-  });
-
-  // Quick lookup for renderCard — map vacancy_id → VacancyMatch with index
-  const matchByIdMap = new Map<number, { match: VacancyMatch; index: number }>();
-  visibleMatches.forEach((m, i) => {
-    matchByIdMap.set(normalizeVacancyId(m.vacancy_id), { match: m, index: i });
-  });
-
   const currentMatchRunId = visibleMatches[0]?.match_run_id ?? null;
   const matchRunIdRef = useRef<string | null>(null);
   matchRunIdRef.current = currentMatchRunId;
@@ -653,7 +588,6 @@ export default function DashboardPage() {
       );
       setMatches(visibleMatches);
       setMatchesPageSize(10);
-      setShowSofterOnly(false);
       const metricsInfo = formatMetricsInfo(metrics);
       const headline = formatRecommendationHeadline(visibleMatches.length);
       setMatchingMessage(metricsInfo ? `${headline} ${metricsInfo}` : headline);
@@ -662,10 +596,6 @@ export default function DashboardPage() {
       setLastSearchAt(new Date());
       const analyzedCount = typeof metrics.analyzed === 'number' ? metrics.analyzed : null;
       if (analyzedCount !== null) setLastAnalyzedCount(analyzedCount);
-      // Load track-gap analysis in parallel — failures degrade gracefully
-      if (selectedResumeId) {
-        void loadTrackGaps(selectedResumeId);
-      }
       return;
     }
 
@@ -701,8 +631,6 @@ export default function DashboardPage() {
     setProfileConfirmed(false);
     setProfileMessage('');
     setApplyingVacancyIds({});
-    setTrackGaps(null);
-    setShowSofterOnly(false);
     if (nextMessage) {
       setMessage(nextMessage);
     }
@@ -1106,16 +1034,6 @@ export default function DashboardPage() {
     }
   }
 
-  async function loadTrackGaps(resumeId: number) {
-    try {
-      const data = await apiFetch<TrackGapAnalysisOut>(`/api/resumes/${resumeId}/track-gaps`, { token });
-      setTrackGaps(data);
-    } catch {
-      // 404 or 500 — fall back gracefully; sections still render without gap line
-      setTrackGaps(null);
-    }
-  }
-
   async function loadDashboardStats(resumeId: number | null) {
     try {
       const suffix = resumeId ? `?resume_id=${resumeId}` : '';
@@ -1443,12 +1361,6 @@ export default function DashboardPage() {
     }
     setApplyingVacancyIds((current) => ({ ...current, [vacancyId]: true }));
     try {
-      const track = vacancy.track ?? 'match';
-      trackEvent('apply_from_track', {
-        resume_id: selectedResumeId ?? undefined,
-        vacancy_id: vacancy.vacancy_id,
-        track,
-      });
       // Fire apply_after_strategy_view if user already viewed strategy for this pair
       try {
         const strategySeen = sessionStorage.getItem(
@@ -1469,7 +1381,7 @@ export default function DashboardPage() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ vacancy_id: vacancy.vacancy_id, status: 'applied', track }),
+        body: JSON.stringify({ vacancy_id: vacancy.vacancy_id, status: 'applied' }),
       });
       if (response.status === 401) {
         clearSession('Сессия истекла. Войдите снова.');
@@ -2246,25 +2158,9 @@ export default function DashboardPage() {
                     </div>
                   ) : null}
 
-                  {/* Track-segmented match cards */}
-                  {showSofterOnly ? (
-                    <div className="flex items-center gap-2 text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
-                      <span>Показаны вакансии с мягкими требованиями</span>
-                      <button
-                        type="button"
-                        className="underline text-[color:var(--color-accent)] hover:opacity-70 transition-opacity"
-                        onClick={() => setShowSofterOnly(false)}
-                      >
-                        Сбросить фильтр
-                      </button>
-                    </div>
-                  ) : null}
-                  <TrackSegmentView
-                    tracks={trackSections}
-                    renderCard={(stub) => {
-                      const entry = matchByIdMap.get(stub.vacancy_id);
-                      if (!entry) return null;
-                      const { match, index: matchIndex } = entry;
+                  {/* Match cards — flat list */}
+                  <div className="flex flex-col gap-3">
+                  {visibleMatches.slice(0, matchesPageSize).map((match, matchIndex) => {
                       const matchedSkills = matchedSkillsFromMatch(match);
                       const matchedRequirements = matchedRequirementsFromMatch(match);
                       const missingRequirements = missingRequirementsFromMatch(match);
@@ -2293,6 +2189,7 @@ export default function DashboardPage() {
                         curatingSkillKey === `${match.vacancy_id}::${direction}::${skill.toLowerCase()}`;
                       return (
                         <article
+                          key={normalizeVacancyId(match.vacancy_id)}
                           className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-4 flex flex-col gap-3 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-shadow duration-[var(--duration-fast)]"
                           data-vacancy-id={normalizeVacancyId(match.vacancy_id)}
                           ref={(el) => {
@@ -2518,15 +2415,8 @@ export default function DashboardPage() {
                           </div>
                         </article>
                       );
-                    }}
-                    onSectionExpand={(kind) =>
-                      trackEvent('track_section_expanded', { resume_id: selectedResumeId ?? undefined, track: kind })
-                    }
-                    onShowSofterStretch={() => setShowSofterOnly(true)}
-                    onSofterCtaClick={(count) =>
-                      trackEvent('softer_subset_clicked', { resume_id: selectedResumeId ?? undefined, count })
-                    }
-                  />
+                    })}
+                  </div>
                 </CardContent>
               </Card>
 
