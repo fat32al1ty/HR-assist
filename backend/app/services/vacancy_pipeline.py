@@ -1,4 +1,5 @@
 import logging
+import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -548,3 +549,43 @@ def discover_and_index_vacancies(
     metrics.enrich_failed = parse_stats.enrich_failed
     metrics.pages_truncated_by_indexed = parse_stats.pages_truncated_by_indexed
     return VacancyDiscoveryResult(indexed_vacancies=indexed, metrics=metrics)
+
+
+def discover_with_429_backoff(
+    db,
+    *,
+    query: str,
+    count: int,
+    rf_only: bool = True,
+    max_analyzed: int | None = None,
+) -> VacancyDiscoveryResult:
+    """Wrapper around discover_and_index_vacancies with per-query 429 backoff.
+
+    On the first attempt, if the result fetched==0 (likely HH 429 or empty
+    response), sleep with jitter and retry once. If the retry also returns
+    nothing, surrender and return the empty result — never block the whole
+    warmup cycle.
+    """
+    result = discover_and_index_vacancies(
+        db,
+        query=query,
+        count=count,
+        rf_only=rf_only,
+        max_analyzed=max_analyzed,
+    )
+    if result.metrics.fetched == 0 and result.metrics.already_indexed_skipped == 0:
+        jitter = random.uniform(2.0, 6.0)
+        logger.info(
+            "discover_with_429_backoff sleeping=%.1fs query=%r before_retry",
+            jitter,
+            query,
+        )
+        time.sleep(jitter)
+        result = discover_and_index_vacancies(
+            db,
+            query=query,
+            count=count,
+            rf_only=rf_only,
+            max_analyzed=max_analyzed,
+        )
+    return result

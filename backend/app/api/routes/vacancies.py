@@ -45,10 +45,13 @@ from app.services.recommendation_jobs import (
     get_latest_job_snapshot_for_user,
     record_instant_recommendation_snapshot,
     start_recommendation_job,
+    start_segment_warmup_job,
 )
+from app.services.segment_keys import segment_key_from_analysis
 from app.services.user_preference_profile_pipeline import recompute_user_preference_profile
 from app.services.vacancy_pipeline import discover_and_index_vacancies
 from app.services.vacancy_recommendation import recommend_vacancies_for_resume
+from app.services.vacancy_warmup import _query_from_resume_analysis
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -215,6 +218,33 @@ def recommend_vacancies_instant(
             current_user.id,
             resume_id,
         )
+
+    segment_warming = False
+    if prefetch_empty:
+        try:
+            resume_obj = get_resume_for_user(db, resume_id=resume_id, user_id=current_user.id)
+            seg_key = (
+                segment_key_from_analysis(resume_obj.analysis)
+                if resume_obj is not None and resume_obj.analysis
+                else None
+            )
+            seg_query = (
+                _query_from_resume_analysis(resume_obj.analysis) if resume_obj is not None else None
+            ) or query
+            if seg_key:
+                start_segment_warmup_job(
+                    segment_key=seg_key,
+                    notify_user_id=current_user.id,
+                    query=seg_query,
+                )
+                segment_warming = True
+        except Exception:
+            logger.exception(
+                "segment_warmup_enqueue_failed user_id=%s resume_id=%s",
+                current_user.id,
+                resume_id,
+            )
+
     return VacancyRecommendResponse(
         query=query,
         indexed=metrics.indexed,
@@ -229,6 +259,7 @@ def recommend_vacancies_instant(
         openai_usage=usage,
         matches=matches,
         prefetch_empty=prefetch_empty,
+        segment_warming=segment_warming,
     )
 
 

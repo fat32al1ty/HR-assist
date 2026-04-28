@@ -157,6 +157,7 @@ class VacancyRecommendResponse(BaseModel):
     openai_usage: OpenAIUsageRead
     matches: list[VacancyMatchRead]
     prefetch_empty: bool = False
+    segment_warming: bool = False
 
 
 class VacancyFeedbackRequest(BaseModel):

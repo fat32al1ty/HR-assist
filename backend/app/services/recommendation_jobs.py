@@ -7,6 +7,7 @@ from threading import Lock
 from uuid import uuid4
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import settings
 from app.db.session import SessionLocal
@@ -53,6 +54,91 @@ class RecommendationJobCancelled(RuntimeError):
     The worker catches this and transitions the job to failed with the
     Russian user-facing message so the frontend can show a friendly label.
     """
+
+
+def start_segment_warmup_job(
+    *,
+    segment_key: str,
+    notify_user_id: int,
+    query: str,
+    resume_id: int | None = None,
+) -> str:
+    """Enqueue a segment_warmup job, idempotent on (segment_key, active status).
+
+    If a row with this segment_key is already queued or running, returns its
+    id without inserting. Otherwise inserts and returns the new job id.
+    Uses the unique partial index on (segment_key) WHERE status IN
+    ('queued', 'running') for dedup — falls back to IntegrityError catch.
+
+    resume_id is looked up from the user's active resume when not provided.
+    Raises ValueError if no resume can be resolved (job cannot be enqueued).
+    """
+    from app.models.resume import Resume
+
+    db = SessionLocal()
+    try:
+        existing = db.scalar(
+            select(RecommendationJob).where(
+                RecommendationJob.segment_key == segment_key,
+                RecommendationJob.status.in_(["queued", "running"]),
+            )
+        )
+        if existing is not None:
+            return existing.id
+
+        if resume_id is None:
+            active_resume = db.scalar(
+                select(Resume).where(
+                    Resume.user_id == notify_user_id,
+                    Resume.is_active.is_(True),
+                )
+            )
+            if active_resume is None:
+                active_resume = db.scalar(
+                    select(Resume)
+                    .where(Resume.user_id == notify_user_id)
+                    .order_by(Resume.created_at.desc())
+                    .limit(1)
+                )
+            if active_resume is None:
+                raise ValueError(
+                    f"no resume found for user_id={notify_user_id}; cannot enqueue segment_warmup"
+                )
+            resume_id = int(active_resume.id)
+
+        job_id = str(uuid4())
+        job = RecommendationJob(
+            id=job_id,
+            user_id=notify_user_id,
+            resume_id=resume_id,
+            job_type="segment_warmup",
+            status="queued",
+            stage="queued",
+            progress=0,
+            segment_key=segment_key,
+            notify_user_id=notify_user_id,
+            request_payload={
+                "query": query,
+                "discover_count": settings.segment_warmup_discover_count,
+                "max_analyzed": settings.segment_warmup_max_analyzed,
+            },
+        )
+        db.add(job)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            fallback = db.scalar(
+                select(RecommendationJob).where(
+                    RecommendationJob.segment_key == segment_key,
+                    RecommendationJob.status.in_(["queued", "running"]),
+                )
+            )
+            return fallback.id if fallback is not None else job_id
+        db.refresh(job)
+        return job.id
+    finally:
+        db.close()
 
 
 def record_instant_recommendation_snapshot(

@@ -223,6 +223,27 @@ def openai_budget_scope(
         _TRACKER.reset(token)
 
 
+@contextmanager
+def system_budget_scope(budget_usd: float, budget_enforced: bool):
+    """Budget scope for system-initiated work (segment warmup, etc.).
+
+    Uses user_id=None so no user's daily spend is charged.
+    Parallel to openai_budget_scope but without per-user daily tracking.
+    """
+    tracker = OpenAIUsageTracker(
+        budget_usd=budget_usd,
+        budget_enforced=budget_enforced,
+        user_id=None,
+        daily_budget_usd=None,
+        daily_budget_enforced=False,
+    )
+    token = _TRACKER.set(tracker)
+    try:
+        yield tracker
+    finally:
+        _TRACKER.reset(token)
+
+
 def record_responses_usage(
     *,
     input_tokens: int,

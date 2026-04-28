@@ -124,6 +124,7 @@ type VacancyRecommendResponse = {
   };
   matches: VacancyMatch[];
   prefetch_empty?: boolean;
+  segment_warming?: boolean;
 };
 
 type RecommendationJobStatusResponse = {
@@ -417,6 +418,7 @@ export default function DashboardPage() {
   const [deepScanRunning, setDeepScanRunning] = useState(false);
   const [showPartialBanner, setShowPartialBanner] = useState(false);
   const [prefetchEmpty, setPrefetchEmpty] = useState(false);
+  const [segmentWarming, setSegmentWarming] = useState(false);
   /** Fires refreshVacancyIndex once the next selectedResumeId is set (post-replace). */
   const postReplaceRefreshRef = useRef(false);
   /** Hidden file input ref for the "Заменить резюме" button in the resume card. */
@@ -1357,6 +1359,7 @@ export default function DashboardPage() {
     setCancelRequested(false);
     setShowPartialBanner(false);
     setPrefetchEmpty(false);
+    setSegmentWarming(false);
 
     // ── Single-stage instant call against the prefetched index ─────────────
     // v0.20.0 (Phase 6): the deep-scan call + polling loop is gone from the
@@ -1389,7 +1392,12 @@ export default function DashboardPage() {
       if (instant.prefetch_empty) {
         setPrefetchEmpty(true);
         setMatches([]);
-        setMatchingMessage('Готовим персональный индекс — первый подбор займёт минуту-две.');
+        if (instant.segment_warming) {
+          setSegmentWarming(true);
+          setMatchingMessage('Прогрев под твою роль запущен — собираем свежие вакансии 5–10 минут. Возвращайся и нажми «Подбор» ещё раз.');
+        } else {
+          setMatchingMessage('Готовим персональный индекс — первый подбор займёт минуту-две.');
+        }
         setMatchingStage('Прогрев...');
       } else {
         const visibleInstant = excludeFeedbackVacancies(
@@ -2391,11 +2399,33 @@ export default function DashboardPage() {
                       ) : null}
                     </div>
                   ) : null}
-                  {/* Prefetch-empty skeleton */}
-                  {prefetchEmpty && !matchingBusy ? (
+                  {/* Prefetch-empty skeleton (shown only when no segment warmup is queued) */}
+                  {prefetchEmpty && !matchingBusy && !segmentWarming ? (
                     <div className="rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-4 py-4 flex flex-col gap-2">
                       <div className="h-3 w-2/3 rounded-full bg-[color-mix(in_srgb,var(--color-ink)_10%,transparent)]" />
                       <div className="h-3 w-1/2 rounded-full bg-[color-mix(in_srgb,var(--color-ink)_8%,transparent)]" />
+                    </div>
+                  ) : null}
+                  {/* Segment-warming honest progress banner — v0.21.0
+                      Shown when the search hit a cold segment and a background
+                      segment_warmup_job has been enqueued; tells the user the
+                      pool will be filled in 5–10 minutes. */}
+                  {prefetchEmpty && !matchingBusy && segmentWarming ? (
+                    <div className="rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--color-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] px-4 py-4 flex flex-col gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="shrink-0 mt-0.5 h-2 w-2 rounded-full bg-[var(--color-accent)] animate-pulse" />
+                        <div className="flex-1 flex flex-col gap-1">
+                          <p className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                            Прогрев индекса под твою роль
+                          </p>
+                          <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-snug)]">
+                            Мы собираем свежие вакансии конкретно под твоё резюме. Обычно занимает 5–10 минут. Заходи позже и нажми «Подбор» ещё раз — увидишь результаты.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="h-1 rounded-full bg-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] overflow-hidden">
+                        <div className="h-full w-full rounded-full bg-[var(--color-accent)] animate-pulse opacity-70" />
+                      </div>
                     </div>
                   ) : null}
                   {/* Partial results banner */}

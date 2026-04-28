@@ -114,6 +114,10 @@ class Settings(BaseSettings):
     feature_vacancy_strategy_template_mode_enabled: bool = False
     vacancy_strategy_cost_cap_usd_per_day: float = 0.05
     vacancy_strategy_cache_ttl_days: int = 30
+    segment_warmup_max_analyzed: int = 30
+    segment_warmup_daily_cap: int = 100
+    segment_warmup_discover_count: int = 60
+    openai_system_request_budget_usd: float = 0.20
 
     @field_validator(
         "openai_api_key",

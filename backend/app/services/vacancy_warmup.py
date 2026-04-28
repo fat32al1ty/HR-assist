@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from threading import Event, Lock, Thread
 
 from sqlalchemy import select
 
 from app.core.config import settings
 from app.db.session import SessionLocal
+from app.models.recommendation_job import RecommendationJob
 from app.models.resume import Resume
 from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
+from app.repositories.recommendation_jobs import complete_job, fail_job, mark_job_running
+from app.services.openai_usage import system_budget_scope
 from app.services.recommendation_jobs import sweep_stale_running_jobs
-from app.services.vacancy_pipeline import discover_and_index_vacancies
+from app.services.vacancy_pipeline import discover_and_index_vacancies, discover_with_429_backoff
 from app.services.vacancy_profile_backfill import backfill_missing_vacancy_profiles
 
 logger = logging.getLogger(__name__)
@@ -30,6 +33,8 @@ _state: dict[str, object] = {
     "last_error": None,
     "last_queries": [],
     "last_metrics": {},
+    "segment_warmup_daily_count": 0,
+    "segment_warmup_daily_date": None,
 }
 
 
@@ -118,9 +123,105 @@ def _collect_warmup_queries() -> list[str]:
         db.close()
 
 
+def _reset_daily_cap_if_needed() -> None:
+    today = date.today().isoformat()
+    with _state_lock:
+        if _state.get("segment_warmup_daily_date") != today:
+            _state["segment_warmup_daily_count"] = 0
+            _state["segment_warmup_daily_date"] = today
+
+
+def _drain_segment_warmup_jobs(db) -> dict[str, int]:
+    _reset_daily_cap_if_needed()
+    with _state_lock:
+        daily_count = int(_state.get("segment_warmup_daily_count", 0))
+
+    cap = settings.segment_warmup_daily_cap
+    if daily_count >= cap:
+        logger.info(
+            "segment_warmup_daily_cap_reached daily_count=%d cap=%d skipping",
+            daily_count,
+            cap,
+        )
+        return {"drained": 0, "skipped_cap": 1}
+
+    remaining = cap - daily_count
+    jobs = db.scalars(
+        select(RecommendationJob)
+        .where(
+            RecommendationJob.status == "queued",
+            RecommendationJob.job_type == "segment_warmup",
+        )
+        .order_by(RecommendationJob.created_at.asc())
+        .limit(remaining)
+    ).all()
+
+    drained = 0
+    for job in jobs:
+        payload = job.request_payload or {}
+        query = payload.get("query") or ""
+        if not query:
+            fail_job(db, job, error_message="segment_warmup missing query")
+            continue
+        discover_count = int(payload.get("discover_count", settings.segment_warmup_discover_count))
+        max_analyzed = int(payload.get("max_analyzed", settings.segment_warmup_max_analyzed))
+        mark_job_running(db, job)
+        try:
+            with system_budget_scope(
+                budget_usd=settings.openai_system_request_budget_usd,
+                budget_enforced=True,
+            ) as usage_tracker:
+                result = discover_with_429_backoff(
+                    db,
+                    query=query,
+                    count=discover_count,
+                    rf_only=True,
+                    max_analyzed=max_analyzed,
+                )
+            complete_job(
+                db,
+                job,
+                query=query,
+                metrics={
+                    "fetched": result.metrics.fetched,
+                    "indexed": result.metrics.indexed,
+                    "analyzed": result.metrics.analyzed,
+                    "filtered": result.metrics.filtered,
+                    "failed": result.metrics.failed,
+                },
+                matches=[],
+                openai_usage=usage_tracker.snapshot().to_dict(),
+            )
+            drained += 1
+            with _state_lock:
+                _state["segment_warmup_daily_count"] = (
+                    int(_state.get("segment_warmup_daily_count", 0)) + 1
+                )
+        except Exception as err:
+            logger.warning(
+                "segment_warmup_job_failed job_id=%s segment_key=%s error=%s",
+                job.id,
+                job.segment_key,
+                err,
+            )
+            try:
+                fail_job(db, job, error_message=str(err))
+            except Exception:
+                pass
+
+    return {"drained": drained, "skipped_cap": 0}
+
+
 def _run_warmup_cycle() -> tuple[list[str], dict[str, int]]:
     db = SessionLocal()
     try:
+        # Drain pending segment-warmup jobs before the generic warmup pass so
+        # cold segments get served as quickly as possible.
+        try:
+            _drain_segment_warmup_jobs(db)
+        except Exception as drain_err:
+            logger.warning("segment_warmup_drain_error error=%s", drain_err)
+
         queries = _collect_warmup_queries()
         started_at = datetime.now(UTC)
         aggregate = {
@@ -219,6 +320,29 @@ def start_vacancy_warmup_worker() -> None:
 
     _stop_event.clear()
     _set_state(enabled=True)
+
+    # Log recovery count: queued segment_warmup rows will be drained on first cycle.
+    try:
+        from sqlalchemy import func as _func
+
+        startup_db = SessionLocal()
+        try:
+            pending_count = startup_db.scalar(
+                select(_func.count(RecommendationJob.id)).where(
+                    RecommendationJob.status == "queued",
+                    RecommendationJob.job_type == "segment_warmup",
+                )
+            )
+            if pending_count and int(pending_count) > 0:
+                logger.info(
+                    "segment_warmup_recovery pending_jobs=%d will_drain_on_first_cycle",
+                    int(pending_count),
+                )
+        finally:
+            startup_db.close()
+    except Exception:
+        pass
+
     _worker_thread = Thread(target=_worker_loop, daemon=True, name="vacancy-warmup-worker")
     _worker_thread.start()
 

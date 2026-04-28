@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text, false, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, false, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -13,6 +13,13 @@ class RecommendationJob(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     resume_id: Mapped[int] = mapped_column(ForeignKey("resumes.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(32), default="queued", index=True)
+    job_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="deep_scan", server_default="deep_scan"
+    )
+    segment_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    notify_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     stage: Mapped[str] = mapped_column(String(64), default="queued")
     progress: Mapped[int] = mapped_column(default=0)
     cancel_requested: Mapped[bool] = mapped_column(
