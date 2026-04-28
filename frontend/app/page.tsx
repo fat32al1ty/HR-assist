@@ -998,7 +998,10 @@ export default function DashboardPage() {
     setProfileDraft((current) => (current ? { ...current, ...patch } : current));
   }
 
-  async function saveProfileAndRecommend() {
+  // Unified save: auto-pins detected roles/domains, PATCHes preferences, then saves
+  // full profile via profile-confirm and refreshes. mergedTitles/mergedDomains are the
+  // caller-computed union of localRoles + auto-detected values (deduped, capped).
+  async function saveProfileAndRecommend(mergedTitles?: string[], mergedDomains?: string[]) {
     if (!selectedResumeId || !profileDraft) {
       setProfileMessage('Сначала выберите резюме.');
       return;
@@ -1020,10 +1023,49 @@ export default function DashboardPage() {
     if (yearsNumber !== null) analysisUpdates.total_experience_years = yearsNumber;
     if (topSkills.length > 0) analysisUpdates.top_skills = topSkills;
 
+    // Use caller-supplied merged pills if provided; otherwise fall back to profileDraft titles
+    const titlesToSave = mergedTitles ?? profileDraft.preferred_titles;
+
+    // If merged pills were supplied, PATCH preferences first so the pills are persisted
+    // independently of whether profile-confirm succeeds. This is the "auto-pin" step.
+    if (mergedTitles !== undefined || mergedDomains !== undefined) {
+      setPrefsSaving(true);
+      setPrefsError('');
+      try {
+        const prefsData = await request<UserRead>('/api/users/me/preferences', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            preferred_titles: mergedTitles ?? localRoles,
+            preferred_domains: mergedDomains ?? localDomains,
+          }),
+        });
+        const updatedPrefs: UserPrefs = {
+          preferred_work_format: prefsData.preferred_work_format,
+          relocation_mode: prefsData.relocation_mode,
+          home_city: prefsData.home_city,
+          preferred_titles: prefsData.preferred_titles,
+          preferred_domains: Array.isArray(prefsData.preferred_domains) ? prefsData.preferred_domains : [],
+          expected_salary_min: prefsData.expected_salary_min,
+          expected_salary_max: prefsData.expected_salary_max,
+          expected_salary_currency: prefsData.expected_salary_currency,
+        };
+        setUserPrefs(updatedPrefs);
+        setLocalRoles(updatedPrefs.preferred_titles);
+        setLocalDomains(updatedPrefs.preferred_domains);
+      } catch (error) {
+        setPrefsError(error instanceof Error ? error.message : 'Не удалось сохранить настройки');
+        setPrefsSaving(false);
+        return;
+      } finally {
+        setPrefsSaving(false);
+      }
+    }
+
     const preferenceUpdates: Record<string, unknown> = {
       preferred_work_format: profileDraft.preferred_work_formats.length === 1 ? profileDraft.preferred_work_formats[0] : 'any',
       relocation_mode: profileDraft.relocation_mode,
-      preferred_titles: profileDraft.preferred_titles
+      preferred_titles: titlesToSave
     };
     if (homeCityTrimmed) {
       preferenceUpdates.home_city = homeCityTrimmed;
@@ -1840,123 +1882,6 @@ export default function DashboardPage() {
           <div className="workspace stagger-children">
             {/* ── Sidebar ─────────────────────────────────────────────── */}
             <aside className="flex flex-col gap-3.5 animate-fade-in">
-              {/* ── Role + Domain pills ───────────────────────────────── */}
-              {(() => {
-                const selectedResume = resumes.find((r) => r.id === selectedResumeId) ?? null;
-                const analysis = selectedResume?.analysis ?? null;
-                const autoRoles: string[] = analysis
-                  ? [
-                      ...(typeof analysis.target_role === 'string' && analysis.target_role ? [analysis.target_role] : []),
-                    ]
-                  : [];
-                const autoDomains: string[] = analysis ? asStringArray(analysis.domains) : [];
-                const savedRoles = userPrefs?.preferred_titles ?? [];
-                const savedDomains = userPrefs?.preferred_domains ?? [];
-                const prefsDirty =
-                  localRoles.join('\x00') !== savedRoles.join('\x00') ||
-                  localDomains.join('\x00') !== savedDomains.join('\x00');
-                return (
-                  <Card className="border-transparent shadow-none">
-                    <CardContent className="flex flex-col gap-4 pt-4">
-                      <PillsEditor
-                        label="Роли"
-                        values={localRoles}
-                        autoDetected={autoRoles}
-                        type="role"
-                        maxItems={5}
-                        isDirty={localRoles.join('\x00') !== savedRoles.join('\x00')}
-                        isSaving={prefsSaving}
-                        onChange={setLocalRoles}
-                        emptyHint="Загрузите резюме, чтобы система предложила роли"
-                        token={token}
-                      />
-                      <PillsEditor
-                        label="Домены"
-                        values={localDomains}
-                        autoDetected={autoDomains}
-                        type="domain"
-                        maxItems={3}
-                        isDirty={localDomains.join('\x00') !== savedDomains.join('\x00')}
-                        isSaving={prefsSaving}
-                        onChange={setLocalDomains}
-                        emptyHint="Загрузите резюме, чтобы система определила домены"
-                        token={token}
-                      />
-                      {prefsDirty && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            marginTop: 2,
-                          }}
-                        >
-                          <span
-                            aria-label="Несохранённые изменения"
-                            style={{
-                              display: 'inline-block',
-                              width: 7,
-                              height: 7,
-                              borderRadius: '50%',
-                              background: 'var(--color-unsaved-indicator-fg)',
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span
-                            style={{
-                              fontSize: 'var(--text-xs)',
-                              color: 'var(--color-ink-muted)',
-                            }}
-                          >
-                            Не сохранено
-                          </span>
-                        </div>
-                      )}
-                      {prefsError ? (
-                        <p
-                          style={{
-                            margin: 0,
-                            fontSize: 'var(--text-xs)',
-                            color: 'var(--color-danger)',
-                          }}
-                        >
-                          {prefsError}
-                        </p>
-                      ) : null}
-                      <Button
-                        type="button"
-                        disabled={!prefsDirty || prefsSaving}
-                        onClick={() => { void savePrefsAndRefresh(); }}
-                        className="w-full"
-                      >
-                        {prefsSaving ? 'Сохраняем…' : 'Сохранить и обновить подбор'}
-                      </Button>
-                      {prefsDirty && !prefsSaving && (
-                        <button
-                          type="button"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: 'var(--text-xs)',
-                            color: 'var(--color-ink-muted)',
-                            textAlign: 'center',
-                            padding: 0,
-                          }}
-                          onClick={() => {
-                            setLocalRoles(savedRoles);
-                            setLocalDomains(savedDomains);
-                            setPrefsError('');
-                          }}
-                        >
-                          Сбросить
-                        </button>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })()}
-
               {/* Upload card */}
               <Card className="border-transparent shadow-none">
                 <CardHeader className="pb-3">
@@ -2012,194 +1937,276 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* ── Что ищу section ─────────────────────────────────── */}
-              {profileDraft ? (
-                <Card className="animate-fade-in border-transparent shadow-none">
-                  <CardHeader className="pb-3">
-                    <CardTitle>Что ищу</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-4 min-w-0">
-                    <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                      <span>Формат работы <em className="font-normal not-italic text-[color:var(--color-ink-muted)]">(любой если не выбрано)</em></span>
-                      <div className="radio-row">
-                        {WORK_FORMAT_OPTIONS.filter((o) => o.value !== 'any').map((option) => (
-                          <label key={option.value} className="radio-chip">
-                            <input
-                              type="checkbox"
-                              value={option.value}
-                              checked={profileDraft.preferred_work_formats.includes(option.value)}
-                              onChange={(e) => {
-                                const next = e.target.checked
-                                  ? [...profileDraft.preferred_work_formats, option.value]
-                                  : profileDraft.preferred_work_formats.filter((v) => v !== option.value);
-                                updateProfileDraft({ preferred_work_formats: next });
-                              }}
-                            />
-                            <span>{option.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
+              {/* ── Что ищу section (merged: pills + profile fields + подобрать) ── */}
+              {(() => {
+                const selectedResume = resumes.find((r) => r.id === selectedResumeId) ?? null;
+                const analysis = selectedResume?.analysis ?? null;
+                const autoRoles: string[] = analysis
+                  ? [
+                      ...(typeof analysis.target_role === 'string' && analysis.target_role
+                        ? [analysis.target_role]
+                        : []),
+                    ]
+                  : [];
+                const autoDomains: string[] = analysis ? asStringArray(analysis.domains) : [];
+                const savedRoles = userPrefs?.preferred_titles ?? [];
+                const savedDomains = userPrefs?.preferred_domains ?? [];
 
-                    <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                      <span>Готовность к переезду</span>
-                      <div className="radio-row">
-                        <label className="radio-chip">
-                          <input
-                            type="radio"
-                            name="relocation-mode"
-                            value="home_only"
-                            checked={profileDraft.relocation_mode === 'home_only'}
-                            onChange={() => updateProfileDraft({ relocation_mode: 'home_only' })}
-                          />
-                          <span>Только в моём городе</span>
-                        </label>
-                        <label className="radio-chip">
-                          <input
-                            type="radio"
-                            name="relocation-mode"
-                            value="any_city"
-                            checked={profileDraft.relocation_mode === 'any_city'}
-                            onChange={() => updateProfileDraft({ relocation_mode: 'any_city' })}
-                          />
-                          <span>Открыт к переезду</span>
-                        </label>
-                      </div>
-                    </div>
+                // Compute merged arrays for auto-pin: union of localRoles with any
+                // auto-detected roles not already present (case-insensitive), capped at 5.
+                function buildMerged(local: string[], auto: string[], cap: number): string[] {
+                  const lowerSet = new Set(local.map((s) => s.toLowerCase()));
+                  const extra = auto.filter((s) => !lowerSet.has(s.toLowerCase()));
+                  return [...local, ...extra].slice(0, cap);
+                }
 
-                    {profileDraft.relocation_mode === 'home_only' ? (
-                      <label className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                        <span>Мой город</span>
-                        <input
-                          type="text"
-                          maxLength={120}
-                          value={profileDraft.home_city}
-                          onChange={(event) =>
-                            updateProfileDraft({ home_city: event.target.value })
-                          }
-                          placeholder="Москва"
-                        />
-                      </label>
-                    ) : null}
+                function handleSaveAndRecommend() {
+                  const mergedTitles = buildMerged(localRoles, autoRoles, 5);
+                  const mergedDomains = buildMerged(localDomains, autoDomains, 3);
+                  if (profileDraft) {
+                    void saveProfileAndRecommend(mergedTitles, mergedDomains);
+                  } else {
+                    // No profile draft yet — just PATCH preferences and refresh
+                    setLocalRoles(mergedTitles);
+                    setLocalDomains(mergedDomains);
+                    void saveProfileAndRecommend(mergedTitles, mergedDomains);
+                  }
+                }
 
-                    <label className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                      <span>Желаемые должности <em className="font-normal not-italic text-[color:var(--color-ink-muted)]">(до 10)</em></span>
-                      <textarea
-                        key={profileDraft.preferred_titles.join(',')}
-                        rows={2}
-                        defaultValue={profileDraft.preferred_titles.join(', ')}
-                        onBlur={(event) => {
-                          const parts = event.target.value
-                            .split(',')
-                            .map((s) => s.trim())
-                            .filter(Boolean)
-                            .slice(0, 10);
-                          updateProfileDraft({ preferred_titles: parts });
-                        }}
-                        placeholder="Backend Engineer, Python Developer"
-                        className="w-full font-normal"
+                return (
+                  <Card className="animate-fade-in border-transparent shadow-none">
+                    <CardHeader className="pb-3">
+                      <CardTitle>Что ищу</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4 min-w-0">
+                      {/* Roles pills */}
+                      <PillsEditor
+                        label="Роли"
+                        values={localRoles}
+                        autoDetected={autoRoles}
+                        type="role"
+                        maxItems={5}
+                        isDirty={localRoles.join('\x00') !== savedRoles.join('\x00')}
+                        isSaving={prefsSaving}
+                        onChange={setLocalRoles}
+                        emptyHint="Загрузите резюме, чтобы система предложила роли"
+                        token={token}
                       />
-                    </label>
+                      {/* Domain pills */}
+                      <PillsEditor
+                        label="Домены"
+                        values={localDomains}
+                        autoDetected={autoDomains}
+                        type="domain"
+                        maxItems={3}
+                        isDirty={localDomains.join('\x00') !== savedDomains.join('\x00')}
+                        isSaving={prefsSaving}
+                        onChange={setLocalDomains}
+                        emptyHint="Загрузите резюме, чтобы система определила домены"
+                        token={token}
+                      />
 
-                    <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                      <span>Зарплата, ₽/мес.</span>
-                      <div className="salary-range-row">
-                        <input
-                          type="number"
-                          min={0}
-                          max={10_000_000}
-                          step={5000}
-                          value={profileDraft.expected_salary_min}
-                          onChange={(event) =>
-                            updateProfileDraft({ expected_salary_min: event.target.value })
-                          }
-                          placeholder="от"
-                          className="font-normal"
-                        />
-                        <span className="salary-range-sep">—</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={10_000_000}
-                          step={5000}
-                          value={profileDraft.expected_salary_max}
-                          onChange={(event) =>
-                            updateProfileDraft({ expected_salary_max: event.target.value })
-                          }
-                          placeholder="до"
-                          className="font-normal"
-                        />
-                      </div>
-                    </div>
-
-                    {curatedSkills.length > 0 ? (
-                      <Collapsible>
-                        <CollapsibleTrigger className="group flex items-center justify-between w-full text-left px-0 py-2 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">
-                          <span>Ручная курация скиллов</span>
-                          <span className="flex items-center gap-2">
-                            <span className="text-[length:var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
-                              {curatedSkills.length}
-                            </span>
-                            <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
-                          </span>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="data-[state=open]:animate-slide-down">
-                          <div className="curated-block mt-2">
-                            {curatedSkills.some((row) => row.direction === 'added') ? (
-                              <div className="curated-group">
-                                <p className="curated-title">Добавлено вручную</p>
-                                <ul className="curated-list">
-                                  {curatedSkills
-                                    .filter((row) => row.direction === 'added')
-                                    .map((row) => (
-                                      <li key={`curated-added-${row.id}`}>
-                                        <span>{row.skill_text}</span>
-                                        <button
-                                          type="button"
-                                          className="fit-micro-btn fit-micro-undo"
-                                          title="Снять отметку"
-                                          aria-label={`Снять отметку с «${row.skill_text}»`}
-                                          disabled={Boolean(curatingSkillKey)}
-                                          onClick={() => void uncurateSkill(row.id)}
-                                        >
-                                          ✕
-                                        </button>
-                                      </li>
-                                    ))}
-                                </ul>
-                              </div>
-                            ) : null}
-                            {curatedSkills.some((row) => row.direction === 'rejected') ? (
-                              <div className="curated-group">
-                                <p className="curated-title">Отмечено как не моё</p>
-                                <ul className="curated-list">
-                                  {curatedSkills
-                                    .filter((row) => row.direction === 'rejected')
-                                    .map((row) => (
-                                      <li key={`curated-rejected-${row.id}`}>
-                                        <span>{row.skill_text}</span>
-                                        <button
-                                          type="button"
-                                          className="fit-micro-btn fit-micro-undo"
-                                          title="Снять отметку"
-                                          aria-label={`Снять отметку с «${row.skill_text}»`}
-                                          disabled={Boolean(curatingSkillKey)}
-                                          onClick={() => void uncurateSkill(row.id)}
-                                        >
-                                          ✕
-                                        </button>
-                                      </li>
-                                    ))}
-                                </ul>
-                              </div>
-                            ) : null}
+                      {profileDraft ? (
+                        <>
+                          <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                            <span>Формат работы <em className="font-normal not-italic text-[color:var(--color-ink-muted)]">(любой если не выбрано)</em></span>
+                            <div className="radio-row">
+                              {WORK_FORMAT_OPTIONS.filter((o) => o.value !== 'any').map((option) => (
+                                <label key={option.value} className="radio-chip">
+                                  <input
+                                    type="checkbox"
+                                    value={option.value}
+                                    checked={profileDraft.preferred_work_formats.includes(option.value)}
+                                    onChange={(e) => {
+                                      const next = e.target.checked
+                                        ? [...profileDraft.preferred_work_formats, option.value]
+                                        : profileDraft.preferred_work_formats.filter((v) => v !== option.value);
+                                      updateProfileDraft({ preferred_work_formats: next });
+                                    }}
+                                  />
+                                  <span>{option.label}</span>
+                                </label>
+                              ))}
+                            </div>
                           </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              ) : null}
+
+                          <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                            <span>Готовность к переезду</span>
+                            <div className="radio-row">
+                              <label className="radio-chip">
+                                <input
+                                  type="radio"
+                                  name="relocation-mode"
+                                  value="home_only"
+                                  checked={profileDraft.relocation_mode === 'home_only'}
+                                  onChange={() => updateProfileDraft({ relocation_mode: 'home_only' })}
+                                />
+                                <span>Только в моём городе</span>
+                              </label>
+                              <label className="radio-chip">
+                                <input
+                                  type="radio"
+                                  name="relocation-mode"
+                                  value="any_city"
+                                  checked={profileDraft.relocation_mode === 'any_city'}
+                                  onChange={() => updateProfileDraft({ relocation_mode: 'any_city' })}
+                                />
+                                <span>Открыт к переезду</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          {profileDraft.relocation_mode === 'home_only' ? (
+                            <label className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                              <span>Мой город</span>
+                              <input
+                                type="text"
+                                maxLength={120}
+                                value={profileDraft.home_city}
+                                onChange={(event) =>
+                                  updateProfileDraft({ home_city: event.target.value })
+                                }
+                                placeholder="Москва"
+                              />
+                            </label>
+                          ) : null}
+
+                          <div className="grid gap-1.5 text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                            <span>Зарплата, ₽/мес.</span>
+                            <div className="salary-range-row">
+                              <input
+                                type="number"
+                                min={0}
+                                max={10_000_000}
+                                step={5000}
+                                value={profileDraft.expected_salary_min}
+                                onChange={(event) =>
+                                  updateProfileDraft({ expected_salary_min: event.target.value })
+                                }
+                                placeholder="от"
+                                className="font-normal"
+                              />
+                              <span className="salary-range-sep">—</span>
+                              <input
+                                type="number"
+                                min={0}
+                                max={10_000_000}
+                                step={5000}
+                                value={profileDraft.expected_salary_max}
+                                onChange={(event) =>
+                                  updateProfileDraft({ expected_salary_max: event.target.value })
+                                }
+                                placeholder="до"
+                                className="font-normal"
+                              />
+                            </div>
+                          </div>
+
+                          {curatedSkills.length > 0 ? (
+                            <Collapsible>
+                              <CollapsibleTrigger className="group flex items-center justify-between w-full text-left px-0 py-2 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors">
+                                <span>Ручная курация скиллов</span>
+                                <span className="flex items-center gap-2">
+                                  <span className="text-[length:var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                                    {curatedSkills.length}
+                                  </span>
+                                  <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
+                                </span>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="data-[state=open]:animate-slide-down">
+                                <div className="curated-block mt-2">
+                                  {curatedSkills.some((row) => row.direction === 'added') ? (
+                                    <div className="curated-group">
+                                      <p className="curated-title">Добавлено вручную</p>
+                                      <ul className="curated-list">
+                                        {curatedSkills
+                                          .filter((row) => row.direction === 'added')
+                                          .map((row) => (
+                                            <li key={`curated-added-${row.id}`}>
+                                              <span>{row.skill_text}</span>
+                                              <button
+                                                type="button"
+                                                className="fit-micro-btn fit-micro-undo"
+                                                title="Снять отметку"
+                                                aria-label={`Снять отметку с «${row.skill_text}»`}
+                                                disabled={Boolean(curatingSkillKey)}
+                                                onClick={() => void uncurateSkill(row.id)}
+                                              >
+                                                ✕
+                                              </button>
+                                            </li>
+                                          ))}
+                                      </ul>
+                                    </div>
+                                  ) : null}
+                                  {curatedSkills.some((row) => row.direction === 'rejected') ? (
+                                    <div className="curated-group">
+                                      <p className="curated-title">Отмечено как не моё</p>
+                                      <ul className="curated-list">
+                                        {curatedSkills
+                                          .filter((row) => row.direction === 'rejected')
+                                          .map((row) => (
+                                            <li key={`curated-rejected-${row.id}`}>
+                                              <span>{row.skill_text}</span>
+                                              <button
+                                                type="button"
+                                                className="fit-micro-btn fit-micro-undo"
+                                                title="Снять отметку"
+                                                aria-label={`Снять отметку с «${row.skill_text}»`}
+                                                disabled={Boolean(curatingSkillKey)}
+                                                onClick={() => void uncurateSkill(row.id)}
+                                              >
+                                                ✕
+                                              </button>
+                                            </li>
+                                          ))}
+                                      </ul>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          ) : null}
+                        </>
+                      ) : null}
+
+                      {/* Error from prefs/profile save */}
+                      {prefsError ? (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: 'var(--text-xs)',
+                            color: 'var(--color-danger)',
+                          }}
+                        >
+                          {prefsError}
+                        </p>
+                      ) : null}
+
+                      {/* Status row + Подобрать button */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-4 py-3">
+                        <div>
+                          <p className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                            {matchingBusy ? 'Быстрый подбор…' : 'Подобрать вакансии'}
+                          </p>
+                          <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
+                            {matchingBusy ? 'Проверяем кеш — займёт до 5 секунд' : 'AI подберёт вакансии под ваш профиль'}
+                          </p>
+                        </div>
+                        <Button
+                          variant="primary"
+                          size="lg"
+                          className="px-6 shrink-0 sm:self-auto self-stretch"
+                          onClick={handleSaveAndRecommend}
+                          disabled={matchingBusy || !selectedResumeId || prefsSaving}
+                        >
+                          {profileSaving || prefsSaving ? 'Сохраняем…' : matchingBusy ? 'Ищем…' : 'Подобрать'}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
               {/* Funnel card */}
               <Card>
@@ -2365,31 +2372,9 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* ── Подбор вакансий section ─────────────────────────── */}
+              {/* ── Результаты подбора ───────────────────────────────── */}
               <Card className="animate-fade-in border-transparent shadow-none">
-                <CardHeader className="pb-3">
-                  <CardTitle>Подбор вакансий</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-4 py-3">
-                    <div>
-                      <p className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                        {matchingBusy ? 'Быстрый подбор…' : 'Подобрать вакансии'}
-                      </p>
-                      <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
-                        {matchingBusy ? 'Проверяем кеш — займёт до 5 секунд' : 'AI подберёт вакансии под ваш профиль'}
-                      </p>
-                    </div>
-                    <Button
-                      variant="primary"
-                      size="lg"
-                      className="px-6 shrink-0 sm:self-auto self-stretch"
-                      onClick={() => profileDraft ? void saveProfileAndRecommend() : void refreshVacancyIndex()}
-                      disabled={matchingBusy || !selectedResumeId}
-                    >
-                      {profileSaving ? 'Сохраняем…' : matchingBusy ? 'Ищем…' : 'Подобрать'}
-                    </Button>
-                  </div>
+                <CardContent className="flex flex-col gap-4 pt-4">
                   {matchingBusy ? (
                     <div className="progress-box">
                       <div className="progress-head">
