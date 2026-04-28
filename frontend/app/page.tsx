@@ -515,6 +515,7 @@ export default function DashboardPage() {
 
   const currentMatchRunId = visibleMatches[0]?.match_run_id ?? null;
   const matchRunIdRef = useRef<string | null>(null);
+  const refreshInFlightRef = useRef(false);
   matchRunIdRef.current = currentMatchRunId;
   const cardRefs = useRef<Map<number, HTMLElement>>(new Map());
   const dwellTrackerRef = useRef<ReturnType<typeof createDwellTracker> | null>(null);
@@ -1166,6 +1167,14 @@ export default function DashboardPage() {
       setMatchingMessage('Выберите резюме для подбора.');
       return;
     }
+    // Mutex against double-trigger — `restoreRecommendationState` fires this
+    // fire-and-forget on cold page load, and a fast reload can race the
+    // user pressing the button. Two parallel runs would overwrite each
+    // other's `setMatches` and waste backend time.
+    if (refreshInFlightRef.current) {
+      return;
+    }
+    refreshInFlightRef.current = true;
 
     // Reset state
     setMatchingBusy(true);
@@ -1237,6 +1246,7 @@ export default function DashboardPage() {
 
     // ── Stage 2: deep scan background (non-blocking) ──────────────────────
     if (!selectedResumeId) {
+      refreshInFlightRef.current = false;
       return;
     }
     setDeepScanRunning(true);
@@ -1285,7 +1295,11 @@ export default function DashboardPage() {
             selectedVacancies,
             hiddenMatchIds
           );
-          // Merge with existing matches: dedupe by vacancy_id, sort by score desc
+          // Merge with existing matches: dedupe by vacancy_id, sort by score
+          // desc. The functional setter reads the latest committed state so
+          // Stage 1's instant matches (committed before Stage 2 ever started)
+          // are always present in `current` here — the deep-scan delta is
+          // additive, never a clobber.
           setMatches((current) => {
             const existingIds = new Set(current.map((m) => normalizeVacancyId(m.vacancy_id)));
             const newOnes = deepMatches.filter((m) => !existingIds.has(normalizeVacancyId(m.vacancy_id)));
@@ -1329,6 +1343,7 @@ export default function DashboardPage() {
       // Deep scan error — silently stop if Stage 1 already gave results
     } finally {
       setDeepScanRunning(false);
+      refreshInFlightRef.current = false;
       await loadDashboardStats(selectedResumeId);
     }
   }

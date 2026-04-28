@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from threading import Lock
 from uuid import uuid4
 
@@ -110,16 +110,22 @@ def sweep_stale_running_jobs() -> int:
     """
     db = SessionLocal()
     try:
+        # Push the started_at filter into the DB so we never load every
+        # running row into Python — the table grows over time and a
+        # full table scan per warmup cycle would be wasteful.
+        cutoff = datetime.now(UTC) - timedelta(seconds=settings.recommendation_job_timeout_seconds)
         stale = db.scalars(
-            select(RecommendationJob).where(RecommendationJob.status == "running")
+            select(RecommendationJob)
+            .where(RecommendationJob.status == "running")
+            .where(RecommendationJob.started_at.is_not(None))
+            .where(RecommendationJob.started_at < cutoff)
         ).all()
         swept = 0
         for job in stale:
-            if _timed_out(job):
-                fail_job(db, job, error_message=JOB_TIMEOUT_MESSAGE)
-                with _active_lock:
-                    _active_jobs.discard(job.id)
-                swept += 1
+            fail_job(db, job, error_message=JOB_TIMEOUT_MESSAGE)
+            with _active_lock:
+                _active_jobs.discard(job.id)
+            swept += 1
         return swept
     finally:
         db.close()

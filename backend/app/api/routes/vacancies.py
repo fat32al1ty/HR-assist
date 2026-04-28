@@ -185,6 +185,10 @@ def recommend_vacancies_instant(
         usage = usage_tracker.snapshot().to_dict()
     excluded_ids = _excluded_ids_for_active_resume(db, current_user)
     matches = _filter_matches_by_feedback(matches=matches, excluded_ids=excluded_ids)
+    # `prefetch_empty` distinguishes "index never seeded" from "matches got
+    # filtered out by user feedback". When feedback drops every cached match
+    # to zero, `metrics.fetched` is still > 0 — flag stays False and the
+    # frontend renders the standard "no results" state instead of skeleton.
     prefetch_empty = len(matches) == 0 and metrics.fetched == 0 and metrics.indexed == 0
     return VacancyRecommendResponse(
         query=query,
