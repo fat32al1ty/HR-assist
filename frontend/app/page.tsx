@@ -1982,8 +1982,8 @@ export default function DashboardPage() {
                       <CardTitle>Что ищу</CardTitle>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-4 min-w-0">
-                      {/* F2: Pills demoted to collapsed disclosure — closed by default */}
-                      <details>
+                      {/* F2: Pills inside disclosure — open by default for visibility */}
+                      <details open>
                         <summary
                           className="cursor-pointer text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] select-none list-none [&::-webkit-details-marker]:hidden"
                           style={{ fontWeight: 400 }}
