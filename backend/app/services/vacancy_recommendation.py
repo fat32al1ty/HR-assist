@@ -177,7 +177,11 @@ def _build_deep_scan_queries(base_query: str, rf_only: bool, analysis: dict | No
     )
     keywords = _as_strings(analysis.get("matching_keywords")) if isinstance(analysis, dict) else []
     hard_skills = _as_strings(analysis.get("hard_skills")) if isinstance(analysis, dict) else []
+    role_family = (
+        _normalize_phrase(analysis.get("role_family")) if isinstance(analysis, dict) else ""
+    )
     skill_focus = _short_query_from_tokens(keywords + hard_skills, max_words=6)
+    top_skills_query = _short_query_from_tokens(hard_skills[:3], max_words=6)
 
     templates = [
         "{q}",
@@ -200,6 +204,24 @@ def _build_deep_scan_queries(base_query: str, rf_only: bool, analysis: dict | No
         if not candidate:
             continue
         queries.append((candidate + region_suffix).strip())
+
+    # Diverse facets: independent resume signals widen the discovery pool.
+    # 1. role_family facet — different signal from target_role.
+    if role_family:
+        queries.append((role_family + region_suffix).strip())
+    # 2. top hard skills facet — catches vacancies matching on stack, not title.
+    if top_skills_query:
+        queries.append((top_skills_query + region_suffix).strip())
+    # 3. role_family + top skill combo — intersects role class with skill stack.
+    if role_family and top_skills_query:
+        combo = _short_query_from_tokens(
+            [role_family, top_skills_query.split()[0]]
+            if top_skills_query.split()
+            else [role_family],
+            max_words=6,
+        )
+        if combo:
+            queries.append((combo + region_suffix).strip())
 
     role_tokens = _normalize_phrase(role).lower()
     prefers_leadership = any(
@@ -292,6 +314,7 @@ _METRIC_INT_FIELDS = (
     "fetched_dropped_analyzed_budget",
     "fetched_dedup_within_job",
     "cursor_fallback_queries_run",
+    "multi_facet_queries_generated",
 )
 
 
@@ -445,6 +468,7 @@ def recommend_vacancies_for_resume(
         queries = _build_deep_scan_queries(query, rf_only=rf_only, analysis=resume.analysis)[
             :max_queries
         ]
+        aggregate_metrics.multi_facet_queries_generated = len(queries)
         # Phase 2.1: HH pagination is free; a wider scan lets nichey / senior
         # resumes reach their real matches on page 2-3. Use sources_scanned_budget
         # as the upper bound regardless of discover_count, and raise the

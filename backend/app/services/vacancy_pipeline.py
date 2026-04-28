@@ -93,6 +93,7 @@ class VacancyDiscoveryMetrics:
     fetched_dropped_analyzed_budget: int = 0
     fetched_dedup_within_job: int = 0
     cursor_fallback_queries_run: int = 0
+    multi_facet_queries_generated: int = 0
     partial: bool = False
 
 
