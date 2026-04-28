@@ -1809,9 +1809,9 @@ export default function DashboardPage() {
                   <input
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    placeholder="Email"
-                    type="email"
-                    autoComplete="email"
+                    placeholder="Логин"
+                    type="text"
+                    autoComplete="username"
                   />
                   {authFormMode === 'reset' ? (
                     <input
@@ -1890,6 +1890,11 @@ export default function DashboardPage() {
                 {message ? (
                   <p className="mt-3 rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
                     {message}
+                  </p>
+                ) : null}
+                {authFormMode === 'register' ? (
+                  <p className="mt-3 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
+                    Логин — любая комбинация букв и цифр (3-80 символов). Восстановления пароля нет, не теряй.
                   </p>
                 ) : null}
               </CardContent>

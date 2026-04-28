@@ -2,6 +2,8 @@
 
 HR Assist is designed so that **the minimum amount of personal data is persisted, for the minimum amount of time**. This document describes what the platform stores, what it deliberately does not store, and what is sent to third parties.
 
+As of v0.18.0, the platform asks for **no contact data**. The 'email' field is an opaque login handle that the system does not validate or use for delivery.
+
 It is not a legal document and does not replace a formal policy of personal-data processing under 152-ФЗ. A user-facing public policy (`/privacy`) is a separate artefact.
 
 ## What is deliberately NOT persisted
@@ -19,7 +21,7 @@ When you upload a resume, the system:
 
 The product cannot function without a small set of data tied to an account:
 
-- `users.email` — required for authentication.
+- `users.email` — opaque user-chosen handle. The system never sends mail; this is a string identifier, not contact data. Users may enter any value they like; @-style format is accepted but not required.
 - `users.hashed_password` — bcrypt-hashed, never logged.
 - `users.home_city`, `users.preferred_titles`, `users.expected_salary_*` — user-supplied preferences that feed the matcher.
 - `resumes.analysis` — the structured profile (role, grade, skills, domains, summary) returned by the LLM. This intentionally contains no name / email / phone (see above).

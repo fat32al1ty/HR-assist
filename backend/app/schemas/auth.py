@@ -1,40 +1,44 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 from app.schemas.user import UserRead
 
 # Length caps are upper bounds on attacker-controlled strings. An uncapped
 # field can be exploited to burn OpenAI quota or blow up a DB row.
-EMAIL_MAX = 254  # RFC 5321 total address length
+EMAIL_MAX = 254  # kept for imports; handle cap is now 80
 PASSWORD_MAX = 128
 FULL_NAME_MAX = 200
 BETA_KEY_MAX = 64
 
+# Any handle 3-80 chars: alphanumerics + . _ - + @ so existing @-style
+# identifiers keep working. Whitespace forbidden.
+USER_HANDLE_PATTERN = r"^[A-Za-z0-9._@+\-]{3,80}$"
+
 
 class RegisterRequest(BaseModel):
-    email: EmailStr = Field(max_length=EMAIL_MAX)
+    email: str = Field(min_length=3, max_length=80, pattern=USER_HANDLE_PATTERN)
     password: str = Field(min_length=8, max_length=PASSWORD_MAX)
     full_name: str | None = Field(default=None, max_length=FULL_NAME_MAX)
     beta_key: str = Field(min_length=8, max_length=BETA_KEY_MAX)
 
 
 class LoginStartRequest(BaseModel):
-    email: EmailStr = Field(max_length=EMAIL_MAX)
+    email: str = Field(min_length=3, max_length=80, pattern=USER_HANDLE_PATTERN)
     password: str = Field(min_length=8, max_length=PASSWORD_MAX)
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr = Field(max_length=EMAIL_MAX)
+    email: str = Field(min_length=3, max_length=80, pattern=USER_HANDLE_PATTERN)
     password: str = Field(min_length=8, max_length=PASSWORD_MAX)
 
 
 class PasswordResetRequest(BaseModel):
-    email: EmailStr = Field(max_length=EMAIL_MAX)
+    email: str = Field(min_length=3, max_length=80, pattern=USER_HANDLE_PATTERN)
     new_password: str = Field(min_length=8, max_length=PASSWORD_MAX)
     beta_key: str = Field(min_length=8, max_length=BETA_KEY_MAX)
 
 
 class VerifyEmailRequest(BaseModel):
-    email: EmailStr = Field(max_length=EMAIL_MAX)
+    email: str = Field(min_length=3, max_length=80, pattern=USER_HANDLE_PATTERN)
     code: str = Field(min_length=4, max_length=16)
 
 
@@ -54,7 +58,7 @@ class RegisterResponse(BaseModel):
 
 
 class LoginVerifyRequest(BaseModel):
-    email: EmailStr = Field(max_length=EMAIL_MAX)
+    email: str = Field(min_length=3, max_length=80, pattern=USER_HANDLE_PATTERN)
     challenge_id: str = Field(min_length=8, max_length=128)
     code: str = Field(min_length=4, max_length=16)
 
