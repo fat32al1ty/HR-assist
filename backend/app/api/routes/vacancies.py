@@ -2,12 +2,15 @@ import logging
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
+from sqlalchemy import update as sa_update
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.models.vacancy import Vacancy
 from app.repositories.applications import list_applied_vacancy_ids_for_user
 from app.repositories.resumes import get_active_resume_for_user, get_resume_for_user
 from app.repositories.user_vacancy_feedback import (
@@ -93,6 +96,50 @@ def _filter_matches_by_feedback(*, matches: list[dict], excluded_ids: set[int]) 
             continue
         filtered.append(item)
     return filtered
+
+
+def _drop_archived_from_snapshot(db: Session, *, matches: list[dict]) -> list[dict]:
+    """Filter out vacancy IDs whose row has been soft-archived.
+
+    Snapshot replay (`/recommend/latest`, `/recommend/status`) reads the
+    `recommendation_jobs.matches` JSON captured at search time. After v0.22's
+    on-read freshness check started flipping rows to `status='archived'`, an
+    older snapshot can still surface them if we don't re-check here. This is
+    a DB lookup (no HH call) on at most ~40 IDs per snapshot, so it's cheap.
+    """
+    if not matches:
+        return matches
+    ids: list[int] = []
+    for item in matches:
+        if not isinstance(item, dict):
+            continue
+        try:
+            ids.append(int(item.get("vacancy_id")))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return matches
+    archived_ids = set(
+        db.scalars(
+            select(Vacancy.id).where(Vacancy.id.in_(ids), Vacancy.status == "archived")
+        ).all()
+    )
+    if not archived_ids:
+        return matches
+    return [
+        m
+        for m in matches
+        if not isinstance(m, dict)
+        or m.get("vacancy_id") is None
+        or _safe_int(m.get("vacancy_id")) not in archived_ids
+    ]
+
+
+def _safe_int(value: object) -> int | None:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
 
 
 @router.post("/discover", response_model=VacancyDiscoverResponse)
@@ -295,18 +342,22 @@ def recommend_vacancies_instant(
         segment_warming=segment_warming,
     )
 
+    # Bump shown_count only for the top-N actually exposed to the user — the
+    # full matches list can hold up to discover_count rows (e.g. 40), but the
+    # UI pages by default to 10 and the freshness check covers the same
+    # top_n. Inflating shown_count past that distorts the sweep prioritization
+    # (which orders by shown_count DESC).
     if matches:
         try:
-            from sqlalchemy import update as _sa_update
-
-            from app.models.vacancy import Vacancy as _Vacancy
-
-            shown_ids = [int(m["vacancy_id"]) for m in matches if m.get("vacancy_id") is not None]
+            top_n = settings.vacancy_freshness_check_top_n
+            shown_ids = [
+                int(m["vacancy_id"]) for m in matches[:top_n] if m.get("vacancy_id") is not None
+            ]
             if shown_ids:
                 db.execute(
-                    _sa_update(_Vacancy)
-                    .where(_Vacancy.id.in_(shown_ids))
-                    .values(shown_count=_Vacancy.shown_count + 1)
+                    sa_update(Vacancy)
+                    .where(Vacancy.id.in_(shown_ids))
+                    .values(shown_count=Vacancy.shown_count + 1)
                 )
                 db.commit()
         except Exception:
@@ -415,6 +466,7 @@ def recommendation_status(
     matches = _filter_matches_by_feedback(
         matches=snapshot.get("matches") or [], excluded_ids=excluded_ids
     )
+    matches = _drop_archived_from_snapshot(db, matches=matches)
     return RecommendationJobStatusResponse(
         job_id=snapshot["id"],
         status=snapshot["status"],
@@ -443,6 +495,7 @@ def latest_recommendation_status(
     matches = _filter_matches_by_feedback(
         matches=snapshot.get("matches") or [], excluded_ids=excluded_ids
     )
+    matches = _drop_archived_from_snapshot(db, matches=matches)
     return RecommendationJobStatusResponse(
         job_id=snapshot["id"],
         status=snapshot["status"],

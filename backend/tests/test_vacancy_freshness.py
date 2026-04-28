@@ -35,9 +35,7 @@ class ExtractHhIdTest(unittest.TestCase):
         self.assertEqual(_extract_hh_id("https://hh.ru/vacancy/123456"), "123456")
 
     def test_url_with_query_params(self) -> None:
-        self.assertEqual(
-            _extract_hh_id("https://hh.ru/vacancy/987654?from=search"), "987654"
-        )
+        self.assertEqual(_extract_hh_id("https://hh.ru/vacancy/987654?from=search"), "987654")
 
     def test_none_input(self) -> None:
         self.assertIsNone(_extract_hh_id(None))
@@ -268,9 +266,7 @@ class CheckVacanciesConcurrentlyTest(VacancyFreshnessDbBase):
             instance.__aexit__ = _fake_aexit
             mock_cls.return_value = instance
 
-            result = check_vacancies_alive_concurrently(
-                self.db, vacancies=[self.vacancy]
-            )
+            result = check_vacancies_alive_concurrently(self.db, vacancies=[self.vacancy])
 
         self.assertIn(self.vacancy.id, result)
 
@@ -296,9 +292,7 @@ class CheckVacanciesConcurrentlyTest(VacancyFreshnessDbBase):
             instance.__aexit__ = _fake_aexit
             mock_cls.return_value = instance
 
-            result = check_vacancies_alive_concurrently(
-                self.db, vacancies=[self.vacancy]
-            )
+            result = check_vacancies_alive_concurrently(self.db, vacancies=[self.vacancy])
 
         self.assertNotIn(self.vacancy.id, result)
 
@@ -320,9 +314,7 @@ class InstantEndpointFreshnessTest(VacancyFreshnessDbBase):
         with patch.object(
             vacancies_route, "check_vacancies_alive_concurrently", side_effect=_fake_check
         ):
-            remaining = [
-                m for m in matches_input if int(m["vacancy_id"]) not in {archived_id}
-            ]
+            remaining = [m for m in matches_input if int(m["vacancy_id"]) not in {archived_id}]
 
         self.assertEqual(remaining, [])
 
@@ -340,6 +332,222 @@ class InstantEndpointFreshnessTest(VacancyFreshnessDbBase):
         self.db.commit()
         self.db.refresh(self.vacancy)
         self.assertEqual(self.vacancy.shown_count, before + 1)
+
+
+# ---------------------------------------------------------------------------
+# Post-review hardening tests (commit follow-up to v0.22.0)
+# ---------------------------------------------------------------------------
+
+
+class SweepRespectsRuntimeBudgetTest(VacancyFreshnessDbBase):
+    """B1: sweep_stale_vacancies must stop after max_runtime_seconds even with
+    rows still pending. Otherwise a sustained HH 5xx wave stalls the whole
+    warmup worker."""
+
+    def test_sweep_stops_when_budget_exhausted(self) -> None:
+        # Make several extra rows so the loop has more than enough work.
+        extra_ids = []
+        for _ in range(5):
+            v = Vacancy(
+                source="hh_api",
+                source_url=f"https://hh.ru/vacancy/{_unique_hh_id()}",
+                title="Filler",
+                status="indexed",
+            )
+            self.db.add(v)
+            self.db.commit()
+            self.db.refresh(v)
+            extra_ids.append(v.id)
+        try:
+            # Mock check_vacancy_alive to be slow + always return True.
+            def slow_alive(db, *, vacancy):
+                vacancy.last_freshness_check = datetime.now(UTC)
+                db.add(vacancy)
+                db.commit()
+                return True
+
+            with patch.object(vacancy_freshness, "check_vacancy_alive", side_effect=slow_alive):
+                # 0.0s budget → exit on first iteration.
+                result = sweep_stale_vacancies(self.db, limit=100, max_runtime_seconds=0.0)
+            # We expect we may have completed 0 or 1 row before the budget
+            # check fires; the key invariant is stopped_early=1 and we
+            # didn't run all the rows.
+            self.assertEqual(result["stopped_early"], 1)
+            self.assertLess(result["checked"], 5)
+        finally:
+            self.db.execute(delete(Vacancy).where(Vacancy.id.in_(extra_ids)))
+            self.db.commit()
+
+
+class LatestEndpointDropsArchivedSnapshotTest(unittest.TestCase):
+    """B3: /recommend/latest must filter out vacancies whose row was flipped
+    to status='archived' AFTER the snapshot was written."""
+
+    def test_archived_id_filtered_from_snapshot(self) -> None:
+        from fastapi.testclient import TestClient
+
+        from app.core.security import create_access_token, hash_password
+        from app.main import app
+        from app.models.recommendation_job import RecommendationJob
+        from app.models.resume import Resume
+
+        suffix = uuid.uuid4().hex[:8]
+        db = SessionLocal()
+        try:
+            user = User(
+                email=f"latest-archived-{suffix}@example.com",
+                hashed_password=hash_password("TestPass123"),
+                full_name="Latest Archived",
+                is_active=True,
+                email_verified=True,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            resume = Resume(
+                user_id=user.id,
+                original_filename=f"cv-{suffix}.pdf",
+                content_type="application/pdf",
+                storage_path=f"/tmp/cv-{suffix}.pdf",
+                status="completed",
+                analysis={"target_role": "Backend"},
+            )
+            db.add(resume)
+            db.commit()
+            db.refresh(resume)
+
+            alive_vac = Vacancy(
+                source="hh_api",
+                source_url=f"https://hh.ru/vacancy/{_unique_hh_id()}",
+                title="Alive",
+                status="indexed",
+            )
+            archived_vac = Vacancy(
+                source="hh_api",
+                source_url=f"https://hh.ru/vacancy/{_unique_hh_id()}",
+                title="Already Archived",
+                status="archived",
+                archived_at=datetime.now(UTC),
+            )
+            db.add(alive_vac)
+            db.add(archived_vac)
+            db.commit()
+            db.refresh(alive_vac)
+            db.refresh(archived_vac)
+
+            now = datetime.now(UTC)
+            job = RecommendationJob(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                resume_id=resume.id,
+                status="completed",
+                stage="done",
+                progress=100,
+                query="backend",
+                metrics={},
+                matches=[
+                    {
+                        "vacancy_id": alive_vac.id,
+                        "title": "Alive",
+                        "similarity_score": 0.9,
+                        "source_url": alive_vac.source_url,
+                        "company": None,
+                        "location": None,
+                    },
+                    {
+                        "vacancy_id": archived_vac.id,
+                        "title": "Already Archived",
+                        "similarity_score": 0.8,
+                        "source_url": archived_vac.source_url,
+                        "company": None,
+                        "location": None,
+                    },
+                ],
+                openai_usage={},
+                started_at=now,
+                finished_at=now,
+            )
+            db.add(job)
+            db.commit()
+
+            user_id = user.id
+            resume_id = resume.id
+            user_email = user.email
+            alive_id = alive_vac.id
+            archived_id = archived_vac.id
+        finally:
+            db.close()
+
+        token = create_access_token(subject=user_email)
+        client = TestClient(app)
+        try:
+            resp = client.get(
+                "/api/vacancies/recommend/latest",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            self.assertEqual(resp.status_code, 200, resp.text)
+            body = resp.json()
+            ids = [m["vacancy_id"] for m in body["matches"]]
+            self.assertIn(alive_id, ids)
+            self.assertNotIn(
+                archived_id,
+                ids,
+                "Archived vacancy must be filtered out of /recommend/latest snapshot",
+            )
+        finally:
+            cleanup = SessionLocal()
+            try:
+                cleanup.execute(
+                    RecommendationJob.__table__.delete().where(RecommendationJob.user_id == user_id)
+                )
+                cleanup.execute(
+                    Vacancy.__table__.delete().where(Vacancy.id.in_([alive_id, archived_id]))
+                )
+                cleanup.execute(Resume.__table__.delete().where(Resume.id == resume_id))
+                cleanup.execute(User.__table__.delete().where(User.id == user_id))
+                cleanup.commit()
+            finally:
+                cleanup.close()
+
+
+class SweepDueWindowTest(unittest.TestCase):
+    """W2: nightly sweep gate respects vacancy_freshness_sweep_interval_hours."""
+
+    def test_sweep_skipped_when_recent_run_exists(self) -> None:
+        from app.services import vacancy_warmup as wm
+
+        original_state = dict(wm._state)
+        try:
+            with wm._state_lock:
+                wm._state["last_freshness_sweep_at"] = datetime.now(UTC)
+
+            with patch.object(vacancy_freshness, "sweep_stale_vacancies") as sweep_mock:
+                wm._run_freshness_sweep_if_due()
+            sweep_mock.assert_not_called()
+        finally:
+            with wm._state_lock:
+                wm._state.clear()
+                wm._state.update(original_state)
+
+    def test_sweep_runs_when_interval_elapsed(self) -> None:
+        from datetime import timedelta
+
+        from app.services import vacancy_warmup as wm
+
+        original_state = dict(wm._state)
+        try:
+            with wm._state_lock:
+                wm._state["last_freshness_sweep_at"] = datetime.now(UTC) - timedelta(days=2)
+
+            with patch.object(vacancy_freshness, "sweep_stale_vacancies") as sweep_mock:
+                sweep_mock.return_value = {"checked": 0, "archived": 0, "stopped_early": 0}
+                wm._run_freshness_sweep_if_due()
+            sweep_mock.assert_called_once()
+        finally:
+            with wm._state_lock:
+                wm._state.clear()
+                wm._state.update(original_state)
 
 
 if __name__ == "__main__":

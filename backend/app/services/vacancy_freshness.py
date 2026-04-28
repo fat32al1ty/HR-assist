@@ -31,10 +31,11 @@ def check_vacancy_alive(db: Session, *, vacancy: Vacancy) -> bool:
     """GET https://api.hh.ru/vacancies/{hh_id}.
 
     Returns True if the vacancy is still live, False if archived/404.
-    Always sets last_freshness_check = now() unless a network/5xx error
-    occurs (so the row is retried on the next sweep without burning the
-    check budget on transient failures, while still bounding retries via
-    shown_count DESC ordering).
+    Sets last_freshness_check = now() on every reachable response (200, 4xx,
+    5xx) so a single 5xx doesn't trap the row on the front of the sweep
+    queue forever. ONLY a network-layer error (DNS / refused / timeout)
+    leaves last_freshness_check unset — those rows are retried on the next
+    sweep at the same priority.
     """
     hh_id = _extract_hh_id(vacancy.source_url)
     if hh_id is None:
@@ -94,9 +95,18 @@ def check_vacancy_alive(db: Session, *, vacancy: Vacancy) -> bool:
     return True
 
 
-def sweep_stale_vacancies(db: Session, *, limit: int) -> dict[str, int]:
+def sweep_stale_vacancies(
+    db: Session,
+    *,
+    limit: int,
+    max_runtime_seconds: float = 600.0,
+) -> dict[str, int]:
     """Re-check up to `limit` rows ordered by last_freshness_check ASC NULLS FIRST,
-    then by shown_count DESC. Returns {"checked": ..., "archived": ...}.
+    then by shown_count DESC. Returns {"checked": ..., "archived": ..., "stopped_early": ...}.
+
+    Bounded by `max_runtime_seconds` so a sustained HH 5xx wave can't stall the
+    warmup worker for ~46 minutes (worst case = limit × (httpx_timeout + sleep)).
+    The remaining rows roll into the next nightly window.
     """
     rows = db.scalars(
         select(Vacancy)
@@ -105,9 +115,20 @@ def sweep_stale_vacancies(db: Session, *, limit: int) -> dict[str, int]:
         .limit(limit)
     ).all()
 
+    started_at = time.monotonic()
     checked = 0
     archived = 0
+    stopped_early = 0
     for vacancy in rows:
+        if time.monotonic() - started_at > max_runtime_seconds:
+            stopped_early = 1
+            logger.info(
+                "vacancy_freshness_sweep_budget_exhausted checked=%d remaining=%d budget_seconds=%.1f",
+                checked,
+                len(rows) - checked,
+                max_runtime_seconds,
+            )
+            break
         hh_id = _extract_hh_id(vacancy.source_url)
         if hh_id is None:
             continue
@@ -118,11 +139,12 @@ def sweep_stale_vacancies(db: Session, *, limit: int) -> dict[str, int]:
         time.sleep(0.5)
 
     logger.info(
-        "vacancy_freshness_sweep_done checked=%d archived=%d",
+        "vacancy_freshness_sweep_done checked=%d archived=%d stopped_early=%d",
         checked,
         archived,
+        stopped_early,
     )
-    return {"checked": checked, "archived": archived}
+    return {"checked": checked, "archived": archived, "stopped_early": stopped_early}
 
 
 async def _check_one(
@@ -161,7 +183,15 @@ async def _check_one(
     vacancy.last_freshness_check = now
     try:
         payload = response.json()
-    except Exception:
+    except Exception as exc:
+        # Treat malformed HH responses as alive — a 200 with broken JSON
+        # is more likely an HH-side glitch than an archive marker. Log so
+        # we can spot patterns if it becomes systematic.
+        logger.debug(
+            "vacancy_freshness_async_json_parse_failed vacancy_id=%s error=%s",
+            vacancy.id,
+            exc,
+        )
         db.add(vacancy)
         return None
 
@@ -204,6 +234,13 @@ def check_vacancies_alive_concurrently(
                 archived.add(r)
         return archived
 
+    # IMPLICIT CONTRACT: this function MUST be called from a sync context
+    # (no running event loop). FastAPI dispatches sync `def` handlers via
+    # anyio's worker thread pool, so the calling thread has no loop and
+    # `asyncio.run()` is safe. If the instant route is ever converted to
+    # `async def`, asyncio.run() will raise from inside the running loop —
+    # at that point convert this helper to `async def` + `await _run()`
+    # and have callers `await` it.
     archived_ids = asyncio.run(_run())
     try:
         db.commit()
