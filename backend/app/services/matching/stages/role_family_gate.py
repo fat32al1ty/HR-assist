@@ -22,6 +22,8 @@ been re-analysed yet from being silently hard-dropped.
 
 from __future__ import annotations
 
+from app.services.matching_service import _SKILL_OVERLAP_FLOOR_SKIP_FAMILIES
+
 from ..role_family import family_distance
 from ..state import MatchingState
 from .base import BaseStage
@@ -43,11 +45,17 @@ class RoleFamilyGateStage(BaseStage):
             vac_is_technical = payload.get("role_is_technical")
 
             if resume_is_technical is True and vac_is_technical is False:
-                cand.drop_reason = "role_family_non_technical"
-                state.diagnostics.custom["drop_role_family_non_technical"] = (
-                    state.diagnostics.custom.get("drop_role_family_non_technical", 0) + 1
-                )
-                continue
+                if (
+                    isinstance(resume_family, str)
+                    and resume_family in _SKILL_OVERLAP_FLOOR_SKIP_FAMILIES
+                ):
+                    pass
+                else:
+                    cand.drop_reason = "role_family_non_technical"
+                    state.diagnostics.custom["drop_role_family_non_technical"] = (
+                        state.diagnostics.custom.get("drop_role_family_non_technical", 0) + 1
+                    )
+                    continue
 
             distance = family_distance(resume_family, vac_family)
             cand.annotations["role_family_distance"] = distance

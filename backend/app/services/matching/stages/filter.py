@@ -66,11 +66,21 @@ class HardFilterStage(BaseStage):
                 cand.drop_reason = "listing_page"
                 diag.drop_listing_page += 1
                 continue
-            if _looks_unlikely_stack(vacancy.title, ctx.resume_skills):
+            resume_role_family_str = (
+                ctx.analysis.get("role_family") if isinstance(ctx.analysis, dict) else None
+            )
+            resume_role_family_str = (
+                resume_role_family_str if isinstance(resume_role_family_str, str) else None
+            )
+            if _looks_unlikely_stack(
+                vacancy.title, ctx.resume_skills, resume_role_family=resume_role_family_str
+            ):
                 cand.drop_reason = "unlikely_stack"
                 diag.drop_unlikely_stack += 1
                 continue
-            if _looks_business_monitoring_role(vacancy.title or "", ctx.resume_skills):
+            if _looks_business_monitoring_role(
+                vacancy.title or "", ctx.resume_skills, resume_role_family=resume_role_family_str
+            ):
                 cand.drop_reason = "business_role"
                 diag.drop_business_role += 1
                 continue
@@ -91,16 +101,11 @@ class HardFilterStage(BaseStage):
                 cand.drop_reason = "geo"
                 diag.drop_geo += 1
                 continue
-            resume_role_family = (
-                ctx.analysis.get("role_family") if isinstance(ctx.analysis, dict) else None
-            )
             if not _has_sufficient_skill_overlap(
                 ctx.resume_skills,
                 ctx.resume_hard_skills,
                 cand.payload,
-                resume_role_family=resume_role_family
-                if isinstance(resume_role_family, str)
-                else None,
+                resume_role_family=resume_role_family_str,
             ):
                 cand.drop_reason = "no_skill_overlap"
                 diag.drop_no_skill_overlap += 1

@@ -852,7 +852,14 @@ def _tokenize_rich_text(value: str) -> set[str]:
     return _tokenize_text(value)
 
 
-def _looks_unlikely_stack(title: str, resume_skills: set[str]) -> bool:
+def _looks_unlikely_stack(
+    title: str, resume_skills: set[str], resume_role_family: str | None = None
+) -> bool:
+    if (
+        isinstance(resume_role_family, str)
+        and resume_role_family in _SKILL_OVERLAP_FLOOR_SKIP_FAMILIES
+    ):
+        return False
     title_tokens = _tokenize_rich_text(title)
     if not title_tokens:
         return False
@@ -946,7 +953,14 @@ def _extract_strict_technical_anchors(resume_skills: set[str]) -> set[str]:
     return anchors
 
 
-def _looks_business_monitoring_role(title: str, resume_skills: set[str]) -> bool:
+def _looks_business_monitoring_role(
+    title: str, resume_skills: set[str], resume_role_family: str | None = None
+) -> bool:
+    if (
+        isinstance(resume_role_family, str)
+        and resume_role_family in _SKILL_OVERLAP_FLOOR_SKIP_FAMILIES
+    ):
+        return False
     strict_anchors = _extract_strict_technical_anchors(resume_skills)
     if not strict_anchors:
         return False
@@ -1626,6 +1640,7 @@ def _lexical_fallback_matches(
     limit: int,
     prefs: dict[str, object] | None = None,
     drop_counters: dict[str, int] | None = None,
+    resume_role_family: str | None = None,
 ) -> list[dict]:
     if not resume_skills:
         return []
@@ -1656,11 +1671,18 @@ def _lexical_fallback_matches(
             continue
         if _looks_like_listing_page(vacancy.source_url, vacancy.title):
             continue
-        if _looks_unlikely_stack(vacancy.title, resume_skills):
+        if _looks_unlikely_stack(
+            vacancy.title, resume_skills, resume_role_family=resume_role_family
+        ):
             continue
-        if _looks_business_monitoring_role(vacancy.title or "", resume_skills):
+        if _looks_business_monitoring_role(
+            vacancy.title or "", resume_skills, resume_role_family=resume_role_family
+        ):
             continue
-        if _looks_hard_non_it_role(vacancy.title or "", None, vacancy.raw_text):
+        if _looks_hard_non_it_role(vacancy.title or "", None, vacancy.raw_text) and not (
+            isinstance(resume_role_family, str)
+            and resume_role_family in _SKILL_OVERLAP_FLOOR_SKIP_FAMILIES
+        ):
             continue
 
         if active_prefs:
@@ -2413,6 +2435,7 @@ def _merge_lexical_fallback(
     """When the vector path under-delivers, fill with lexical matches
     and roll the fallback's drop counters into ``metrics``."""
     lexical_counters: dict[str, int] = {}
+    _lex_role_family = ctx.analysis.get("role_family") if isinstance(ctx.analysis, dict) else None
     lexical = _lexical_fallback_matches(
         db,
         resume_skills=ctx.resume_skills,
@@ -2421,6 +2444,7 @@ def _merge_lexical_fallback(
         limit=limit * 2,
         prefs=prefs,
         drop_counters=lexical_counters,
+        resume_role_family=_lex_role_family if isinstance(_lex_role_family, str) else None,
     )
     if metrics is not None:
         metrics["hard_filter_drop_geo"] = metrics.get("hard_filter_drop_geo", 0) + int(
