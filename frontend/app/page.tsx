@@ -1713,16 +1713,27 @@ export default function DashboardPage() {
   }
 
   // ── Подобрать CTA — hoisted so the button block can live outside the IIFE ──
-  const _ctaSelectedResume = resumes.find((r) => r.id === selectedResumeId) ?? null;
+  // Pull from the active resume same as the "Подбираем для тебя" summary;
+  // fall back to selected only if no resume is marked active.
+  const _ctaSelectedResume =
+    resumes.find((r) => r.is_active) ??
+    resumes.find((r) => r.id === selectedResumeId) ??
+    null;
   const _ctaAnalysis = _ctaSelectedResume?.analysis ?? null;
-  const ctaAutoRoles: string[] = _ctaAnalysis
-    ? [
-        ...(typeof _ctaAnalysis.target_role === 'string' && _ctaAnalysis.target_role
-          ? [_ctaAnalysis.target_role]
-          : []),
-      ]
-    : [];
-  const ctaAutoDomains: string[] = _ctaAnalysis ? asStringArray(_ctaAnalysis.domains) : [];
+  const ctaAutoRoles: string[] = (() => {
+    if (!_ctaAnalysis) return [];
+    // Prefer LLM-normalized aliases (v0.17.0 prompt); fall back to splitting
+    // the raw target_role on common separators for resumes analyzed earlier.
+    const aliases = asStringArray(_ctaAnalysis.target_role_aliases);
+    if (aliases.length > 0) return aliases.slice(0, 5);
+    const raw = typeof _ctaAnalysis.target_role === 'string' ? _ctaAnalysis.target_role : '';
+    return raw
+      .split(/[/|,]| и /)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 4)
+      .slice(0, 5);
+  })();
+  const ctaAutoDomains: string[] = _ctaAnalysis ? asStringArray(_ctaAnalysis.domains).slice(0, 3) : [];
 
   function handleSaveAndRecommend() {
     // F1: pass localRoles/localDomains as-is — no auto-pin merge.
