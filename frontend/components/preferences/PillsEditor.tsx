@@ -43,6 +43,7 @@ function AutoPill({ label, removing, onRemove }: AutoPillProps) {
         alignItems: 'center',
         gap: 4,
         height: 28,
+        maxWidth: '100%',
         padding: '0 10px 0 12px',
         borderRadius: 'var(--radius-full)',
         background: 'var(--color-pill-auto-bg)',
@@ -51,12 +52,12 @@ function AutoPill({ label, removing, onRemove }: AutoPillProps) {
         fontSize: 'var(--text-sm)',
         fontWeight: 400,
         lineHeight: 1,
-        whiteSpace: 'nowrap',
         cursor: 'default',
         userSelect: 'none',
+        overflow: 'hidden',
       }}
     >
-      {label}
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{label}</span>
       <button
         type="button"
         aria-label={`Удалить ${label}`}
@@ -108,6 +109,7 @@ function PinnedPill({ label, removing, onRemove }: PinnedPillProps) {
         alignItems: 'center',
         gap: 4,
         height: 28,
+        maxWidth: '100%',
         padding: '0 10px 0 12px',
         borderRadius: 'var(--radius-full)',
         background: 'var(--color-pill-pinned-bg)',
@@ -116,12 +118,12 @@ function PinnedPill({ label, removing, onRemove }: PinnedPillProps) {
         fontSize: 'var(--text-sm)',
         fontWeight: 600,
         lineHeight: 1,
-        whiteSpace: 'nowrap',
         cursor: 'default',
         userSelect: 'none',
+        overflow: 'hidden',
       }}
     >
-      {label}
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{label}</span>
       <button
         type="button"
         aria-label={`Удалить ${label}`}
@@ -260,7 +262,7 @@ function Combobox({ type, token, existingValues, onAdd, onClose }: ComboboxProps
   }
 
   return (
-    <div style={{ position: 'relative', width: 260, flexShrink: 0 }}>
+    <div style={{ position: 'relative', width: 240, maxWidth: '100%', flexShrink: 0 }}>
       {/* Input */}
       <div
         style={{
@@ -436,6 +438,7 @@ export default function PillsEditor({
         opacity: isSaving ? 0.6 : 1,
         pointerEvents: isSaving ? 'none' : 'auto',
         transition: 'opacity var(--duration-fast) var(--ease-out)',
+        minWidth: 0,
       }}
     >
       {/* Group label */}

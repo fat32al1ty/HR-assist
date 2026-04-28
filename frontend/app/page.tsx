@@ -1712,6 +1712,36 @@ export default function DashboardPage() {
     setExpandedResumeIds((current) => ({ ...current, [resumeId]: !current[resumeId] }));
   }
 
+  // ── Подобрать CTA — hoisted so the button block can live outside the IIFE ──
+  const _ctaSelectedResume = resumes.find((r) => r.id === selectedResumeId) ?? null;
+  const _ctaAnalysis = _ctaSelectedResume?.analysis ?? null;
+  const ctaAutoRoles: string[] = _ctaAnalysis
+    ? [
+        ...(typeof _ctaAnalysis.target_role === 'string' && _ctaAnalysis.target_role
+          ? [_ctaAnalysis.target_role]
+          : []),
+      ]
+    : [];
+  const ctaAutoDomains: string[] = _ctaAnalysis ? asStringArray(_ctaAnalysis.domains) : [];
+
+  function ctaBuildMerged(local: string[], auto: string[], cap: number): string[] {
+    const lowerSet = new Set(local.map((s) => s.toLowerCase()));
+    const extra = auto.filter((s) => !lowerSet.has(s.toLowerCase()));
+    return [...local, ...extra].slice(0, cap);
+  }
+
+  function handleSaveAndRecommend() {
+    const mergedTitles = ctaBuildMerged(localRoles, ctaAutoRoles, 5);
+    const mergedDomains = ctaBuildMerged(localDomains, ctaAutoDomains, 3);
+    if (profileDraft) {
+      void saveProfileAndRecommend(mergedTitles, mergedDomains);
+    } else {
+      setLocalRoles(mergedTitles);
+      setLocalDomains(mergedDomains);
+      void saveProfileAndRecommend(mergedTitles, mergedDomains);
+    }
+  }
+
   return (
     <main className="page">
       <section className="main">
@@ -1937,41 +1967,26 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              {/* ── Что ищу section (merged: pills + profile fields + подобрать) ── */}
+              {/* ── Подобрать CTA block — primary action, no Card wrapper ── */}
+              <div className="flex flex-col gap-1.5 px-1">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  className="w-full"
+                  onClick={handleSaveAndRecommend}
+                  disabled={matchingBusy || !selectedResumeId}
+                >
+                  {profileSaving || prefsSaving ? 'Сохраняем…' : matchingBusy ? 'Ищем…' : 'Подобрать вакансии'}
+                </Button>
+                <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] text-center px-1">
+                  {matchingMessage || 'AI подберёт вакансии под ваш профиль'}
+                </p>
+              </div>
+
+              {/* ── Что ищу section (merged: pills + profile fields) ── */}
               {(() => {
-                const selectedResume = resumes.find((r) => r.id === selectedResumeId) ?? null;
-                const analysis = selectedResume?.analysis ?? null;
-                const autoRoles: string[] = analysis
-                  ? [
-                      ...(typeof analysis.target_role === 'string' && analysis.target_role
-                        ? [analysis.target_role]
-                        : []),
-                    ]
-                  : [];
-                const autoDomains: string[] = analysis ? asStringArray(analysis.domains) : [];
                 const savedRoles = userPrefs?.preferred_titles ?? [];
                 const savedDomains = userPrefs?.preferred_domains ?? [];
-
-                // Compute merged arrays for auto-pin: union of localRoles with any
-                // auto-detected roles not already present (case-insensitive), capped at 5.
-                function buildMerged(local: string[], auto: string[], cap: number): string[] {
-                  const lowerSet = new Set(local.map((s) => s.toLowerCase()));
-                  const extra = auto.filter((s) => !lowerSet.has(s.toLowerCase()));
-                  return [...local, ...extra].slice(0, cap);
-                }
-
-                function handleSaveAndRecommend() {
-                  const mergedTitles = buildMerged(localRoles, autoRoles, 5);
-                  const mergedDomains = buildMerged(localDomains, autoDomains, 3);
-                  if (profileDraft) {
-                    void saveProfileAndRecommend(mergedTitles, mergedDomains);
-                  } else {
-                    // No profile draft yet — just PATCH preferences and refresh
-                    setLocalRoles(mergedTitles);
-                    setLocalDomains(mergedDomains);
-                    void saveProfileAndRecommend(mergedTitles, mergedDomains);
-                  }
-                }
 
                 return (
                   <Card className="animate-fade-in border-transparent shadow-none">
@@ -1983,7 +1998,7 @@ export default function DashboardPage() {
                       <PillsEditor
                         label="Роли"
                         values={localRoles}
-                        autoDetected={autoRoles}
+                        autoDetected={ctaAutoRoles}
                         type="role"
                         maxItems={5}
                         isDirty={localRoles.join('\x00') !== savedRoles.join('\x00')}
@@ -1996,7 +2011,7 @@ export default function DashboardPage() {
                       <PillsEditor
                         label="Домены"
                         values={localDomains}
-                        autoDetected={autoDomains}
+                        autoDetected={ctaAutoDomains}
                         type="domain"
                         maxItems={3}
                         isDirty={localDomains.join('\x00') !== savedDomains.join('\x00')}
@@ -2183,26 +2198,6 @@ export default function DashboardPage() {
                         </p>
                       ) : null}
 
-                      {/* Status row + Подобрать button */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-4 py-3">
-                        <div>
-                          <p className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                            {matchingBusy ? 'Быстрый подбор…' : 'Подобрать вакансии'}
-                          </p>
-                          <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
-                            {matchingBusy ? 'Проверяем кеш — займёт до 5 секунд' : 'AI подберёт вакансии под ваш профиль'}
-                          </p>
-                        </div>
-                        <Button
-                          variant="primary"
-                          size="lg"
-                          className="px-6 shrink-0 sm:self-auto self-stretch"
-                          onClick={handleSaveAndRecommend}
-                          disabled={matchingBusy || !selectedResumeId || prefsSaving}
-                        >
-                          {profileSaving || prefsSaving ? 'Сохраняем…' : matchingBusy ? 'Ищем…' : 'Подобрать'}
-                        </Button>
-                      </div>
                     </CardContent>
                   </Card>
                 );
