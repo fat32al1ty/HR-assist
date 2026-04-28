@@ -20,6 +20,27 @@ from __future__ import annotations
 from ..state import MatchingState
 from .base import BaseStage
 
+_NEGATIVE_TERM_PENALTY_PER_TERM = 0.02
+_NEGATIVE_TERM_PENALTY_CAP = 0.06
+
+
+def _negative_term_penalty(vacancy_payload: dict | None, negative_term_set: set[str]) -> float:
+    """Return a deduction [0.0, _NEGATIVE_TERM_PENALTY_CAP] based on how many
+    tokens from negative_term_set appear in the vacancy's must_have_skills.
+
+    Never drops a vacancy — soft signal only.
+    """
+    if not negative_term_set or not isinstance(vacancy_payload, dict):
+        return 0.0
+    must_have = vacancy_payload.get("must_have_skills")
+    if not isinstance(must_have, list) or not must_have:
+        return 0.0
+    vac_tokens = {s.strip().lower() for s in must_have if isinstance(s, str) and s.strip()}
+    overlap_count = len(vac_tokens & negative_term_set)
+    if overlap_count == 0:
+        return 0.0
+    return min(_NEGATIVE_TERM_PENALTY_CAP, overlap_count * _NEGATIVE_TERM_PENALTY_PER_TERM)
+
 
 class ScoringStage(BaseStage):
     name = "score"
@@ -77,6 +98,10 @@ class ScoringStage(BaseStage):
             if domain_boost > 0.0:
                 hybrid = min(TITLE_BOOST_SCORE_CAP, hybrid + domain_boost)
                 diag.domain_preference_boost_applied += 1
+            neg_penalty = _negative_term_penalty(cand.payload, ctx.negative_term_set)
+            if neg_penalty > 0.0:
+                hybrid -= neg_penalty
+                diag.negative_term_penalty_applied += 1
             cand.lexical_score = overlap
             cand.hybrid_score = hybrid
             cand.annotations["leadership_hint"] = has_leadership_hint

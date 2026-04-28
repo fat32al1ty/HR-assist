@@ -2053,6 +2053,13 @@ def _build_resume_context(
     for phrase in resume_skill_phrases:
         resume_phrase_aliases.update(_phrase_aliases(phrase))
 
+    from app.services.feedback_signal_extractor import get_negative_term_set
+
+    if settings.preference_decay_enabled:
+        negative_term_set = get_negative_term_set(db, user_id=user_id, resume_id=resume_id)
+    else:
+        negative_term_set = set()
+
     return ResumeContext(
         resume_id=resume_id,
         user_id=user_id,
@@ -2070,6 +2077,7 @@ def _build_resume_context(
         preferred_domains=list(prefs.get("preferred_domains") or []),
         excluded_vacancy_ids=excluded_vacancy_ids,
         rejected_skill_norms=rejected_normalized,
+        negative_term_set=negative_term_set,
     )
 
 
