@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { useSession } from '@/lib/session';
 import { type Resume, resumeDisplayName } from '@/types/resume';
 import PillsEditor from '@/components/preferences/PillsEditor';
+import { fetchDomainDisplayMap } from '@/lib/preferences';
 const MIN_PROGRESS_VISIBLE_MS = 1400;
 const RECOMMEND_TIMEOUT_MS = 360000;
 const LAST_JOB_ID_STORAGE_KEY = 'last_recommendation_job_id';
@@ -398,6 +399,7 @@ export default function DashboardPage() {
   const [userPrefs, setUserPrefs] = useState<UserPrefs | null>(null);
   const [localRoles, setLocalRoles] = useState<string[]>([]);
   const [localDomains, setLocalDomains] = useState<string[]>([]);
+  const [slugToDisplay, setSlugToDisplay] = useState<Record<string, string>>({});
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsError, setPrefsError] = useState('');
   const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
@@ -440,6 +442,15 @@ export default function DashboardPage() {
     void loadSelectedVacancies();
     void loadDislikedVacancies();
     void loadUserPrefs();
+  }, [token]);
+
+  // One-shot fetch of the domain slug→display map. Runs once per session when
+  // the user is authenticated. Falls back to empty map (slug shown as-is).
+  useEffect(() => {
+    if (!token) return;
+    void fetchDomainDisplayMap(token).then((map) => {
+      setSlugToDisplay(map);
+    });
   }, [token]);
 
   useEffect(() => {
@@ -2058,6 +2069,7 @@ export default function DashboardPage() {
                             onChange={setLocalDomains}
                             emptyHint="Загрузите резюме, чтобы система определила домены"
                             token={token}
+                            displayMap={slugToDisplay}
                           />
                         </div>
                       </details>
@@ -2488,7 +2500,8 @@ export default function DashboardPage() {
                       ? activeAnalysis.seniority
                       : null;
                     const summaryDomains = asStringArray(activeAnalysis.domains).slice(0, 3);
-                    const roleLine = [summaryRole, summarySeniority, summaryDomains.join(', ')]
+                    const summaryDomainsDisplay = summaryDomains.map((s) => slugToDisplay[s] ?? s);
+                    const roleLine = [summaryRole, summarySeniority, summaryDomainsDisplay.join(', ')]
                       .filter(Boolean)
                       .join(' · ');
                     if (!roleLine) return null;

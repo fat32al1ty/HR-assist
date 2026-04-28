@@ -1918,24 +1918,18 @@ def _preferred_title_boost_score(vacancy_title: object, preferred_titles: list[s
 def _domain_preference_boost(vacancy_payload: dict | None, preferred_domains: list[str]) -> float:
     """Return DOMAIN_PREFERENCE_BOOST when vacancy domain overlaps user prefs, else 0.0.
 
-    Case-insensitive substring match: any preferred_domain token found inside
-    any vacancy domain string triggers the boost. Never drops a vacancy — only
-    nudges ranking upward.
+    Set intersection on canonical slugs — both sides are normalized at write
+    time by normalize_domains so equality is exact. Never drops a vacancy —
+    only nudges ranking upward.
     """
     if not preferred_domains or not isinstance(vacancy_payload, dict):
         return 0.0
     vacancy_domains = vacancy_payload.get("domains")
     if not isinstance(vacancy_domains, list) or not vacancy_domains:
         return 0.0
-    vac_text = " ".join(str(d).lower() for d in vacancy_domains if isinstance(d, str))
-    if not vac_text:
-        return 0.0
-    for pref in preferred_domains:
-        if not isinstance(pref, str):
-            continue
-        needle = pref.strip().lower()
-        if needle and needle in vac_text:
-            return DOMAIN_PREFERENCE_BOOST
+    overlap = set(vacancy_domains) & set(preferred_domains)
+    if overlap:
+        return DOMAIN_PREFERENCE_BOOST
     return 0.0
 
 

@@ -24,6 +24,8 @@ export type PillsEditorProps = {
   onChange: (next: string[]) => void;
   emptyHint?: string;
   token: string | null;
+  /** Maps internal value (slug) → user-facing label. Falls back to value when key absent. */
+  displayMap?: Record<string, string>;
 };
 
 // ─── Pill sub-components ────────────────────────────────────────────────────
@@ -171,11 +173,12 @@ type ComboboxProps = {
   existingValues: string[];
   onAdd: (value: string) => void;
   onClose: () => void;
+  displayMap?: Record<string, string>;
 };
 
 const DEBOUNCE_MS = 200;
 
-function Combobox({ type, token, existingValues, onAdd, onClose }: ComboboxProps) {
+function Combobox({ type, token, existingValues, onAdd, onClose, displayMap }: ComboboxProps) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -369,7 +372,7 @@ function Combobox({ type, token, existingValues, onAdd, onClose }: ComboboxProps
                 commitValue(s.value);
               }}
             >
-              <span>{s.value}</span>
+              <span>{(displayMap && displayMap[s.value]) ?? s.value}</span>
               {s.frequency > 1 && (
                 <span
                   style={{
@@ -407,6 +410,7 @@ export default function PillsEditor({
   onChange,
   emptyHint,
   token,
+  displayMap,
 }: PillsEditorProps) {
   const [comboboxOpen, setComboboxOpen] = useState(false);
   const [removingIndex, setRemovingIndex] = useState<number | null>(null);
@@ -504,23 +508,24 @@ export default function PillsEditor({
           alignItems: 'center',
         }}
       >
-        {values.map((value, i) =>
-          isAuto(value) ? (
+        {values.map((value, i) => {
+          const displayLabel = (displayMap && displayMap[value]) ?? value;
+          return isAuto(value) ? (
             <AutoPill
               key={value}
-              label={value}
+              label={displayLabel}
               removing={removingIndex === i}
               onRemove={() => handleRemove(i)}
             />
           ) : (
             <PinnedPill
               key={value}
-              label={value}
+              label={displayLabel}
               removing={removingIndex === i}
               onRemove={() => handleRemove(i)}
             />
-          )
-        )}
+          );
+        })}
 
         {/* Add button or combobox */}
         {comboboxOpen ? (
@@ -530,6 +535,7 @@ export default function PillsEditor({
             existingValues={values}
             onAdd={handleAdd}
             onClose={() => setComboboxOpen(false)}
+            displayMap={displayMap}
           />
         ) : atLimit ? (
           <span

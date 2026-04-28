@@ -5,6 +5,7 @@ from typing import Any
 from openai import APIConnectionError, APIStatusError, OpenAI
 
 from app.core.config import settings
+from app.services.domain_taxonomy import normalize_domains
 from app.services.llm_guard import prompt_injection_flags, wrap_untrusted_text
 from app.services.openai_usage import record_responses_usage
 from app.services.resume_analyzer import DEFAULT_OPENAI_BASE_URL
@@ -152,6 +153,7 @@ def analyze_vacancy_text(text: str) -> dict[str, Any]:
     )
 
     parsed = json.loads(response.output_text)
+    parsed["domains"] = normalize_domains(parsed.get("domains"))
     if injection_flags:
         red_flags = parsed.get("red_flags")
         if not isinstance(red_flags, list):

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
 from app.models.user import User
+from app.services.domain_taxonomy import normalize_domains
 
 
 def get_user_by_email(db: Session, email: str) -> User | None:
@@ -84,6 +85,7 @@ def update_preferences(
         user.preferred_titles = preferred_titles
     if preferred_domains is not None:
         # [] = clear, None = no change (sentinel pattern)
+        preferred_domains = normalize_domains(preferred_domains)
         user.preferred_domains = preferred_domains
     if expected_salary_min is not None:
         user.expected_salary_min = expected_salary_min or None

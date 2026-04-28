@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.repositories.users import update_preferences
 from app.schemas.user import UserPreferencesUpdate, UserRead
+from app.services.domain_taxonomy import all_canonical_slugs
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ _SUGGESTIONS_CACHE_TTL = 300  # 5 minutes
 class SuggestionItem(BaseModel):
     value: str
     frequency: int
+    display_name: str | None = None
 
 
 class SuggestionsResponse(BaseModel):
@@ -77,30 +79,17 @@ def get_preference_suggestions(
             {"prefix": prefix, "like_prefix": prefix + "%", "lim": limit},
         ).fetchall()
     else:
-        # domains live in vacancy_profiles.profile JSON under "domains" (array of strings)
-        # Cast profile::jsonb — same reason as the role query above.
-        raw = db.execute(
-            text(
-                """
-                SELECT val, COUNT(*) AS freq
-                FROM vacancy_profiles,
-                     jsonb_array_elements_text(
-                         CASE
-                             WHEN (profile::jsonb) ? 'domains'
-                               AND jsonb_typeof((profile::jsonb)->'domains') = 'array'
-                             THEN (profile::jsonb)->'domains'
-                             ELSE '[]'::jsonb
-                         END
-                     ) AS val
-                WHERE val <> ''
-                  AND (:prefix = '' OR lower(val) LIKE :like_prefix)
-                GROUP BY val
-                ORDER BY freq DESC
-                LIMIT :lim
-                """
-            ),
-            {"prefix": prefix, "like_prefix": prefix + "%", "lim": limit},
-        ).fetchall()
+        # domains: return canonical slugs from taxonomy (display_name filtered by prefix)
+        matched = [
+            {"value": slug, "frequency": 0, "display_name": display}
+            for slug, display in all_canonical_slugs()
+            if not prefix or display.lower().startswith(prefix) or slug.startswith(prefix)
+        ]
+        raw_domain = matched[:limit]
+        results = raw_domain
+        with _suggestions_cache_lock:
+            _suggestions_cache[cache_key] = (now + _SUGGESTIONS_CACHE_TTL, results)
+        return SuggestionsResponse(suggestions=[SuggestionItem(**s) for s in results])
 
     results = [{"value": row[0], "frequency": int(row[1])} for row in raw]
     with _suggestions_cache_lock:
