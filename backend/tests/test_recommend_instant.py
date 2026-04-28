@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 
 from app.core.security import create_access_token, hash_password
 from app.db.session import SessionLocal
@@ -105,9 +106,7 @@ class InstantEndpointWarmIndexTest(unittest.TestCase):
 
     @patch("app.services.vacancy_recommendation.match_vacancies_for_resume")
     @patch("app.services.vacancy_recommendation.discover_and_index_vacancies")
-    def test_instant_returns_matches_when_index_is_warm(
-        self, mock_discover, mock_match
-    ) -> None:
+    def test_instant_returns_matches_when_index_is_warm(self, mock_discover, mock_match) -> None:
         # Pre-populate the matcher stub with one high-quality match so the
         # endpoint sees a non-empty index.
         mock_match.return_value = [
@@ -259,9 +258,7 @@ class InstantEndpointNoHHBraveTest(unittest.TestCase):
         self.db.close()
 
     @patch("app.services.vacancy_recommendation.match_vacancies_for_resume")
-    def test_instant_does_not_call_discover_and_index_vacancies(
-        self, mock_match
-    ) -> None:
+    def test_instant_does_not_call_discover_and_index_vacancies(self, mock_match) -> None:
         mock_match.return_value = []
 
         # Patch discover_and_index_vacancies so that if it IS called the test
@@ -303,9 +300,7 @@ class InstantEndpointPersistsSnapshotTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.db.execute(
-            RecommendationJob.__table__.delete().where(
-                RecommendationJob.user_id == self.user.id
-            )
+            RecommendationJob.__table__.delete().where(RecommendationJob.user_id == self.user.id)
         )
         self.db.execute(
             UserVacancyFeedback.__table__.delete().where(
@@ -359,6 +354,15 @@ class InstantEndpointPersistsSnapshotTest(unittest.TestCase):
         instant_body = instant_resp.json()
         self.assertEqual(len(instant_body["matches"]), 2)
 
+        # Exactly one new completed row was persisted for this user — guards
+        # against the test passing vacuously off a stale row from another run.
+        row_count = self.db.scalar(
+            select(func.count())
+            .select_from(RecommendationJob)
+            .where(RecommendationJob.user_id == self.user.id)
+        )
+        self.assertEqual(row_count, 1)
+
         latest_resp = self.client.get(
             "/api/vacancies/recommend/latest",
             headers=self.headers,
@@ -374,9 +378,7 @@ class InstantEndpointPersistsSnapshotTest(unittest.TestCase):
 
     @patch("app.services.vacancy_recommendation.match_vacancies_for_resume")
     @patch("app.services.vacancy_recommendation.discover_and_index_vacancies")
-    def test_instant_persists_even_when_matches_are_empty(
-        self, mock_discover, mock_match
-    ) -> None:
+    def test_instant_persists_even_when_matches_are_empty(self, mock_discover, mock_match) -> None:
         # Cold-index path also writes a snapshot — otherwise refresh on a
         # cold session resurrects an older deep_scan job and confuses the UI.
         mock_match.return_value = []
@@ -387,6 +389,13 @@ class InstantEndpointPersistsSnapshotTest(unittest.TestCase):
             json=_BASIC_BODY,
             headers=self.headers,
         )
+
+        row_count = self.db.scalar(
+            select(func.count())
+            .select_from(RecommendationJob)
+            .where(RecommendationJob.user_id == self.user.id)
+        )
+        self.assertEqual(row_count, 1)
 
         latest_resp = self.client.get(
             "/api/vacancies/recommend/latest",

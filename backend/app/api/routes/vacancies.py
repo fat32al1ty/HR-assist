@@ -1,3 +1,4 @@
+import logging
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -50,6 +51,7 @@ from app.services.vacancy_pipeline import discover_and_index_vacancies
 from app.services.vacancy_recommendation import recommend_vacancies_for_resume
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _require_active_resume_id(db: Session, user: User) -> int:
@@ -194,17 +196,25 @@ def recommend_vacancies_instant(
     # frontend renders the standard "no results" state instead of skeleton.
     prefetch_empty = len(matches) == 0 and metrics.fetched == 0 and metrics.indexed == 0
     # Persist a completed-status snapshot so /recommend/latest can return the
-    # same matches after a page refresh. Without this, refresh would only see
-    # the last deep_scan job and regress a high-quality instant result.
-    record_instant_recommendation_snapshot(
-        user_id=current_user.id,
-        resume_id=resume_id,
-        request_payload=payload.model_dump(),
-        query=query,
-        metrics=asdict(metrics),
-        matches=matches,
-        openai_usage=usage,
-    )
+    # same matches after a page refresh. Best-effort: if the DB write fails,
+    # the user still gets their matches in the response — the snapshot is a
+    # restore convenience, not part of the contract.
+    try:
+        record_instant_recommendation_snapshot(
+            user_id=current_user.id,
+            resume_id=resume_id,
+            request_payload=payload.model_dump(),
+            query=query,
+            metrics=asdict(metrics),
+            matches=matches,
+            openai_usage=usage,
+        )
+    except Exception:
+        logger.exception(
+            "instant_recommendation_snapshot_persist_failed user_id=%s resume_id=%s",
+            current_user.id,
+            resume_id,
+        )
     return VacancyRecommendResponse(
         query=query,
         indexed=metrics.indexed,
