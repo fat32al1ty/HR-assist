@@ -229,22 +229,28 @@ class SuggestionsDomainTest(unittest.TestCase):
         self.db.close()
 
     # T9 ─────────────────────────────────────────────────────────────────────
-    def test_domain_suggestions_aggregated_from_profile_domains(self) -> None:
-        """type=domain returns the namespaced FinTech (freq=2) and HealthTech (freq=1)."""
+    def test_domain_suggestions_returns_canonical_taxonomy(self) -> None:
+        """type=domain now returns canonical slugs from domain_taxonomy.py,
+        not aggregations from vacancy_profiles. The seeded namespaced
+        domains (zzdom-...) are NOT in the canonical list and must NOT
+        appear; well-known canonical slugs MUST appear with display names.
+        """
         resp = self.client.get(
             "/api/users/preferences/suggestions",
-            params={"type": "domain", "q": f"zzdom-{self.suffix}"},
+            params={"type": "domain", "limit": 50},
             headers=self.headers,
         )
         self.assertEqual(resp.status_code, 200, resp.text)
         suggestions = resp.json()["suggestions"]
-        values = [s["value"] for s in suggestions]
-        self.assertIn(self.dom_ft, values)
-        self.assertIn(self.dom_ht, values)
-        ft_item = next(s for s in suggestions if s["value"] == self.dom_ft)
-        ht_item = next(s for s in suggestions if s["value"] == self.dom_ht)
-        self.assertEqual(ft_item["frequency"], 2)
-        self.assertEqual(ht_item["frequency"], 1)
+        slugs = [s["value"] for s in suggestions]
+        self.assertIn("it", slugs)
+        self.assertIn("fintech", slugs)
+        self.assertIn("healthcare", slugs)
+        self.assertNotIn(self.dom_ft, slugs)  # not canonical
+        self.assertNotIn(self.dom_ht, slugs)
+        # display_name should be present for canonical entries
+        it_item = next(s for s in suggestions if s["value"] == "it")
+        self.assertTrue(it_item.get("display_name"))
 
 
 class SuggestionsAuthAndCacheTest(unittest.TestCase):

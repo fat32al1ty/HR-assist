@@ -67,6 +67,11 @@ def _compute_negative_term_set(
 
     from app.repositories.resumes import get_resume_for_user
 
+    # Defensive — some matcher unit tests pass a mock db without scalars(),
+    # in which case the negative-term feature simply yields no signal.
+    if not hasattr(db, "scalars"):
+        return set()
+
     cutoff = datetime.now(UTC) - timedelta(days=30)
 
     disliked_ids: list[int] = list(

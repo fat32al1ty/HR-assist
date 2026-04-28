@@ -100,7 +100,7 @@ class PreferredDomainsPatchTest(unittest.TestCase):
         # Seed.
         self.client.patch(
             "/api/users/me/preferences",
-            json={"preferred_domains": ["healthtech"]},
+            json={"preferred_domains": ["healthcare"]},
             headers=self.headers,
         )
         # Update something else — no preferred_domains key.
@@ -110,7 +110,7 @@ class PreferredDomainsPatchTest(unittest.TestCase):
             headers=self.headers,
         )
         self.assertEqual(resp.status_code, 200, resp.text)
-        self.assertEqual(resp.json()["preferred_domains"], ["healthtech"])
+        self.assertEqual(resp.json()["preferred_domains"], ["healthcare"])
 
     # T4 ─────────────────────────────────────────────────────────────────────
     def test_patch_preferred_domains_over_cap_returns_422(self) -> None:
