@@ -2439,9 +2439,12 @@ export default function DashboardPage() {
                     const activeAnalysis = activeResume?.analysis ?? null;
                     const hasOverride = (userPrefs?.preferred_titles ?? []).length > 0;
                     if (!activeAnalysis || hasOverride) return null;
-                    const summaryRole = typeof activeAnalysis.target_role === 'string' && activeAnalysis.target_role
-                      ? activeAnalysis.target_role
-                      : null;
+                    const _aliases = asStringArray(activeAnalysis.target_role_aliases).slice(0, 3);
+                    const summaryRole = _aliases.length > 0
+                      ? _aliases.join(' · ')
+                      : (typeof activeAnalysis.target_role === 'string' && activeAnalysis.target_role
+                          ? activeAnalysis.target_role
+                          : null);
                     const summarySeniority = typeof activeAnalysis.seniority === 'string' && activeAnalysis.seniority
                       ? activeAnalysis.seniority
                       : null;

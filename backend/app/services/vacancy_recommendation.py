@@ -100,6 +100,26 @@ def _normalize_phrase(value: object) -> str:
     return normalized
 
 
+def _split_role_compound(value: str | None) -> list[str]:
+    """Split a compound resume title into individual role fragments.
+
+    Handles separators: '/', '|', ' и ', ','. Filters fragments shorter than
+    4 characters and caps the result at 4 fragments.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return []
+    pattern = r"\s*/\s*|\s*\|\s*|\s+и\s+|\s*,\s*"
+    fragments = re.split(pattern, value)
+    result: list[str] = []
+    for fragment in fragments:
+        cleaned = fragment.strip()
+        if len(cleaned) >= 4:
+            result.append(cleaned)
+        if len(result) >= 4:
+            break
+    return result
+
+
 def _short_query_from_tokens(tokens: list[str], *, max_words: int = 7) -> str:
     words: list[str] = []
     for token in tokens:
@@ -141,12 +161,28 @@ def _build_discovery_query(
             if normalized:
                 parts.append(normalized)
     elif analysis:
-        role = _normalize_phrase(analysis.get("target_role"))
-        specialization = _normalize_phrase(analysis.get("specialization"))
-        if role:
-            parts.append(role)
-        if specialization:
-            parts.append(specialization)
+        aliases = _as_strings(analysis.get("target_role_aliases"))
+        if aliases:
+            # LLM-normalized canonical roles — better HH query material than the
+            # raw target_role header which often contains company-specific verbiage.
+            for alias in aliases[:3]:
+                normalized = _normalize_phrase(alias)
+                if normalized:
+                    parts.append(normalized)
+        else:
+            # Backfill path: old resumes have only target_role. Split on common
+            # separators so a "Role A / Role B" header still produces 2 query
+            # tokens rather than one 7-word phrase.
+            # TODO: once logs show most active users have re-analyzed and have
+            # target_role_aliases populated, this fallback branch can be removed.
+            role_raw = analysis.get("target_role")
+            for fragment in _split_role_compound(role_raw):
+                normalized = _normalize_phrase(fragment)
+                if normalized:
+                    parts.append(normalized)
+            specialization = _normalize_phrase(analysis.get("specialization"))
+            if specialization:
+                parts.append(specialization)
 
     # Preferred domains carry user intent — push them BEFORE skills so the
     # 7-word cap below doesn't silently drop them on resumes with many skills.
@@ -222,6 +258,14 @@ def _build_deep_scan_queries(base_query: str, rf_only: bool, analysis: dict | No
         )
         if combo:
             queries.append((combo + region_suffix).strip())
+    # 4. target_role_aliases facet — LLM-normalized canonical titles widen
+    #    discovery for users with ambiguous or compound resume headers.
+    if isinstance(analysis, dict):
+        aliases = _as_strings(analysis.get("target_role_aliases"))
+        for alias in aliases[:2]:
+            normalized_alias = _normalize_phrase(alias)
+            if normalized_alias:
+                queries.append((normalized_alias + region_suffix).strip())
 
     role_tokens = _normalize_phrase(role).lower()
     prefers_leadership = any(

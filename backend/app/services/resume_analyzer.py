@@ -30,6 +30,17 @@ Role classification — load-bearing for matching:
   (software_engineering, data_ml, infrastructure_devops, cybersecurity, hardware_embedded).
   False for PM, design, business, ops, HR, finance, legal. Use null when unclear.
 - esco_occupation_uri: leave null — the matcher resolves this from ESCO lookup post-analysis.
+
+target_role_aliases — search-friendly canonical role names:
+Extract 2-5 canonical role aliases the candidate could realistically search for on a job board.
+Use widely-recognized titles, not literal resume headers. Strip company-specific qualifiers and split
+compound titles. Examples:
+- Resume header "Руководитель AI-проектов и IT-платформ / AI Product Manager" →
+  aliases: ["AI Product Manager", "Head of AI Platforms", "ML Product Manager"]
+- Resume header "Senior Backend Developer / Tech Lead" →
+  aliases: ["Senior Backend Developer", "Tech Lead", "Backend Tech Lead"]
+Use English where it is the standard industry term; Russian if Russian is the dominant search term
+for that role.
 """
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 
@@ -107,6 +118,17 @@ def analyze_resume_text(text: str) -> dict[str, Any]:
                             "role_family": {"type": ["string", "null"]},
                             "role_is_technical": {"type": ["boolean", "null"]},
                             "esco_occupation_uri": {"type": ["string", "null"]},
+                            "target_role_aliases": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": (
+                                    "2-5 canonical, search-friendly role names this person could "
+                                    "realistically apply to on a job board. Use widely-recognized "
+                                    "titles (AI Product Manager, Head of AI, ML Engineer), not "
+                                    "literal resume headers. Strip company-specific qualifiers and "
+                                    "split compound titles."
+                                ),
+                            },
                         },
                         "required": [
                             "target_role",
@@ -132,6 +154,7 @@ def analyze_resume_text(text: str) -> dict[str, Any]:
                             "role_family",
                             "role_is_technical",
                             "esco_occupation_uri",
+                            "target_role_aliases",
                         ],
                     },
                     "strict": True,
