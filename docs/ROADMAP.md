@@ -1,6 +1,6 @@
 # HR Assist — Roadmap
 
-**Статус (2026-04-28):** IT-MVP закрыт релизом `v0.14.0`, шлифовка UX подбора в `v0.15.0`, явное управление ролями/доменами в `v0.16.0`. Дальше — `v1.0.0` (Phase 5.3, domain expansion), запускается только после подтверждения PMF в IT.
+**Статус (2026-04-28):** IT-MVP закрыт релизом `v0.14.0`, шлифовка UX подбора в `v0.15.0`, явное управление ролями/доменами в `v0.16.0`, отказ от auto-pin + multi-facet expansion + feedback loop в `v0.17.0`. Дальше — `v1.0.0` (Phase 5.3, domain expansion), запускается только после подтверждения PMF в IT.
 
 Полный план и принципы — в [`.claude/skills/product-roadmap/SKILL.md`](../.claude/skills/product-roadmap/SKILL.md).
 
@@ -14,6 +14,17 @@ HR Assist — AI-ассистент для **соискателя** в IT. Не 
 - **AI-агрегаторы уровня getmatch** — умный ранжир поверх нескольких источников.
 
 ## Последние релизы
+
+### `v0.17.0` — Откат auto-pin, multi-facet discovery, feedback loop (2026-04-28)
+Раскат v0.16.0 показал, что auto-pin (запись `analysis.target_role/domains` в `User.preferred_*` при первом сохранении) **отравлял** persistence у пользователей. У `fat32al1ty` после первого save оказались `preferred_titles=['product', 'Владелец продукта', 'Менеджер проектов', 'Руководитель AI-проектов и IT-платформ / AI Product Manager']` — query "Владелец продукта Менеджер проектов Project Manager ИТ" → HH вернул 208 вакансий не-IT product-менеджеров → pre-filter уронил 205, matcher выкинул 3, **0 матчей**. Независимая product-analyst-сессия подтвердила: фикс — backend, не UI.
+
+**Tier 1 (фикс).** Auto-pin убран на фронте: `localRoles + autoDetected` union больше не пишется в БД, `preferred_*` пишется ТОЛЬКО когда юзер явно отредактировал пилюли. Серверный validator на `_validate_titles` (в `UserPreferencesUpdate` и `PreferenceOverrides`) режет noise: items < 4 символов и blocklist generic-stems (`product`, `manager`, `lead`, `head`, `director`, `specialist`, `engineer`, `developer`, `analyst`) без квалификатора. `_build_discovery_query` перестал брать `preferred_titles[:2]` — теперь все, словесный cap честно режет в конце. Логирование `discovery_query_noisy_pref` для уже-заражённых юзеров без destructive миграции.
+
+**Tier 1.5 (UX).** Pills демотированы в `<details>` "Дополнительные фильтры (необязательно)", свёрнуто по умолчанию, с подсказкой что AI и так подбирает по резюме. Над матчами — read-only summary "Подбираем для тебя: {role} · {seniority} · {top 3 domains}" + ссылка на `/audit` для коррекции резюме (скрывается, если у юзера активный `preferred_titles` override).
+
+**Tier 2 (multi-facet expansion).** `_build_deep_scan_queries` дополнен 3 facet-вариантами от **независимых** сигналов резюме: `role_family` отдельно, top-3 hard_skills отдельно, `role_family + top skill` combo. Дедуп по case-insensitive перед `[:max_queries=6]`. Pre-filter audit (B5): `_looks_unlikely_stack` смотрит на vacancy.title, не на query, `_has_sufficient_skill_overlap` фильтрует по навыкам, не по роли — обе совместимы со skill-only facet. Counter `multi_facet_queries_generated` в admin-телеметрии.
+
+**Tier 3 (feedback loop).** Новый `feedback_signal_extractor.get_negative_term_set()` берёт до 30 dislikes (≤30d), агрегирует токены из `vacancy_profile.must_have_skills + nice_to_have_skills`, вычитает `resume.hard_skills`, возвращает top-N с freq≥2. Кеш 5 мин per `(user_id, resume_id)`. ScoringStage применяет `−0.02` за каждый пересекающийся токен (cap `−0.06`) — никогда не дропает. Counter `negative_term_penalty_applied`. Гейт через `settings.preference_decay_enabled` (по умолчанию off — оператор включает в `.env.local`). Магнитуды откалиброваны ниже `+0.03 DOMAIN_BOOST`, `+0.05 TITLE_BOOST_PARTIAL`.
 
 ### `v0.16.0` — Явное управление ролями и доменами поиска (2026-04-28)
 В сайдбаре `/` появились две группы редактируемых пилюль: **Роли** (до 5) и **Домены** (до 3). Значения, выдранные из резюме, помечены серым (`auto`), вручную добавленные — акцентом (`pinned`). Inline-typeahead подсказывает варианты из частотного индекса по `vacancy_profiles`. Кнопка «Сохранить и обновить подбор» делает PATCH `/users/me/preferences` и сразу запускает instant-first refresh с новыми фильтрами. Новая колонка `users.preferred_domains` (миграция `0035`), новый эндпоинт `GET /users/preferences/suggestions?type=role|domain&q=…&limit=…` (5-мин кеш). `_build_discovery_query` уважает оба override'а; matcher применяет soft-boost `+0.03` к vacancy.score, если `vacancy.domains ∩ preferred_domains ≠ ∅` — никогда не отбраковывает. Новый счётчик `domain_preference_boost_applied` в admin-телеметрии. Eval: 16 новых тестов (PATCH semantics + cap + clear + suggestions sort/prefix/auth + discovery query + matcher boost). Designer ввёл 16 новых семантических токенов (`pill-auto-*`, `pill-pinned-*`, `combobox-*`, `unsaved-indicator-fg`) + анимации `pill-in/pill-out` с `prefers-reduced-motion`-гвардом.
@@ -63,6 +74,7 @@ HR Assist — AI-ассистент для **соискателя** в IT. Не 
 | 5.2 — Per-vacancy strategy | `v0.14.0` | 2026-04-25 | Стратегия отклика + cover letter + recommendation corrections. |
 | UX — Instant-first matching | `v0.15.0` | 2026-04-28 | Двухэтапный подбор: instant ≤5 c из индекса + фоновый deep-scan без блок-спиннера, partial-on-timeout. |
 | UX — Editable role/domain pills | `v0.16.0` | 2026-04-28 | Пилюли ролей и доменов в сайдбаре, typeahead из vacancy_profiles, soft-boost +0.03 в matcher'е. |
+| Matching — auto-pin off + multi-facet + feedback | `v0.17.0` | 2026-04-28 | Откат auto-pin, noise blocklist, 3 facet-query от резюме, negative-term penalty от dislikes. |
 
 ## Что дальше
 
