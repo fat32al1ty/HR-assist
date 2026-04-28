@@ -47,6 +47,12 @@ export interface SkillGap {
   owned: boolean;
 }
 
+/** Wrapper returned by backend for skill_gaps block (Phase 5.3+). */
+export interface SkillGapsData {
+  gaps: SkillGap[];
+  sample_size: number;
+}
+
 export interface ResumeAuditOut {
   resume_id: number;
   computed_at: string; // ISO-8601
@@ -54,7 +60,10 @@ export interface ResumeAuditOut {
   template_mode_active: boolean;
   role_read: RoleRead;
   market_salary: MarketSalary | null;
-  skill_gaps: SkillGap[];
+  /** Phase 5.3+: object wrapper. Earlier responses returned SkillGap[] directly. */
+  skill_gaps: SkillGapsData | SkillGap[];
   quality_issues: QualityIssue[];
   triggered_question_ids: string[];
+  /** Phase 5.3+: inline questions, may be absent on older backend responses. */
+  onboarding_questions?: OnboardingQuestionOut[];
 }

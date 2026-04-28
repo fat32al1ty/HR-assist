@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.repositories.resume_profiles import create_or_update_resume_profile
 from app.repositories.resume_vacancy_score import delete_scores_for_resume
 from app.services.embeddings import create_embedding
+from app.services.resume_analyzer import all_resume_skills
 from app.services.vector_store import get_vector_store
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,8 @@ def build_resume_profile_text(profile: dict[str, Any]) -> str:
         f"Seniority: {profile.get('seniority') or 'unknown'}",
         f"Total experience years: {profile.get('total_experience_years') or 'unknown'}",
         f"Summary: {profile.get('summary') or ''}",
-        f"Hard skills: {', '.join(profile.get('hard_skills') or profile.get('skills') or [])}",
+        # all_resume_skills unions all buckets so the embedding captures every mentioned skill
+        f"Hard skills: {', '.join(all_resume_skills(profile) or profile.get('skills') or [])}",
         f"Soft skills: {', '.join(profile.get('soft_skills') or [])}",
         f"Tools: {', '.join(profile.get('tools') or [])}",
         f"Domains: {', '.join(profile.get('domains') or [])}",
@@ -39,7 +41,8 @@ def build_resume_vector_payload(profile: dict[str, Any], *, canonical_text: str)
         "seniority": profile.get("seniority"),
         "seniority_confidence": profile.get("seniority_confidence"),
         "total_experience_years": profile.get("total_experience_years"),
-        "hard_skills": profile.get("hard_skills") or profile.get("skills") or [],
+        # all_resume_skills unions all buckets for vector payload; narrows on re-query are done by matchers
+        "hard_skills": all_resume_skills(profile) or profile.get("skills") or [],
         "tools": profile.get("tools") or [],
         "domains": profile.get("domains") or [],
         "languages": profile.get("languages") or [],

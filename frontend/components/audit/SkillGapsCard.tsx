@@ -4,10 +4,18 @@ import * as React from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import type { SkillGap } from '@/types/audit';
+import type { SkillGap, SkillGapsData } from '@/types/audit';
+
+/** Normalise the two possible shapes the backend may return. */
+function normaliseSkillGaps(raw: SkillGapsData | SkillGap[]): { gaps: SkillGap[]; sampleSize: number | null } {
+  if (Array.isArray(raw)) {
+    return { gaps: raw, sampleSize: null };
+  }
+  return { gaps: raw.gaps, sampleSize: raw.sample_size };
+}
 
 interface SkillGapsCardProps {
-  skillGaps: SkillGap[];
+  skillGaps: SkillGapsData | SkillGap[];
   className?: string;
 }
 
@@ -87,8 +95,12 @@ function SkillRow({ gap, index }: SkillRowProps) {
   );
 }
 
+const THIN_DATA_THRESHOLD = 10;
+
 export function SkillGapsCard({ skillGaps, className }: SkillGapsCardProps) {
-  const missingCount = skillGaps.filter((g) => !g.owned).length;
+  const { gaps, sampleSize } = normaliseSkillGaps(skillGaps);
+  const isThinData = sampleSize !== null && sampleSize < THIN_DATA_THRESHOLD;
+  const missingCount = gaps.filter((g) => !g.owned).length;
 
   return (
     <Card className={cn('bg-[var(--color-surface)]', className)}>
@@ -98,14 +110,14 @@ export function SkillGapsCard({ skillGaps, className }: SkillGapsCardProps) {
             <span className="block text-[length:var(--text-xs)] font-bold tracking-[0.1em] uppercase text-[color:var(--color-ink-muted)] mb-1">
               Пробелы в навыках
             </span>
-            <CardTitle>Топ-{skillGaps.length} навыков рынка</CardTitle>
+            <CardTitle>Топ-{gaps.length} навыков рынка</CardTitle>
           </div>
-          {missingCount > 0 && (
+          {!isThinData && missingCount > 0 && (
             <Badge variant="warning" className="mt-1 shrink-0">
               {missingCount} не хватает
             </Badge>
           )}
-          {missingCount === 0 && skillGaps.length > 0 && (
+          {!isThinData && missingCount === 0 && gaps.length > 0 && (
             <Badge variant="success" className="mt-1 shrink-0">
               Всё есть
             </Badge>
@@ -117,13 +129,17 @@ export function SkillGapsCard({ skillGaps, className }: SkillGapsCardProps) {
       </CardHeader>
 
       <CardContent>
-        {skillGaps.length === 0 ? (
+        {isThinData ? (
+          <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-snug)]">
+            Рынок для твоей роли в нашей базе пока тонок — не показываем «топ-N навыков», чтобы не вводить в заблуждение. Используй подбор для конкретных вакансий.
+          </p>
+        ) : gaps.length === 0 ? (
           <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] italic">
             Данных о навыках по вашему сегменту пока нет.
           </p>
         ) : (
           <ul className="list-none p-0 m-0" role="list" aria-label="Список навыков рынка">
-            {skillGaps.map((gap, i) => (
+            {gaps.map((gap, i) => (
               <SkillRow key={gap.skill} gap={gap} index={i} />
             ))}
           </ul>

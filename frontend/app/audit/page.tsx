@@ -12,7 +12,8 @@ import { AuditSkeleton } from './AuditSkeleton';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { trackEvent } from '@/lib/telemetry';
-import type { ResumeAuditOut } from '@/types/audit';
+import { cn } from '@/lib/utils';
+import type { ResumeAuditOut, OnboardingQuestionOut } from '@/types/audit';
 
 // ─── Banner components ────────────────────────────────────────────────────────
 
@@ -93,6 +94,177 @@ function ErrorCard({ message, analysing, onRetry }: ErrorCardProps) {
   );
 }
 
+// ─── Inline onboarding questions section (F2) ─────────────────────────────────
+
+interface QuestionRowProps {
+  question: OnboardingQuestionOut;
+  value: string;
+  onChange: (v: string) => void;
+}
+
+function QuestionRow({ question, value, onChange }: QuestionRowProps) {
+  if (question.answer_type === 'boolean') {
+    return (
+      <div className="flex gap-3 mt-2">
+        {(['Да', 'Нет'] as const).map((label) => {
+          const boolVal = label === 'Да' ? 'true' : 'false';
+          const selected = value === boolVal;
+          return (
+            <button
+              key={label}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(boolVal)}
+              className={cn(
+                'px-4 py-1.5 rounded-[var(--radius-full)] border text-[length:var(--text-sm)] font-semibold',
+                'transition-[border-color,background,color] duration-[var(--duration-fast)]',
+                'focus-visible:outline-2 focus-visible:outline-[var(--color-focus-ring)] focus-visible:outline-offset-2',
+                selected
+                  ? 'bg-[var(--color-accent-subtle)] border-[var(--color-accent)] text-[color:var(--color-accent)]'
+                  : 'bg-[var(--color-surface-muted)] border-[var(--color-border)] text-[color:var(--color-ink)] hover:border-[var(--color-border-strong)]'
+              )}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  if (question.answer_type === 'choice') {
+    const choices = question.choices ?? [];
+    return (
+      <div className="flex flex-wrap gap-2 mt-2">
+        {choices.map((opt) => {
+          const selected = value === opt;
+          return (
+            <button
+              key={opt}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onChange(opt)}
+              className={cn(
+                'px-4 py-1.5 rounded-[var(--radius-full)] border text-[length:var(--text-sm)] font-semibold',
+                'transition-[border-color,background,color] duration-[var(--duration-fast)]',
+                'focus-visible:outline-2 focus-visible:outline-[var(--color-focus-ring)] focus-visible:outline-offset-2',
+                selected
+                  ? 'bg-[var(--color-accent-subtle)] border-[var(--color-accent)] text-[color:var(--color-accent)]'
+                  : 'bg-[var(--color-surface-muted)] border-[var(--color-border)] text-[color:var(--color-ink)] hover:border-[var(--color-border-strong)]'
+              )}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // text and number_range
+  return (
+    <input
+      type={question.answer_type === 'number_range' ? 'number' : 'text'}
+      placeholder="Введите ответ"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="mt-2 w-full border border-[var(--color-border)] rounded-[var(--radius-md)] px-3 py-2 text-[length:var(--text-sm)] bg-[var(--color-surface)] text-[color:var(--color-ink)] focus:outline-2 focus:outline-[var(--color-focus-ring)]"
+    />
+  );
+}
+
+interface OnboardingQuestionsSectionProps {
+  resumeId: number;
+  /** Questions from audit response (Phase 5.3+) OR fetched from endpoint. */
+  questions: OnboardingQuestionOut[];
+  onSaved: () => void;
+}
+
+function OnboardingQuestionsSection({
+  resumeId,
+  questions,
+  onSaved,
+}: OnboardingQuestionsSectionProps) {
+  const { token } = useSession();
+  const [answers, setAnswers] = React.useState<Record<string, string>>({});
+  const [saving, setSaving] = React.useState(false);
+
+  function setAnswer(id: string, v: string) {
+    setAnswers((prev) => ({ ...prev, [id]: v }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    // TODO: persist answers — POST /api/resumes/{id}/onboarding/answer per question
+    // The endpoint exists: POST /api/resumes/{resumeId}/onboarding/answer
+    // body: { question_id: string, answer_value: string }
+    const toPost = Object.entries(answers).filter(([, v]) => v.trim().length > 0);
+    await Promise.all(
+      toPost.map(([qId, val]) =>
+        apiFetch<null>(`/api/resumes/${resumeId}/onboarding/answer`, {
+          token,
+          method: 'POST',
+          body: JSON.stringify({ question_id: qId, answer_value: val }),
+        }).catch((err: unknown) => {
+          console.debug('[OnboardingQuestionsSection] answer POST failed', err);
+        })
+      )
+    );
+    toPost.forEach(([qId]) =>
+      trackEvent('onboarding_question_answered', { resume_id: resumeId, question_id: qId })
+    );
+    setSaving(false);
+    onSaved();
+  }
+
+  const hasAnyAnswer = Object.values(answers).some((v) => v.trim().length > 0);
+
+  return (
+    <section
+      aria-labelledby="onboarding-questions-heading"
+      className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 grid gap-5"
+    >
+      <h2
+        id="onboarding-questions-heading"
+        className="text-[length:var(--text-base)] font-bold text-[color:var(--color-ink)] m-0"
+      >
+        Уточняющие вопросы
+      </h2>
+      <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] m-0 -mt-3">
+        Ответы помогут точнее подобрать вакансии под ваши цели
+      </p>
+
+      <div className="grid gap-5">
+        {questions.map((q) => (
+          <div key={q.id}>
+            <p className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)] m-0">
+              {q.text}
+            </p>
+            <QuestionRow
+              question={q}
+              value={answers[q.id] ?? ''}
+              onChange={(v) => setAnswer(q.id, v)}
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex justify-end pt-1">
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => { void handleSave(); }}
+          disabled={saving || !hasAnyAnswer}
+        >
+          {saving ? 'Сохраняем…' : 'Сохранить ответы'}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const AUTO_RETRY_INTERVAL_MS = 3000;
@@ -112,6 +284,8 @@ function AuditPageInner() {
   // true while the backend is still computing (422 from /audit)
   const [analysing, setAnalysing] = React.useState(false);
   const [modalOpen, setModalOpen] = React.useState(false);
+  // Inline onboarding questions (F2)
+  const [inlineQuestions, setInlineQuestions] = React.useState<OnboardingQuestionOut[]>([]);
   // Track whether audit_view telemetry has already been fired this mount
   const auditViewFired = React.useRef(false);
 
@@ -152,6 +326,19 @@ function AuditPageInner() {
       if (!auditViewFired.current) {
         auditViewFired.current = true;
         trackEvent('audit_view', { resume_id: resumeId });
+      }
+
+      // Populate inline questions: prefer audit-embedded list (Phase 5.3+),
+      // otherwise fetch from the dedicated endpoint when there are triggered IDs.
+      if (data.onboarding_questions && data.onboarding_questions.length > 0) {
+        setInlineQuestions(data.onboarding_questions);
+      } else if (data.triggered_question_ids.length > 0) {
+        void apiFetch<OnboardingQuestionOut[]>(
+          `/api/resumes/${resumeId}/onboarding/questions`,
+          { token }
+        ).then((qs) => setInlineQuestions(qs)).catch(() => {/* silently skip */});
+      } else {
+        setInlineQuestions([]);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Ошибка загрузки аудита';
@@ -204,7 +391,12 @@ function AuditPageInner() {
   }
 
   function handleModalAnswered() {
-    // Refetch audit so triggered_question_ids updates (banner may disappear)
+    // Refetch audit so triggered_question_ids updates (banner/section may disappear)
+    void fetchAudit();
+  }
+
+  function handleInlineQuestionsSaved() {
+    // Refetch so the section reflects freshly-answered questions
     void fetchAudit();
   }
 
@@ -322,6 +514,17 @@ function AuditPageInner() {
             <SkillGapsCard skillGaps={audit.skill_gaps} />
             <ResumeQualityCard qualityIssues={audit.quality_issues} />
           </div>
+
+          {/* Уточняющие вопросы — shown inline when questions are available */}
+          {inlineQuestions.length > 0 && resumeId !== null && (
+            <div className="animate-fade-in">
+              <OnboardingQuestionsSection
+                resumeId={resumeId}
+                questions={inlineQuestions}
+                onSaved={handleInlineQuestionsSaved}
+              />
+            </div>
+          )}
 
           {/* Bottom CTA */}
           <div

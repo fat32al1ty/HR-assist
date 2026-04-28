@@ -84,11 +84,15 @@ export function MarketSalaryCard({ salary, className }: MarketSalaryCardProps) {
     );
   }
 
-  const { p25, p50, p75, currency, user_expectation, gap_to_median_pct, sample_size } = salary;
+  const { p25, p50, p75, currency, user_expectation, gap_to_median_pct, sample_size, model_version } = salary;
   const hasExpectation = user_expectation !== null;
   const hasGap = gap_to_median_pct !== null;
   const gapPositive = hasGap && gap_to_median_pct! >= 0;
   const gapAbs = hasGap ? Math.abs(gap_to_median_pct!) : 0;
+
+  const isLowConfidence =
+    (sample_size !== null && sample_size < 20) ||
+    model_version === 'baseline-median-v1';
 
   return (
     <Card className={cn('bg-[var(--color-surface)]', className)}>
@@ -96,6 +100,14 @@ export function MarketSalaryCard({ salary, className }: MarketSalaryCardProps) {
         <span className="block text-[length:var(--text-xs)] font-bold tracking-[0.1em] uppercase text-[color:var(--color-ink-muted)] mb-1">
           Рыночная зарплата
         </span>
+
+        {/* Low-confidence notice — shown when sample is thin or model fell back to baseline */}
+        {isLowConfidence && (
+          <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-snug)] mb-2">
+            Данных по этому сегменту мало — берите цифру с поправкой.{' '}
+            {sample_size !== null && `Найдено ${sample_size.toLocaleString('ru-RU')} вакансий.`}
+          </p>
+        )}
 
         {/* Hero metric — p50, typeset large */}
         <div className="flex items-baseline gap-3 flex-wrap">

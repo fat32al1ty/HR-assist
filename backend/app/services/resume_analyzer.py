@@ -42,6 +42,33 @@ compound titles. Examples:
   aliases: ["Senior Backend Developer", "Tech Lead", "Backend Tech Lead"]
 Use English where it is the standard industry term; Russian if Russian is the dominant search term
 for that role.
+
+Skill classification — load-bearing for downstream signal quality:
+The four skill fields capture different things. Use role_family to decide
+where to put each skill:
+
+- hard_skills: ONLY skills the person is hired to USE in their role.
+  * Engineer (software_engineering / data_ml / infra_devops / cybersec):
+    programming languages, frameworks, infra they code with daily.
+  * Product (product_management): discovery, roadmap, prioritization,
+    OKR setting, stakeholder management.
+  * Design: UX research, wireframing, visual design, design systems.
+  * Marketing: performance marketing, growth, content strategy, SEO.
+  * Sales: pipeline management, prospecting, account management.
+  * etc.
+
+- methodology_skills: process expertise — Agile, Scrum, OKR, Discovery,
+  Design Thinking, GTM. Cross-role.
+
+- tools: specific software — JIRA, Figma, Mixpanel, Tableau, Notion.
+  Not programming languages.
+
+- tech_familiarity: technologies merely mentioned in resume context but
+  NOT used hands-on. A PM who writes "managed a Python team" → Python
+  goes in tech_familiarity, NOT hard_skills.
+
+When in doubt for a non-engineer role, put a programming-language-style
+token in tech_familiarity, not hard_skills.
 """
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 
@@ -87,9 +114,46 @@ def analyze_resume_text(text: str) -> dict[str, Any]:
                             "seniority_confidence": {"type": "number"},
                             "total_experience_years": {"type": ["number", "null"]},
                             "skills": {"type": "array", "items": {"type": "string"}},
-                            "hard_skills": {"type": "array", "items": {"type": "string"}},
+                            "hard_skills": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": (
+                                    "Skills the candidate is hired TO USE in their role. For an engineer: "
+                                    "programming languages, frameworks, infra tools they actively work with. "
+                                    "For a PM: discovery, roadmap, OKR, prioritization. For a designer: "
+                                    "UX research, prototyping, visual design. NOT technologies the candidate "
+                                    "has merely touched or whose teams used them."
+                                ),
+                            },
+                            "methodology_skills": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": (
+                                    "Process and methodology expertise: Agile, Scrum, OKR, Discovery, "
+                                    "Design Thinking, GTM, performance marketing frameworks. "
+                                    "Cross-cutting, not tied to a specific tool."
+                                ),
+                            },
                             "soft_skills": {"type": "array", "items": {"type": "string"}},
-                            "tools": {"type": "array", "items": {"type": "string"}},
+                            "tools": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": (
+                                    "Specific software tools used in day-to-day work: JIRA, Confluence, "
+                                    "Figma, Mixpanel, Tableau, Notion, Miro. NOT programming languages "
+                                    "or infrastructure stacks."
+                                ),
+                            },
+                            "tech_familiarity": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": (
+                                    "Technologies the candidate is AWARE of (mentioned in resume context, "
+                                    "e.g. 'managed Python team', 'shipped a Kafka-based service') but does "
+                                    "NOT actively code/operate. For a PM mentioning Python because their "
+                                    "team uses it, Python goes HERE, not in hard_skills."
+                                ),
+                            },
                             "domains": {"type": "array", "items": {"type": "string"}},
                             "experience": {
                                 "type": "array",
@@ -140,8 +204,10 @@ def analyze_resume_text(text: str) -> dict[str, Any]:
                             "total_experience_years",
                             "skills",
                             "hard_skills",
+                            "methodology_skills",
                             "soft_skills",
                             "tools",
+                            "tech_familiarity",
                             "domains",
                             "experience",
                             "education",
@@ -204,3 +270,21 @@ def analyze_resume_text(text: str) -> dict[str, Any]:
             existing = []
         parsed["risk_flags"] = [*existing, *injection_flags]
     return parsed
+
+
+def all_resume_skills(analysis: dict) -> list[str]:
+    """Union of all skill fields, deduped, preserves order.
+
+    Use for embedding/vector paths that need every mentioned skill.
+    Do NOT use for skill-gap audit — that intentionally stays narrow (hard_skills only).
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+    for key in ("hard_skills", "methodology_skills", "tools", "tech_familiarity"):
+        for item in analysis.get(key, []) or []:
+            if isinstance(item, str):
+                norm = item.strip().lower()
+                if norm and norm not in seen:
+                    seen.add(norm)
+                    out.append(item)
+    return out
