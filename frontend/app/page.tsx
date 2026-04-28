@@ -2400,16 +2400,6 @@ export default function DashboardPage() {
                           expectedSalaryMax={userPrefs?.expected_salary_max}
                         />
                       ) : null}
-                      {resume.status === 'completed' ? (
-                        <Button
-                          variant="primary"
-                          size="md"
-                          onClick={() => router.push(`/audit?resume_id=${resume.id}`)}
-                          className="w-full mt-1"
-                        >
-                          Открыть аудит резюме →
-                        </Button>
-                      ) : null}
                     </article>
                   ))}
                 </CardContent>
@@ -2504,15 +2494,6 @@ export default function DashboardPage() {
                       <div className="rounded-[var(--radius-lg)] border border-[color-mix(in_srgb,var(--color-ink-secondary)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-ink)_4%,transparent)] px-4 py-3 flex flex-col gap-1">
                         <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink)] leading-[var(--leading-snug)]">
                           <strong>Подбираем для тебя:</strong> {roleLine}
-                        </p>
-                        <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
-                          Резюме читается не так?{' '}
-                          <a
-                            href={activeResume ? `/audit?resume_id=${activeResume.id}` : '/audit'}
-                            className="underline hover:text-[color:var(--color-ink)] transition-colors"
-                          >
-                            Открыть аудит резюме →
-                          </a>
                         </p>
                       </div>
                     );
