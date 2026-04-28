@@ -16,6 +16,7 @@ from app.repositories.resume_user_skills import (
 from app.repositories.resumes import (
     ResumeLimitExceeded,
     activate_resume,
+    count_resumes_for_user,
     delete_resume,
     get_active_resume_for_user,
     get_resume_for_user,
@@ -153,6 +154,15 @@ def remove_resume(
 
     delete_resume_profile_vector(resume_id=resume.id)
     delete_resume(db, resume)
+
+    # If this was the user's last resume, clear preferred_titles/domains too —
+    # those values were originally derived from resume context, so leaving
+    # them would re-poison the next resume's matching with stale tags.
+    if count_resumes_for_user(db, user_id=current_user.id) == 0:
+        current_user.preferred_titles = []
+        current_user.preferred_domains = []
+        db.add(current_user)
+        db.commit()
 
 
 @router.post("/{resume_id}/profile-confirm", response_model=ResumeProfileConfirmResponse)
