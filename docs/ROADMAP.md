@@ -1,6 +1,6 @@
 # HR Assist — Roadmap
 
-**Статус (2026-04-25):** IT-MVP закрыт релизом `v0.14.0`. Дальше — `v1.0.0` (Phase 5.3, domain expansion), запускается только после подтверждения PMF в IT.
+**Статус (2026-04-28):** IT-MVP закрыт релизом `v0.14.0`, шлифовка UX подбора в `v0.15.0`. Дальше — `v1.0.0` (Phase 5.3, domain expansion), запускается только после подтверждения PMF в IT.
 
 Полный план и принципы — в [`.claude/skills/product-roadmap/SKILL.md`](../.claude/skills/product-roadmap/SKILL.md).
 
@@ -14,6 +14,9 @@ HR Assist — AI-ассистент для **соискателя** в IT. Не 
 - **AI-агрегаторы уровня getmatch** — умный ранжир поверх нескольких источников.
 
 ## Последние релизы
+
+### `v0.15.0` — UX подбора: instant-first + partial-on-timeout (2026-04-28)
+Кнопка «Подбор» больше не зависает на «10%» по 7 минут. Двухэтапный flow: (1) синхронный `POST /vacancies/recommend/instant/{resume_id}` отдаёт матчи из уже прогретого индекса за ≤5 c — пользователь сразу видит список; (2) фоновый deep-scan запускается без блокирующего спиннера, тонкий индикатор сверху списка показывает «ищем ещё», результаты доливаются по завершении. Дефолты payload бэк-side: `use_prefetched_index=true, discover_count=40` (было `false/100`). Server timeout снижен 420→180 c, при срабатывании внутреннего runtime budget (150 c) job завершается `completed` с флагом `metrics.partial=true` — фронт рисует баннер «это часть результатов, обновите через 1–2 минуты» вместо ошибки. Janitor в `vacancy_warmup` раз в цикл подметает зомби-jobs (`status=running` старше timeout). Eval: 11 новых тестов (instant happy/cold/404/no-HH-call + partial flag round-trip + sweeper).
 
 ### `v0.14.0` — Phase 5.2 — Стратегия отклика на конкретную вакансию (2026-04-25)
 По кнопке «Стратегия» открывается страница, где LLM (или template fallback) объясняет: что в твоём опыте релевантно этой вакансии, чего не хватает и как это компенсировать в письме, плюс готовый draft сопроводительного на ≤ 1200 символов. Каждую карточку можно пометить «не я / не правда» — корректировки идут в `recommendation_corrections` для будущего ranker'а. Cost-cap $0.05/DAU/день общий с `/audit`.
@@ -55,6 +58,7 @@ HR Assist — AI-ассистент для **соискателя** в IT. Не 
 | 5.0.1 — Audit data pipe fixes | `v0.12.1` | 2026-04-25 | Skill gaps / market salary / sample_size перестали быть пустыми. |
 | 5.1 — Track segmentation | `v0.13.0` | 2026-04-25 | 3 трека (точка/вырост/стрейч), gap-analysis из рынка. |
 | 5.2 — Per-vacancy strategy | `v0.14.0` | 2026-04-25 | Стратегия отклика + cover letter + recommendation corrections. |
+| UX — Instant-first matching | `v0.15.0` | 2026-04-28 | Двухэтапный подбор: instant ≤5 c из индекса + фоновый deep-scan без блок-спиннера, partial-on-timeout. |
 
 ## Что дальше
 

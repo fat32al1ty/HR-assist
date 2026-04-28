@@ -135,6 +135,74 @@ def match_vacancies(
     return match_vacancies_for_resume(db, resume_id=resume_id, user_id=current_user.id, limit=limit)
 
 
+@router.post("/recommend/instant/{resume_id}", response_model=VacancyRecommendResponse)
+def recommend_vacancies_instant(
+    resume_id: int,
+    payload: VacancyRecommendRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> VacancyRecommendResponse:
+    if get_resume_for_user(db, resume_id=resume_id, user_id=current_user.id) is None:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    with openai_budget_scope(
+        budget_usd=settings.openai_request_budget_usd,
+        budget_enforced=settings.openai_enforce_request_budget,
+        user_id=current_user.id,
+        daily_budget_usd=settings.openai_user_daily_budget_usd,
+        daily_budget_enforced=settings.openai_enforce_user_daily_budget,
+    ) as usage_tracker:
+        try:
+            query, metrics, matches = recommend_vacancies_for_resume(
+                db,
+                resume_id=resume_id,
+                user_id=current_user.id,
+                discover_count=payload.discover_count,
+                match_limit=payload.match_limit,
+                deep_scan=False,
+                rf_only=payload.rf_only,
+                use_brave_fallback=False,
+                use_prefetched_index=True,
+                discover_if_few_matches=False,
+                preference_overrides=(
+                    payload.preference_overrides.model_dump(exclude_unset=True)
+                    if payload.preference_overrides is not None
+                    else None
+                ),
+            )
+        except DailyBudgetExceeded as error:
+            raise HTTPException(status_code=429, detail=DAILY_BUDGET_USER_MESSAGE) from error
+        except OpenAIBudgetExceeded as error:
+            snapshot = error.snapshot
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "OpenAI budget exceeded for this request. "
+                    f"Spent ${snapshot.estimated_cost_usd:.4f} with limit ${snapshot.budget_usd:.4f}. "
+                    "Reduce search depth/count or increase budget."
+                ),
+            ) from error
+
+        usage = usage_tracker.snapshot().to_dict()
+    excluded_ids = _excluded_ids_for_active_resume(db, current_user)
+    matches = _filter_matches_by_feedback(matches=matches, excluded_ids=excluded_ids)
+    prefetch_empty = len(matches) == 0 and metrics.fetched == 0 and metrics.indexed == 0
+    return VacancyRecommendResponse(
+        query=query,
+        indexed=metrics.indexed,
+        fetched=metrics.fetched,
+        prefiltered=metrics.prefiltered,
+        analyzed=metrics.analyzed,
+        filtered=metrics.filtered,
+        failed=metrics.failed,
+        already_indexed_skipped=metrics.already_indexed_skipped,
+        skipped_parse_errors=metrics.skipped_parse_errors,
+        sources=metrics.sources or [],
+        openai_usage=usage,
+        matches=matches,
+        prefetch_empty=prefetch_empty,
+    )
+
+
 @router.post("/recommend/{resume_id}", response_model=VacancyRecommendResponse)
 def recommend_vacancies(
     resume_id: int,

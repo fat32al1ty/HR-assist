@@ -11,6 +11,7 @@ from app.db.session import SessionLocal
 from app.models.resume import Resume
 from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
+from app.services.recommendation_jobs import sweep_stale_running_jobs
 from app.services.vacancy_pipeline import discover_and_index_vacancies
 from app.services.vacancy_profile_backfill import backfill_missing_vacancy_profiles
 
@@ -185,6 +186,7 @@ def _worker_loop() -> None:
         _set_state(running=True, last_started_at=started.isoformat(), last_error=None)
         try:
             queries, metrics = _run_warmup_cycle()
+            sweep_stale_running_jobs()
             finished = datetime.now(UTC)
             _set_state(
                 running=False,

@@ -33,8 +33,7 @@ _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="recommendation
 _active_jobs: set[str] = set()
 _active_lock = Lock()
 JOB_TIMEOUT_MESSAGE = (
-    "Recommendation job timed out. Current search configuration is too heavy. "
-    "Retry with narrower query or lower scan depth."
+    "Поиск был остановлен по тайм-ауту, ниже — частичные результаты, обновите подбор позже."
 )
 JOB_CANCELLED_MESSAGE = "Подбор остановлен по запросу пользователя."
 
@@ -102,6 +101,28 @@ def _force_fail_if_timed_out(db, job: RecommendationJob) -> RecommendationJob:
         with _active_lock:
             _active_jobs.discard(job.id)
     return job
+
+
+def sweep_stale_running_jobs() -> int:
+    """Mark all running jobs that exceeded the timeout as failed.
+
+    Called once per warmup cycle. Returns the count of jobs swept.
+    """
+    db = SessionLocal()
+    try:
+        stale = db.scalars(
+            select(RecommendationJob).where(RecommendationJob.status == "running")
+        ).all()
+        swept = 0
+        for job in stale:
+            if _timed_out(job):
+                fail_job(db, job, error_message=JOB_TIMEOUT_MESSAGE)
+                with _active_lock:
+                    _active_jobs.discard(job.id)
+                swept += 1
+        return swept
+    finally:
+        db.close()
 
 
 def check_job_alive(db, job: RecommendationJob) -> None:

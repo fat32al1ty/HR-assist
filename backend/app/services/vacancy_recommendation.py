@@ -376,6 +376,7 @@ def recommend_vacancies_for_resume(
     query = _build_discovery_query(resume.analysis)
     aggregate_metrics = _empty_metrics()
     fetch_succeeded = False
+    _cut_short = False
     report("collecting", 5, aggregate_metrics)
 
     if use_prefetched_index:
@@ -417,6 +418,7 @@ def recommend_vacancies_for_resume(
             if max_runtime_seconds is not None:
                 elapsed = time.monotonic() - started_at
                 if elapsed >= max_runtime_seconds:
+                    _cut_short = True
                     break
             report(
                 "collecting",
@@ -518,6 +520,8 @@ def recommend_vacancies_for_resume(
                 aggregate_metrics = _merge_metrics(aggregate_metrics, result.metrics)
                 aggregate_metrics.cursor_fallback_queries_run += 1
 
+    if _cut_short:
+        aggregate_metrics.partial = True
     report("matching", 85, aggregate_metrics)
     matches = _run_matcher(match_limit)
     report("finalizing", 95, aggregate_metrics)

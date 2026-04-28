@@ -129,6 +129,7 @@ class VacancyRecommendResponse(BaseModel):
     sources: list[str] = Field(default_factory=list)
     openai_usage: OpenAIUsageRead
     matches: list[VacancyMatchRead]
+    prefetch_empty: bool = False
 
 
 class VacancyFeedbackRequest(BaseModel):

@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { useSession } from '@/lib/session';
 import { type Resume, resumeDisplayName } from '@/types/resume';
 const MIN_PROGRESS_VISIBLE_MS = 1400;
-const RECOMMEND_TIMEOUT_MS = 540000;
+const RECOMMEND_TIMEOUT_MS = 360000;
 const LAST_JOB_ID_STORAGE_KEY = 'last_recommendation_job_id';
 
 const RESUME_LABEL_MAX = 32;
@@ -120,6 +120,7 @@ type VacancyRecommendResponse = {
     budget_enforced: boolean;
   };
   matches: VacancyMatch[];
+  prefetch_empty?: boolean;
 };
 
 type RecommendationJobStatusResponse = {
@@ -137,6 +138,7 @@ type RecommendationJobStatusResponse = {
     failed?: number;
     already_indexed_skipped?: number;
     sources?: string[];
+    partial?: boolean;
   };
   matches: VacancyMatch[];
   openai_usage: VacancyRecommendResponse['openai_usage'] | null;
@@ -404,6 +406,9 @@ export default function DashboardPage() {
   const [matchesPageSize, setMatchesPageSize] = useState<number>(10);
   const isAdmin = Boolean(user?.is_admin);
   const [dragOver, setDragOver] = useState(false);
+  const [deepScanRunning, setDeepScanRunning] = useState(false);
+  const [showPartialBanner, setShowPartialBanner] = useState(false);
+  const [prefetchEmpty, setPrefetchEmpty] = useState(false);
 
   /** Syncs resumes into both local state and the Session context. */
   function setResumes(next: Resume[] | ((prev: Resume[]) => Resume[])) {
@@ -1162,44 +1167,109 @@ export default function DashboardPage() {
       return;
     }
 
-    const startedAt = Date.now();
-    let terminalStage: 'completed' | 'failed' | null = null;
+    // Reset state
     setMatchingBusy(true);
     setMatchingProgress(1);
-    setMatchingStage('Задача в очереди...');
-    setMatchingMessage('Запускаем задачу подбора...');
+    setMatchingStage('Быстрый подбор...');
+    setMatchingMessage('Ищем кешированные результаты...');
     setOpenaiUsageMessage('');
     setLastMatchingQuery('');
     setLastSources([]);
     setCancelRequested(false);
+    setShowPartialBanner(false);
+    setPrefetchEmpty(false);
 
+    // ── Stage 1: instant synchronous call (≤5s) ──────────────────────────
+    const instantStartedAt = Date.now();
     try {
-      const started = await request<{ job_id: string; status: string }>(`/api/vacancies/recommend/start/${selectedResumeId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          discover_count: 100,
-          match_limit: 20,
-          deep_scan: true,
-          rf_only: true,
-          use_prefetched_index: false,
-          discover_if_few_matches: true,
-          min_prefetched_matches: 5
-        })
-      });
+      const instant = await request<VacancyRecommendResponse>(
+        `/api/vacancies/recommend/instant/${selectedResumeId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            discover_count: 1,
+            match_limit: 20,
+            deep_scan: false,
+            rf_only: true,
+            use_prefetched_index: true,
+            discover_if_few_matches: false,
+            min_prefetched_matches: 5
+          })
+        }
+      );
+
+      if (instant.prefetch_empty) {
+        setPrefetchEmpty(true);
+        setMatches([]);
+        setMatchingMessage('Готовим персональный индекс — первый подбор займёт минуту-две.');
+        setMatchingStage('Прогрев...');
+      } else {
+        const visibleInstant = excludeFeedbackVacancies(
+          instant.matches || [],
+          dislikedVacancies,
+          selectedVacancies,
+          hiddenMatchIds
+        );
+        setMatches(visibleInstant);
+        setMatchesPageSize(10);
+        setLastSearchAt(new Date());
+        if (instant.query) setLastMatchingQuery(instant.query);
+        if (Array.isArray(instant.sources)) setLastSources(instant.sources);
+        if (visibleInstant.length > 0) {
+          setMatchingMessage(`Найдено ${visibleInstant.length} подходящих, ищем ещё свежие…`);
+        } else {
+          setMatchingMessage('Пока нет подходящих. Ищем свежие…');
+        }
+        setMatchingStage('Быстрый подбор завершён');
+      }
+    } catch (error) {
+      // Instant call failed — proceed to deep scan anyway, just clear message
+      setMatchingMessage(error instanceof Error ? error.message : 'Не удалось выполнить быстрый подбор. Запускаем полный...');
+    } finally {
+      const elapsed = Date.now() - instantStartedAt;
+      if (elapsed < MIN_PROGRESS_VISIBLE_MS) {
+        await sleep(MIN_PROGRESS_VISIBLE_MS - elapsed);
+      }
+      setMatchingProgress(100);
+      setMatchingBusy(false);
+    }
+
+    // ── Stage 2: deep scan background (non-blocking) ──────────────────────
+    if (!selectedResumeId) {
+      return;
+    }
+    setDeepScanRunning(true);
+    const deepStartedAt = Date.now();
+    try {
+      const started = await request<{ job_id: string; status: string }>(
+        `/api/vacancies/recommend/start/${selectedResumeId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            discover_count: 40,
+            match_limit: 20,
+            deep_scan: true,
+            rf_only: true,
+            use_prefetched_index: true,
+            discover_if_few_matches: true,
+            min_prefetched_matches: 8
+          })
+        }
+      );
       setPersistentJobId(started.job_id);
 
       while (true) {
-        const elapsed = Date.now() - startedAt;
+        const elapsed = Date.now() - deepStartedAt;
         if (elapsed > RECOMMEND_TIMEOUT_MS) {
-          throw new Error('Превышено время ожидания задачи подбора. Попробуйте сузить запрос или повторить позже.');
+          // Watchdog: stop polling silently if we already have results
+          break;
         }
 
-        const status = await request<RecommendationJobStatusResponse>(`/api/vacancies/recommend/status/${started.job_id}`);
-        applyJobSnapshot(status);
-        if (status.status === 'running' || status.status === 'queued') {
-          setMatchingMessage(`Прогресс: ${formatMetricsInfo(status.metrics || {})}`);
-        }
+        const status = await request<RecommendationJobStatusResponse>(
+          `/api/vacancies/recommend/status/${started.job_id}`
+        );
 
         if (status.openai_usage) {
           setOpenaiUsageMessage(
@@ -1208,36 +1278,57 @@ export default function DashboardPage() {
         }
 
         if (status.status === 'completed') {
-          terminalStage = 'completed';
+          const deepMetrics = status.metrics || {};
+          const deepMatches = excludeFeedbackVacancies(
+            status.matches || [],
+            dislikedVacancies,
+            selectedVacancies,
+            hiddenMatchIds
+          );
+          // Merge with existing matches: dedupe by vacancy_id, sort by score desc
+          setMatches((current) => {
+            const existingIds = new Set(current.map((m) => normalizeVacancyId(m.vacancy_id)));
+            const newOnes = deepMatches.filter((m) => !existingIds.has(normalizeVacancyId(m.vacancy_id)));
+            const merged = [...current, ...newOnes].sort((a, b) => b.similarity_score - a.similarity_score);
+            const metricsInfo = formatMetricsInfo(deepMetrics);
+            const headline = formatRecommendationHeadline(merged.length);
+            setMatchingMessage(metricsInfo ? `${headline} ${metricsInfo}` : headline);
+            return merged;
+          });
+          setLastSearchAt(new Date());
+          if (status.query) setLastMatchingQuery(status.query);
+          const sources = Array.isArray(deepMetrics.sources) ? deepMetrics.sources : [];
+          if (sources.length > 0) setLastSources(sources);
+          const analyzedCount = typeof deepMetrics.analyzed === 'number' ? deepMetrics.analyzed : null;
+          if (analyzedCount !== null) setLastAnalyzedCount(analyzedCount);
+          if (deepMetrics.partial === true) {
+            setShowPartialBanner(true);
+          }
+          setPrefetchEmpty(false);
           break;
         }
 
         if (status.status === 'failed') {
-          terminalStage = 'failed';
+          // Don't show error if we already have results from Stage 1
+          setMatches((current) => {
+            if (current.length === 0) {
+              setMatchingMessage(status.error_message || 'Задача подбора завершилась с ошибкой.');
+            }
+            return current;
+          });
           break;
         }
+
         if (!status.active && (status.status === 'queued' || status.status === 'running')) {
-          throw new Error('Фоновая задача перестала выполняться. Запустите подбор повторно.');
+          break;
         }
 
         await sleep(1200);
       }
-    } catch (error) {
-      setMatchingMessage(error instanceof Error ? error.message : 'Не удалось выполнить подбор');
-      setMatchingStage('Ошибка');
+    } catch {
+      // Deep scan error — silently stop if Stage 1 already gave results
     } finally {
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < MIN_PROGRESS_VISIBLE_MS) {
-        await sleep(MIN_PROGRESS_VISIBLE_MS - elapsed);
-      }
-      if (terminalStage === 'completed') {
-        setMatchingProgress(100);
-        setMatchingStage('Готово');
-      } else if (terminalStage === 'failed') {
-        setMatchingProgress(100);
-        setMatchingStage('Ошибка');
-      }
-      setMatchingBusy(false);
+      setDeepScanRunning(false);
       await loadDashboardStats(selectedResumeId);
     }
   }
@@ -1267,26 +1358,32 @@ export default function DashboardPage() {
     }
 
     if (!snapshot) {
+      // F4: no job snapshot — trigger instant fetch to show cached matches
+      void refreshVacancyIndex();
       return;
     }
 
     setPersistentJobId(snapshot.job_id);
     applyJobSnapshot(snapshot);
 
+    // F3: check partial on already-completed jobs
     if (snapshot.status !== 'running' && snapshot.status !== 'queued') {
+      if (snapshot.status === 'completed' && snapshot.metrics?.partial === true) {
+        setShowPartialBanner(true);
+      }
       await loadDashboardStats(selectedResumeId);
       return;
     }
 
-    setMatchingBusy(true);
+    // In-flight job: poll as deep-scan (non-blocking for UI)
+    setDeepScanRunning(true);
     const startedAt = Date.now();
-    let terminalStage: 'completed' | 'failed' | null = null;
 
     try {
       while (true) {
         const elapsed = Date.now() - startedAt;
         if (elapsed > RECOMMEND_TIMEOUT_MS) {
-          throw new Error('Превышено время ожидания задачи подбора. Попробуйте обновить страницу.');
+          break;
         }
 
         const status = await request<RecommendationJobStatusResponse>(`/api/vacancies/recommend/status/${snapshot.job_id}`);
@@ -1295,30 +1392,23 @@ export default function DashboardPage() {
           setMatchingMessage(`Прогресс: ${formatMetricsInfo(status.metrics || {})}`);
         }
         if (status.status === 'completed') {
-          terminalStage = 'completed';
+          if (status.metrics?.partial === true) {
+            setShowPartialBanner(true);
+          }
           break;
         }
         if (status.status === 'failed') {
-          terminalStage = 'failed';
           break;
         }
         if (!status.active && (status.status === 'queued' || status.status === 'running')) {
-          throw new Error('Фоновая задача остановилась. Запустите подбор заново.');
+          break;
         }
         await sleep(1200);
       }
     } catch (error) {
       setMatchingMessage(error instanceof Error ? error.message : 'Не удалось восстановить статус подбора.');
-      setMatchingStage('Ошибка');
     } finally {
-      if (terminalStage === 'completed') {
-        setMatchingProgress(100);
-        setMatchingStage('Готово');
-      } else if (terminalStage === 'failed') {
-        setMatchingProgress(100);
-        setMatchingStage('Ошибка');
-      }
-      setMatchingBusy(false);
+      setDeepScanRunning(false);
       await loadDashboardStats(selectedResumeId);
     }
   }
@@ -2106,10 +2196,10 @@ export default function DashboardPage() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-4 py-3">
                     <div>
                       <p className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                        {matchingBusy ? 'Ищем подходящие вакансии…' : 'Подобрать вакансии'}
+                        {matchingBusy ? 'Быстрый подбор…' : 'Подобрать вакансии'}
                       </p>
                       <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
-                        {matchingBusy ? 'Это займёт несколько минут' : 'AI подберёт вакансии под ваш профиль'}
+                        {matchingBusy ? 'Проверяем кеш — займёт до 5 секунд' : 'AI подберёт вакансии под ваш профиль'}
                       </p>
                     </div>
                     <Button
@@ -2125,23 +2215,30 @@ export default function DashboardPage() {
                   {matchingBusy ? (
                     <div className="progress-box">
                       <div className="progress-head">
-                        <span>{matchingStage || 'Идет выполнение...'}</span>
+                        <span>{matchingStage || 'Быстрый подбор...'}</span>
                         <span>{matchingProgress}%</span>
                       </div>
                       <div className="progress-track">
                         <div className="progress-fill" style={{ width: `${matchingProgress}%` }} />
                       </div>
-                      {matchingBusy && currentJobId ? (
-                        <div className="progress-actions">
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            disabled={cancelRequested}
-                            onClick={() => void cancelRecommendationJob()}
-                          >
-                            {cancelRequested ? 'Останавливаем...' : 'Отменить'}
-                          </Button>
-                        </div>
+                    </div>
+                  ) : null}
+                  {/* Deep-scan background indicator — thin, non-blocking */}
+                  {deepScanRunning ? (
+                    <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_5%,transparent)] px-3 py-2">
+                      <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] shrink-0">Ищем свежие вакансии…</span>
+                      <div className="flex-1 h-1 rounded-full bg-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] overflow-hidden">
+                        <div className="h-full w-full rounded-full bg-[var(--color-accent)] animate-pulse opacity-70" />
+                      </div>
+                      {currentJobId ? (
+                        <button
+                          type="button"
+                          disabled={cancelRequested}
+                          onClick={() => void cancelRecommendationJob()}
+                          className="shrink-0 text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-danger)] transition-colors disabled:opacity-40"
+                        >
+                          {cancelRequested ? 'Стоп…' : 'Отмена'}
+                        </button>
                       ) : null}
                     </div>
                   ) : null}
@@ -2155,6 +2252,22 @@ export default function DashboardPage() {
                           {`Показано ${Math.min(matchesPageSize, visibleMatches.length)} из ${visibleMatches.length}${lastAnalyzedCount ? ` · проверено ${lastAnalyzedCount} новых` : ''} · запуск в ${lastSearchAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
                         </p>
                       ) : null}
+                    </div>
+                  ) : null}
+                  {/* Prefetch-empty skeleton */}
+                  {prefetchEmpty && !matchingBusy ? (
+                    <div className="rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_6%,transparent)] px-4 py-4 flex flex-col gap-2">
+                      <div className="h-3 w-2/3 rounded-full bg-[color-mix(in_srgb,var(--color-ink)_10%,transparent)]" />
+                      <div className="h-3 w-1/2 rounded-full bg-[color-mix(in_srgb,var(--color-ink)_8%,transparent)]" />
+                    </div>
+                  ) : null}
+                  {/* Partial results banner */}
+                  {showPartialBanner && !deepScanRunning ? (
+                    <div className="rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] px-4 py-3 flex items-start gap-2">
+                      <svg className="shrink-0 mt-0.5 text-[color:var(--color-accent)]" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="7" cy="7" r="6"/><path d="M7 4v4M7 10h.01"/></svg>
+                      <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-snug)]">
+                        Это часть результатов — индекс ещё прогревается. Обновите подбор через 1–2 минуты, чтобы увидеть больше.
+                      </p>
                     </div>
                   ) : null}
 

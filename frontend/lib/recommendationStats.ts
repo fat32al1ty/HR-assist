@@ -2,6 +2,7 @@ export type RecommendationMetrics = {
   fetched?: number;
   analyzed?: number;
   indexed?: number;
+  partial?: boolean;
 };
 
 export function formatRecommendationMetrics(metrics: RecommendationMetrics): string {

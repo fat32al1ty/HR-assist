@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     openai_enforce_request_budget: bool = True
     openai_user_daily_budget_usd: float = 1.00
     openai_enforce_user_daily_budget: bool = True
-    recommendation_job_timeout_seconds: int = 420
+    recommendation_job_timeout_seconds: int = 180
     vacancy_warmup_enabled: bool = True
     vacancy_warmup_interval_seconds: int = 600
     vacancy_warmup_queries_per_cycle: int = 2
