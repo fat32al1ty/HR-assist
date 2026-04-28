@@ -469,6 +469,40 @@ export default function DashboardPage() {
     });
   }, [dislikedVacancies, selectedVacancies, appliedVacancies, hiddenMatchIds]);
 
+  // Seed pills from resume analysis when the user hasn't saved any yet.
+  // We can't auto-write to the DB (that was the v0.16.0 disaster), but we
+  // CAN pre-fill the local editable list so the user sees what AI extracted
+  // without having to click + add for every value. They can ×-remove what
+  // they don't want before clicking "Подобрать".
+  useEffect(() => {
+    const activeResume =
+      resumes.find((r) => r.is_active) ??
+      resumes.find((r) => r.id === selectedResumeId) ??
+      null;
+    const analysis = activeResume?.analysis ?? null;
+    if (!userPrefs || !analysis) return;
+    const aliases = asStringArray(analysis.target_role_aliases);
+    const autoRoles =
+      aliases.length > 0
+        ? aliases.slice(0, 5)
+        : (typeof analysis.target_role === 'string' ? analysis.target_role : '')
+            .split(/[/|,]| и /)
+            .map((s) => s.trim())
+            .filter((s) => s.length >= 4)
+            .slice(0, 5);
+    const autoDomains = asStringArray(analysis.domains).slice(0, 3);
+    const savedRoles = userPrefs.preferred_titles ?? [];
+    const savedDomains = userPrefs.preferred_domains ?? [];
+    if (savedRoles.length === 0 && localRoles.length === 0 && autoRoles.length > 0) {
+      setLocalRoles(autoRoles);
+    }
+    if (savedDomains.length === 0 && localDomains.length === 0 && autoDomains.length > 0) {
+      setLocalDomains(autoDomains);
+    }
+    // Don't list local* in deps — seeding only when saved+local are both empty.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userPrefs, resumes, selectedResumeId]);
+
   useEffect(() => {
     if (!token) {
       return;
