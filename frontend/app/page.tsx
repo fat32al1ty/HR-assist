@@ -24,7 +24,7 @@ import { type Resume, resumeDisplayName } from '@/types/resume';
 import PillsEditor from '@/components/preferences/PillsEditor';
 import { fetchDomainDisplayMap } from '@/lib/preferences';
 const MIN_PROGRESS_VISIBLE_MS = 1400;
-const RECOMMEND_TIMEOUT_MS = 360000;
+const RESTORE_POLL_TIMEOUT_MS = 360000;
 const LAST_JOB_ID_STORAGE_KEY = 'last_recommendation_job_id';
 
 const RESUME_LABEL_MAX = 32;
@@ -1349,7 +1349,7 @@ export default function DashboardPage() {
     // Reset state
     setMatchingBusy(true);
     setMatchingProgress(1);
-    setMatchingStage('Быстрый подбор...');
+    setMatchingStage('Подбор...');
     setMatchingMessage('Ищем кешированные результаты...');
     setOpenaiUsageMessage('');
     setLastMatchingQuery('');
@@ -1386,12 +1386,6 @@ export default function DashboardPage() {
         }
       );
 
-      if (instant.openai_usage) {
-        setOpenaiUsageMessage(
-          `OpenAI: ~$${instant.openai_usage.estimated_cost_usd.toFixed(4)} / $${instant.openai_usage.budget_usd.toFixed(2)}, токены: ${instant.openai_usage.total_tokens}, вызовов: ${instant.openai_usage.api_calls}.`
-        );
-      }
-
       if (instant.prefetch_empty) {
         setPrefetchEmpty(true);
         setMatches([]);
@@ -1412,10 +1406,14 @@ export default function DashboardPage() {
         if (typeof instant.analyzed === 'number') {
           setLastAnalyzedCount(instant.analyzed);
         }
+        // Only surface the OpenAI cost line when we actually got a payload
+        // worth measuring — on prefetch_empty the call returned matches=[]
+        // and showing "0 tokens" is just noise.
+        setOpenaiUsageMessage(formatOpenAiUsage(instant.openai_usage));
         if (visibleInstant.length > 0) {
           setMatchingMessage(formatRecommendationHeadline(visibleInstant.length));
         } else {
-          setMatchingMessage('Пока нет подходящих. Обновите подбор позже — индекс пополняется в фоне.');
+          setMatchingMessage('Пока нет подходящих. Обновите подбор позже.');
         }
         setMatchingStage('Подбор завершён');
       }
@@ -1482,7 +1480,7 @@ export default function DashboardPage() {
     try {
       while (true) {
         const elapsed = Date.now() - startedAt;
-        if (elapsed > RECOMMEND_TIMEOUT_MS) {
+        if (elapsed > RESTORE_POLL_TIMEOUT_MS) {
           break;
         }
 
@@ -2354,7 +2352,7 @@ export default function DashboardPage() {
                   {matchingBusy ? (
                     <div className="progress-box">
                       <div className="progress-head">
-                        <span>{matchingStage || 'Быстрый подбор...'}</span>
+                        <span>{matchingStage || 'Подбор...'}</span>
                         <span>{matchingProgress}%</span>
                       </div>
                       <div className="progress-track">
@@ -2365,7 +2363,7 @@ export default function DashboardPage() {
                   {/* Deep-scan background indicator — thin, non-blocking */}
                   {deepScanRunning ? (
                     <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--color-accent)_25%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_5%,transparent)] px-3 py-2">
-                      <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] shrink-0">Ищем свежие вакансии…</span>
+                      <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] shrink-0">Восстанавливаем подбор…</span>
                       <div className="flex-1 h-1 rounded-full bg-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] overflow-hidden">
                         <div className="h-full w-full rounded-full bg-[var(--color-accent)] animate-pulse opacity-70" />
                       </div>
