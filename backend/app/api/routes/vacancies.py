@@ -18,7 +18,7 @@ from app.repositories.user_vacancy_feedback import (
     set_vacancy_disliked,
     set_vacancy_liked,
 )
-from app.repositories.vacancies import list_vacancies
+from app.repositories.vacancies import get_vacancy_by_id, list_vacancies
 from app.schemas.vacancy import (
     RecommendationJobStartResponse,
     RecommendationJobStatusResponse,
@@ -49,6 +49,7 @@ from app.services.recommendation_jobs import (
 )
 from app.services.segment_keys import query_from_resume_analysis, segment_key_from_analysis
 from app.services.user_preference_profile_pipeline import recompute_user_preference_profile
+from app.services.vacancy_freshness import check_vacancies_alive_concurrently
 from app.services.vacancy_pipeline import discover_and_index_vacancies
 from app.services.vacancy_recommendation import recommend_vacancies_for_resume
 
@@ -192,6 +193,29 @@ def recommend_vacancies_instant(
         usage = usage_tracker.snapshot().to_dict()
     excluded_ids = _excluded_ids_for_active_resume(db, current_user)
     matches = _filter_matches_by_feedback(matches=matches, excluded_ids=excluded_ids)
+
+    if settings.vacancy_freshness_check_enabled and matches:
+        try:
+            top_n = matches[: settings.vacancy_freshness_check_top_n]
+            top_vacancies = [
+                v
+                for item in top_n
+                if (v := get_vacancy_by_id(db, vacancy_id=int(item["vacancy_id"]))) is not None
+                and v.source == "hh_api"
+            ]
+            if top_vacancies:
+                archived_ids = check_vacancies_alive_concurrently(db, vacancies=top_vacancies)
+                if archived_ids:
+                    matches = [
+                        m for m in matches if int(m.get("vacancy_id", -1)) not in archived_ids
+                    ]
+        except Exception:
+            logger.exception(
+                "vacancy_freshness_check_failed user_id=%s resume_id=%s",
+                current_user.id,
+                resume_id,
+            )
+
     # `prefetch_empty` distinguishes "index never seeded" from "matches got
     # filtered out by user feedback". When feedback drops every cached match
     # to zero, `metrics.fetched` is still > 0 — flag stays False and the
@@ -254,7 +278,7 @@ def recommend_vacancies_instant(
                 resume_id,
             )
 
-    return VacancyRecommendResponse(
+    response_obj = VacancyRecommendResponse(
         query=query,
         indexed=metrics.indexed,
         fetched=metrics.fetched,
@@ -270,6 +294,29 @@ def recommend_vacancies_instant(
         prefetch_empty=prefetch_empty,
         segment_warming=segment_warming,
     )
+
+    if matches:
+        try:
+            from sqlalchemy import update as _sa_update
+
+            from app.models.vacancy import Vacancy as _Vacancy
+
+            shown_ids = [int(m["vacancy_id"]) for m in matches if m.get("vacancy_id") is not None]
+            if shown_ids:
+                db.execute(
+                    _sa_update(_Vacancy)
+                    .where(_Vacancy.id.in_(shown_ids))
+                    .values(shown_count=_Vacancy.shown_count + 1)
+                )
+                db.commit()
+        except Exception:
+            logger.exception(
+                "shown_count_bump_failed user_id=%s resume_id=%s",
+                current_user.id,
+                resume_id,
+            )
+
+    return response_obj
 
 
 @router.post("/recommend/{resume_id}", response_model=VacancyRecommendResponse)

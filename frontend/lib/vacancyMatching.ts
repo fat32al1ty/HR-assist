@@ -7,6 +7,19 @@ export type VacancyMatchLike = VacancyLike & {
   title?: string | null;
 };
 
+/** Extract a human-readable host from a URL string for ToS-mandated source attribution.
+ * Returns "hh.ru" / "linkedin.com" / etc., or empty string when parsing fails. */
+export function hostFromUrl(url: string | null | undefined): string {
+  if (!url) {
+    return '';
+  }
+  try {
+    return new URL(url).host.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
 export function normalizeVacancyId(value: number | string): number {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : 0;

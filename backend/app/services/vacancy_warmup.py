@@ -38,6 +38,7 @@ _state: dict[str, object] = {
     "last_metrics": {},
     "segment_warmup_daily_count": 0,
     "segment_warmup_daily_date": None,
+    "last_freshness_sweep_at": None,
 }
 
 
@@ -180,6 +181,40 @@ def _drain_segment_warmup_jobs(db) -> dict[str, int]:
     return {"drained": drained, "skipped_cap": 0}
 
 
+def _run_freshness_sweep_if_due() -> None:
+    from app.services.vacancy_freshness import sweep_stale_vacancies
+
+    interval_hours = settings.vacancy_freshness_sweep_interval_hours
+    with _state_lock:
+        last_sweep = _state.get("last_freshness_sweep_at")
+
+    now = datetime.now(UTC)
+    if last_sweep is not None:
+        elapsed = (now - last_sweep).total_seconds()
+        if elapsed < interval_hours * 3600:
+            return
+
+    logger.info(
+        "vacancy_freshness_sweep_start limit=%d",
+        settings.vacancy_freshness_sweep_limit,
+    )
+    db = SessionLocal()
+    try:
+        result = sweep_stale_vacancies(db, limit=settings.vacancy_freshness_sweep_limit)
+        logger.info(
+            "vacancy_freshness_sweep_complete checked=%d archived=%d",
+            result.get("checked", 0),
+            result.get("archived", 0),
+        )
+    except Exception as err:
+        logger.warning("vacancy_freshness_sweep_error error=%s", err)
+    finally:
+        db.close()
+
+    with _state_lock:
+        _state["last_freshness_sweep_at"] = datetime.now(UTC)
+
+
 def _run_warmup_cycle() -> tuple[list[str], dict[str, int]]:
     db = SessionLocal()
     try:
@@ -256,6 +291,10 @@ def _worker_loop() -> None:
         try:
             queries, metrics = _run_warmup_cycle()
             sweep_stale_running_jobs()
+            try:
+                _run_freshness_sweep_if_due()
+            except Exception as fsweep_err:
+                logger.warning("vacancy_freshness_sweep_loop_error error=%s", fsweep_err)
             finished = datetime.now(UTC)
             _set_state(
                 running=False,

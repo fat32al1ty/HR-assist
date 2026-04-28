@@ -4,6 +4,10 @@ HR Assist is designed so that **the minimum amount of personal data is persisted
 
 As of v0.18.0, the platform asks for **no contact data**. The 'email' field is an opaque login handle that the system does not validate or use for delivery.
 
+## Relationship to hh.ru
+
+HR Assist is an **AI-assisted search layer over hh.ru**, not a derivative database of vacancy content. We fetch vacancy metadata via the public hh.ru API to rank it against your resume; every recommended vacancy in the UI links back to its canonical posting on hh.ru via the original `alternate_url`. We honour archive status: a top-N freshness check runs on every search response and a nightly sweep re-checks the rest of the cached pool, soft-deleting any postings that hh.ru has marked archived (per hh.ru ToS §3.11). We do not republish vacancy descriptions, do not present ourselves as the source, and do not retain archived content beyond the time required to remove it from our index.
+
 It is not a legal document and does not replace a formal policy of personal-data processing under 152-ФЗ. A user-facing public policy (`/privacy`) is a separate artefact.
 
 ## What is deliberately NOT persisted

@@ -118,6 +118,11 @@ class Settings(BaseSettings):
     segment_warmup_daily_cap: int = 100
     segment_warmup_discover_count: int = 60
     openai_system_request_budget_usd: float = 0.20
+    vacancy_freshness_check_enabled: bool = True
+    vacancy_freshness_check_top_n: int = 20
+    vacancy_freshness_check_timeout_seconds: float = 5.0
+    vacancy_freshness_sweep_limit: int = 500
+    vacancy_freshness_sweep_interval_hours: int = 24
 
     @field_validator(
         "openai_api_key",

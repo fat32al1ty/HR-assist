@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   excludeFeedbackVacancies,
+  hostFromUrl,
   normalizeVacancyId,
   removeVacancyFromList,
   removeVacancyMatchEntry
@@ -2711,7 +2712,7 @@ export default function DashboardPage() {
                               href={match.source_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="ml-auto text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-accent)] transition-colors no-underline font-semibold"
+                              className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-md)] text-[length:var(--text-xs)] font-semibold border border-[color-mix(in_srgb,var(--color-accent)_35%,transparent)] bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] text-[color:var(--color-ink)] hover:bg-[color-mix(in_srgb,var(--color-accent)_18%,transparent)] hover:border-[var(--color-accent)] transition-colors no-underline"
                               onClick={() =>
                                 trackClick({
                                   vacancy_id: normalizeVacancyId(match.vacancy_id),
@@ -2722,7 +2723,11 @@ export default function DashboardPage() {
                                 })
                               }
                             >
-                              Источник →
+                              {hostFromUrl(match.source_url) || 'Открыть'}
+                              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M3 9l6-6"/>
+                                <path d="M5 3h4v4"/>
+                              </svg>
                             </a>
                           </div>
                         </article>
