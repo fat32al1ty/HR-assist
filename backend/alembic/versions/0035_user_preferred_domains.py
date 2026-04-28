@@ -27,8 +27,8 @@ def upgrade() -> None:
             server_default="{}",
         ),
     )
-    # Backfill existing rows (server_default only fires on INSERT, not UPDATE)
-    op.execute("UPDATE users SET preferred_domains = '{}' WHERE preferred_domains IS NULL")
+    # NOTE: server_default fills existing rows at DDL time, so an explicit
+    # backfill UPDATE is unnecessary. Left out intentionally.
 
 
 def downgrade() -> None:

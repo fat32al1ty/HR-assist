@@ -133,18 +133,19 @@ def _build_discovery_query(
         if specialization:
             parts.append(specialization)
 
+    # Preferred domains carry user intent — push them BEFORE skills so the
+    # 7-word cap below doesn't silently drop them on resumes with many skills.
+    if preferred_domains:
+        for domain in preferred_domains[:2]:
+            normalized = _normalize_phrase(domain)
+            if normalized:
+                parts.append(normalized)
+
     if analysis:
         keywords = _as_strings(analysis.get("matching_keywords"))
         hard_skills = _as_strings(analysis.get("hard_skills"))
         parts.extend(_normalize_phrase(item) for item in keywords[:4])
         parts.extend(_normalize_phrase(item) for item in hard_skills[:4])
-
-    if preferred_domains:
-        # Append domain context so search engine surfaces industry-matching vacancies
-        for domain in preferred_domains[:2]:
-            normalized = _normalize_phrase(domain)
-            if normalized:
-                parts.append(normalized)
 
     compact = _dedupe([item for item in parts if item])
     short = _short_query_from_tokens(compact, max_words=7)

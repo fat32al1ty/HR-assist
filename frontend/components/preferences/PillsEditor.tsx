@@ -10,7 +10,7 @@
  * This keeps the component stateless w.r.t. provenance.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { fetchSuggestions, type Suggestion } from '@/lib/preferences';
 
 export type PillsEditorProps = {
@@ -178,6 +178,10 @@ function Combobox({ type, token, existingValues, onAdd, onClose }: ComboboxProps
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Per-instance IDs — the page mounts two PillsEditors (roles + domains),
+  // so hardcoded IDs would collide and break aria-controls / activedescendant.
+  const listboxId = useId();
+  const optionId = (i: number) => `${listboxId}-opt-${i}`;
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -278,12 +282,14 @@ function Combobox({ type, token, existingValues, onAdd, onClose }: ComboboxProps
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder="Введите и выберите…"
+          maxLength={64}
+          role="combobox"
           aria-label="Введите значение"
           aria-autocomplete="list"
-          aria-controls="pills-combobox-listbox"
-          aria-activedescendant={
-            activeIndex >= 0 ? `pills-combobox-option-${activeIndex}` : undefined
-          }
+          aria-haspopup="listbox"
+          aria-expanded={suggestions.length > 0}
+          aria-controls={listboxId}
+          aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined}
           style={{
             flex: 1,
             border: 'none',
@@ -316,7 +322,7 @@ function Combobox({ type, token, existingValues, onAdd, onClose }: ComboboxProps
       {/* Dropdown */}
       {suggestions.length > 0 && (
         <div
-          id="pills-combobox-listbox"
+          id={listboxId}
           role="listbox"
           aria-label="Варианты"
           style={{
@@ -335,7 +341,7 @@ function Combobox({ type, token, existingValues, onAdd, onClose }: ComboboxProps
           {suggestions.map((s, i) => (
             <div
               key={s.value}
-              id={`pills-combobox-option-${i}`}
+              id={optionId(i)}
               role="option"
               aria-selected={i === activeIndex}
               style={{
