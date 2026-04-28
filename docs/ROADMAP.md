@@ -15,6 +15,9 @@ HR Assist — AI-ассистент для **соискателя** в IT. Не 
 
 ## Последние релизы
 
+### `v0.18.0` — Drop `/audit` (2026-04-28)
+Страница аудита резюме (Phase 5.0/5.0.1) удалена. Причина: на не-engineering резюме фича выдавала ложные сигналы — Senior PM с 13 годами видел медианную ЗП 170к (engineering global median fallback), «топ-N навыков рынка» содержал Kafka/Kubernetes для PM-роли, а онбординг-вопросы (которые ДОЛЖНЫ были триггериться у PM) фронт не отрисовывал. Лучше убрать чем имитировать работу. Удалены: route `/audit` + компоненты, `resume_audit` сервис + кеш, `onboarding_questions` + YAML, admin-эндпоинты, eval-фикстуры. **Оставлены** (используются другими фичами): `salary_predictor`/`salary_baseline`/`track_classifier`/`llm_cost_accounting`. **БД**: таблицы `resume_audits` + `resume_clarifications` остаются (no destructive migration), орфаны.
+
 ### `v0.17.0` — Откат auto-pin, multi-facet discovery, feedback loop (2026-04-28)
 Раскат v0.16.0 показал, что auto-pin (запись `analysis.target_role/domains` в `User.preferred_*` при первом сохранении) **отравлял** persistence у пользователей. У `fat32al1ty` после первого save оказались `preferred_titles=['product', 'Владелец продукта', 'Менеджер проектов', 'Руководитель AI-проектов и IT-платформ / AI Product Manager']` — query "Владелец продукта Менеджер проектов Project Manager ИТ" → HH вернул 208 вакансий не-IT product-менеджеров → pre-filter уронил 205, matcher выкинул 3, **0 матчей**. Независимая product-analyst-сессия подтвердила: фикс — backend, не UI.
 

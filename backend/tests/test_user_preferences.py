@@ -1,6 +1,6 @@
 """Integration tests for preferred_domains in PATCH /api/users/me/preferences.
 
-T1: PATCH {"preferred_domains": ["FinTech"]} → 200, UserRead.preferred_domains == ["FinTech"].
+T1: PATCH {"preferred_domains": ["fintech"]} → 200, UserRead.preferred_domains == ["fintech"].
     Re-GET /me confirms the value was persisted in the DB.
 T2: PATCH {"preferred_domains": []} after having ["X"] set → column is cleared.
 T3: PATCH body without preferred_domains → existing value untouched.
@@ -56,19 +56,19 @@ class PreferredDomainsPatchTest(unittest.TestCase):
 
     # T1 ─────────────────────────────────────────────────────────────────────
     def test_patch_preferred_domains_set_and_persisted(self) -> None:
-        """PATCH with ["FinTech"] → 200, response + GET /me both show ["FinTech"]."""
+        """PATCH with ["fintech"] → 200, response + GET /me both show ["fintech"]."""
         resp = self.client.patch(
             "/api/users/me/preferences",
-            json={"preferred_domains": ["FinTech"]},
+            json={"preferred_domains": ["fintech"]},
             headers=self.headers,
         )
         self.assertEqual(resp.status_code, 200, resp.text)
-        self.assertEqual(resp.json()["preferred_domains"], ["FinTech"])
+        self.assertEqual(resp.json()["preferred_domains"], ["fintech"])
 
         # Re-GET confirms DB persistence.
         me = self.client.get("/api/users/me", headers=self.headers)
         self.assertEqual(me.status_code, 200)
-        self.assertEqual(me.json()["preferred_domains"], ["FinTech"])
+        self.assertEqual(me.json()["preferred_domains"], ["fintech"])
 
     # T2 ─────────────────────────────────────────────────────────────────────
     def test_patch_preferred_domains_clear_with_empty_list(self) -> None:
@@ -100,7 +100,7 @@ class PreferredDomainsPatchTest(unittest.TestCase):
         # Seed.
         self.client.patch(
             "/api/users/me/preferences",
-            json={"preferred_domains": ["HealthTech"]},
+            json={"preferred_domains": ["healthtech"]},
             headers=self.headers,
         )
         # Update something else — no preferred_domains key.
@@ -110,7 +110,7 @@ class PreferredDomainsPatchTest(unittest.TestCase):
             headers=self.headers,
         )
         self.assertEqual(resp.status_code, 200, resp.text)
-        self.assertEqual(resp.json()["preferred_domains"], ["HealthTech"])
+        self.assertEqual(resp.json()["preferred_domains"], ["healthtech"])
 
     # T4 ─────────────────────────────────────────────────────────────────────
     def test_patch_preferred_domains_over_cap_returns_422(self) -> None:

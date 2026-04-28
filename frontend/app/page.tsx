@@ -1203,36 +1203,31 @@ export default function DashboardPage() {
       setResumes((current) => [resume, ...current]);
       setFile(null);
 
-      if (resume.status === 'completed') {
-        // Already done — redirect immediately to audit page
-        router.push(`/audit?resume_id=${resume.id}`);
-        return;
-      }
+      if (resume.status !== 'completed') {
+        // Resume is still processing — poll until completed
+        setMessage('Анализируем резюме…');
+        const MAX_POLL_MS = 120_000;
+        const POLL_INTERVAL_MS = 2_000;
+        const deadline = Date.now() + MAX_POLL_MS;
 
-      // Resume is still processing — poll until completed then redirect
-      setMessage('Анализируем резюме…');
-      const MAX_POLL_MS = 120_000;
-      const POLL_INTERVAL_MS = 2_000;
-      const deadline = Date.now() + MAX_POLL_MS;
-
-      while (Date.now() < deadline) {
-        await sleep(POLL_INTERVAL_MS);
-        try {
-          const list = await request<Resume[]>('/api/resumes');
-          const updated = list.find((r) => r.id === resume.id);
-          if (!updated) break;
-          // Keep local state in sync
-          setResumes(list);
-          if (updated.status === 'completed') {
-            router.push(`/audit?resume_id=${updated.id}`);
-            return;
+        while (Date.now() < deadline) {
+          await sleep(POLL_INTERVAL_MS);
+          try {
+            const list = await request<Resume[]>('/api/resumes');
+            const updated = list.find((r) => r.id === resume.id);
+            if (!updated) break;
+            // Keep local state in sync
+            setResumes(list);
+            if (updated.status === 'completed') {
+              break;
+            }
+            if (updated.status === 'failed') {
+              setMessage(updated.error_message || 'Не удалось обработать резюме');
+              break;
+            }
+          } catch {
+            // Poll failure is non-fatal — keep trying until deadline
           }
-          if (updated.status === 'failed') {
-            setMessage(updated.error_message || 'Не удалось обработать резюме');
-            break;
-          }
-        } catch {
-          // Poll failure is non-fatal — keep trying until deadline
         }
       }
     } catch (error) {

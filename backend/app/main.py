@@ -10,9 +10,7 @@ from app.api.routes import (
     auth,
     dashboard,
     health,
-    onboarding,
     recommendation_corrections,
-    resume_audit,
     resumes,
     system,
     telemetry,
@@ -55,8 +53,6 @@ app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"]
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(resumes.router, prefix="/api/resumes", tags=["resumes"])
-app.include_router(resume_audit.router, prefix="/api/resumes", tags=["resume-audit"])
-app.include_router(onboarding.router, prefix="/api/resumes", tags=["onboarding"])
 app.include_router(vacancies.router, prefix="/api/vacancies", tags=["vacancies"])
 app.include_router(track_gaps.router, prefix="/api", tags=["track-gaps"])
 app.include_router(applications.router, prefix="/api/applications", tags=["applications"])
