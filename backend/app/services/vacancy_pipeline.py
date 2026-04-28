@@ -88,6 +88,7 @@ class VacancyDiscoveryMetrics:
     matcher_drop_hard_non_it: int = 0
     matcher_drop_dedupe: int = 0
     matcher_drop_mmr_dedupe: int = 0
+    recall_seen_fallback_triggered: int = 0
     # Silent-drop counters (Phase v0.9.4): track URLs that vanish before LLM.
     # fetched_dropped_analyzed_budget — items skipped once max_analyzed is hit.
     # fetched_dedup_within_job — same URL seen twice across different queries.

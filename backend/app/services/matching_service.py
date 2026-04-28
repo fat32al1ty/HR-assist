@@ -2055,6 +2055,7 @@ def _build_resume_context(
     query_vector: list[float],
     prefs: dict,
     excluded_vacancy_ids: set[int],
+    seen_excluded_vacancy_ids: set[int] | None = None,
 ) -> tuple:
     """Build (ResumeContext, rejected_normalized_skill_norms) from DB state.
 
@@ -2118,6 +2119,7 @@ def _build_resume_context(
         preferred_titles=list(prefs.get("preferred_titles") or []),
         preferred_domains=list(prefs.get("preferred_domains") or []),
         excluded_vacancy_ids=excluded_vacancy_ids,
+        seen_excluded_vacancy_ids=seen_excluded_vacancy_ids or set(),
         rejected_skill_norms=rejected_normalized,
         negative_term_set=negative_term_set,
     )
@@ -2510,22 +2512,27 @@ def match_vacancies_for_resume(
     pos, neg = vector_store.get_user_preference_vectors(user_id=user_id, resume_id=resume_id)
     query_vector = _blend_resume_with_preferences(query_vector, pos, neg)
 
-    excluded_set = (
+    # Hard excludes: explicit user intent — applied, disliked, liked.
+    # These remain excluded even when the seen-dedup fallback fires.
+    hard_excluded_set = (
         set(list_disliked_vacancy_ids(db, user_id=user_id, resume_id=resume_id))
         .union(list_liked_vacancy_ids(db, user_id=user_id, resume_id=resume_id))
         .union(list_applied_vacancy_ids_for_user(db, user_id=user_id, resume_id=resume_id))
     )
-    # Level 2 D2: bolt recently-shown vacancies onto the exclusion set so
-    # the same top-N doesn't ride across repeated "подобрать" clicks while
-    # the inventory is still thin. Gated by ``feature_exclude_seen_enabled``.
+    # Soft excludes: recently-seen vacancies. Dropped on fallback so the
+    # user gets previously-shown-but-still-relevant results instead of an
+    # empty list when the seen pool covers the entire recall result set.
+    # Level 2 D2: gated by ``feature_exclude_seen_enabled``.
+    seen_excluded_set: set[int] = set()
     if settings.feature_exclude_seen_enabled:
-        excluded_set = excluded_set.union(
+        seen_excluded_set = set(
             list_seen_vacancy_ids(
                 db,
                 user_id=user_id,
                 within_days=settings.feature_exclude_seen_window_days,
             )
         )
+    excluded_set = hard_excluded_set | seen_excluded_set
 
     ctx = _build_resume_context(
         db,
@@ -2534,7 +2541,8 @@ def match_vacancies_for_resume(
         user_id=user_id,
         query_vector=query_vector,
         prefs=prefs,
-        excluded_vacancy_ids=excluded_set,
+        excluded_vacancy_ids=hard_excluded_set,
+        seen_excluded_vacancy_ids=seen_excluded_set,
     )
 
     state = MatchingState(resume_context=ctx, candidates=[])

@@ -356,6 +356,7 @@ _METRIC_INT_FIELDS = (
     "matcher_drop_hard_non_it",
     "matcher_drop_dedupe",
     "matcher_drop_mmr_dedupe",
+    "recall_seen_fallback_triggered",
     "fetched_dropped_analyzed_budget",
     "fetched_dedup_within_job",
     "cursor_fallback_queries_run",
@@ -417,6 +418,7 @@ def recommend_vacancies_for_resume(
         "matcher_drop_hard_non_it": "matcher_drop_hard_non_it",
         "matcher_drop_dedupe": "matcher_drop_dedupe",
         "matcher_drop_mmr_dedupe": "matcher_drop_mmr_dedupe",
+        "recall_seen_fallback_triggered": "recall_seen_fallback_triggered",
     }
 
     def _run_matcher(limit: int) -> list[dict]:

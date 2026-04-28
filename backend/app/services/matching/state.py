@@ -53,6 +53,7 @@ class ResumeContext:
     preferred_titles: list[str] = field(default_factory=list)
     preferred_domains: list[str] = field(default_factory=list)
     excluded_vacancy_ids: set[int] = field(default_factory=set)
+    seen_excluded_vacancy_ids: set[int] = field(default_factory=set)
     rejected_skill_norms: set[str] = field(default_factory=set)
     negative_term_set: set[str] = field(default_factory=set)
 
@@ -107,6 +108,7 @@ class MatchingDiagnostics:
     drop_no_skill_overlap: int = 0
     drop_dedupe: int = 0
     drop_mmr_dedupe: int = 0
+    recall_seen_fallback_triggered: int = 0
     seniority_penalty_applied: int = 0
     title_boost_applied: int = 0
     domain_preference_boost_applied: int = 0
@@ -150,6 +152,7 @@ class MatchingDiagnostics:
         bump("matcher_drop_hard_non_it", self.drop_hard_non_it)
         bump("matcher_drop_dedupe", self.drop_dedupe)
         bump("matcher_drop_mmr_dedupe", self.drop_mmr_dedupe)
+        bump("recall_seen_fallback_triggered", self.recall_seen_fallback_triggered)
         for key, value in self.custom.items():
             bump(key, value)
 

@@ -43,8 +43,41 @@ class VectorRecallStage(BaseStage):
         )
         state.diagnostics.recall_count = len(found)
 
+        # Hard excludes: applied, disliked, liked. Soft excludes: seen.
+        # On the first pass we apply both; on fallback we drop the soft
+        # set so the user gets previously-shown-but-still-relevant results
+        # rather than an empty list.
+        hard_excluded = ctx.excluded_vacancy_ids
+        all_excluded = hard_excluded | ctx.seen_excluded_vacancy_ids
+
+        self._hydrate_candidates(
+            state, found, all_excluded, get_vacancy_by_id, PRIMARY_VACANCY_SOURCE
+        )
+
+        if not state.candidates and ctx.seen_excluded_vacancy_ids:
+            # Pool exhausted by seen-dedup. Retry without seen exclusion so
+            # the user sees previously-shown-but-still-relevant vacancies
+            # instead of an empty list. Applied + disliked + liked remain
+            # excluded — those represent explicit user intent.
+            self._hydrate_candidates(
+                state, found, hard_excluded, get_vacancy_by_id, PRIMARY_VACANCY_SOURCE
+            )
+            if state.candidates:
+                state.diagnostics.recall_seen_fallback_triggered = 1
+
+        return state
+
+    def _hydrate_candidates(
+        self,
+        state: MatchingState,
+        found: list,
+        excluded: set[int],
+        get_vacancy_by_id,
+        primary_source: str,
+    ) -> None:
+        state.candidates.clear()
         for vacancy_id, score, payload in found:
-            if vacancy_id in ctx.excluded_vacancy_ids:
+            if vacancy_id in excluded:
                 continue
             if isinstance(payload, dict) and "is_vacancy" in payload:
                 if payload.get("is_vacancy") is not True:
@@ -52,7 +85,7 @@ class VectorRecallStage(BaseStage):
             vacancy = get_vacancy_by_id(self._db, vacancy_id=vacancy_id)
             if vacancy is None or vacancy.status != "indexed":
                 continue
-            if (vacancy.source or "").strip().lower() != PRIMARY_VACANCY_SOURCE:
+            if (vacancy.source or "").strip().lower() != primary_source:
                 continue
             state.candidates.append(
                 Candidate(
@@ -62,4 +95,3 @@ class VectorRecallStage(BaseStage):
                     vector_score=float(score),
                 )
             )
-        return state
