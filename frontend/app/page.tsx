@@ -1861,17 +1861,6 @@ export default function DashboardPage() {
                       >
                         Нет аккаунта? Зарегистрироваться
                       </Button>
-                      <Button
-                        variant="ghost"
-                        type="button"
-                        className="w-full"
-                        onClick={() => {
-                          setAuthFormMode('reset');
-                          setMessage('');
-                        }}
-                      >
-                        Забыли пароль?
-                      </Button>
                     </div>
                   ) : (
                     <Button
