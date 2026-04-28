@@ -1358,7 +1358,15 @@ export default function DashboardPage() {
     setShowPartialBanner(false);
     setPrefetchEmpty(false);
 
-    // ── Stage 1: instant synchronous call (≤5s) ──────────────────────────
+    // ── Single-stage instant call against the prefetched index ─────────────
+    // v0.20.0 (Phase 6): the deep-scan call + polling loop is gone from the
+    // hot path — running an HH crawl + LLM analyze inside the request thread
+    // was the root cause of 60s latency, $0.50/search, and the "Stage 2
+    // ruined Stage 1" persistence bug. Live ingestion happens in the
+    // background warmup worker; the search button only reads the local
+    // index. /api/vacancies/recommend/start stays for admin/debug. When the
+    // segment is cold (`prefetch_empty=True`), v0.21 will enqueue a
+    // segment_warmup job and serve a degrade-UX response.
     const instantStartedAt = Date.now();
     try {
       const instant = await request<VacancyRecommendResponse>(
@@ -1378,6 +1386,12 @@ export default function DashboardPage() {
         }
       );
 
+      if (instant.openai_usage) {
+        setOpenaiUsageMessage(
+          `OpenAI: ~$${instant.openai_usage.estimated_cost_usd.toFixed(4)} / $${instant.openai_usage.budget_usd.toFixed(2)}, токены: ${instant.openai_usage.total_tokens}, вызовов: ${instant.openai_usage.api_calls}.`
+        );
+      }
+
       if (instant.prefetch_empty) {
         setPrefetchEmpty(true);
         setMatches([]);
@@ -1395,16 +1409,18 @@ export default function DashboardPage() {
         setLastSearchAt(new Date());
         if (instant.query) setLastMatchingQuery(instant.query);
         if (Array.isArray(instant.sources)) setLastSources(instant.sources);
-        if (visibleInstant.length > 0) {
-          setMatchingMessage(`Найдено ${visibleInstant.length} подходящих, ищем ещё свежие…`);
-        } else {
-          setMatchingMessage('Пока нет подходящих. Ищем свежие…');
+        if (typeof instant.analyzed === 'number') {
+          setLastAnalyzedCount(instant.analyzed);
         }
-        setMatchingStage('Быстрый подбор завершён');
+        if (visibleInstant.length > 0) {
+          setMatchingMessage(formatRecommendationHeadline(visibleInstant.length));
+        } else {
+          setMatchingMessage('Пока нет подходящих. Обновите подбор позже — индекс пополняется в фоне.');
+        }
+        setMatchingStage('Подбор завершён');
       }
     } catch (error) {
-      // Instant call failed — proceed to deep scan anyway, just clear message
-      setMatchingMessage(error instanceof Error ? error.message : 'Не удалось выполнить быстрый подбор. Запускаем полный...');
+      setMatchingMessage(error instanceof Error ? error.message : 'Не удалось выполнить подбор. Попробуйте ещё раз.');
     } finally {
       const elapsed = Date.now() - instantStartedAt;
       if (elapsed < MIN_PROGRESS_VISIBLE_MS) {
@@ -1412,107 +1428,6 @@ export default function DashboardPage() {
       }
       setMatchingProgress(100);
       setMatchingBusy(false);
-    }
-
-    // ── Stage 2: deep scan background (non-blocking) ──────────────────────
-    if (!selectedResumeId) {
-      refreshInFlightRef.current = false;
-      return;
-    }
-    setDeepScanRunning(true);
-    const deepStartedAt = Date.now();
-    try {
-      const started = await request<{ job_id: string; status: string }>(
-        `/api/vacancies/recommend/start/${selectedResumeId}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            discover_count: 40,
-            match_limit: 20,
-            deep_scan: true,
-            rf_only: true,
-            use_prefetched_index: true,
-            discover_if_few_matches: true,
-            min_prefetched_matches: 8
-          })
-        }
-      );
-      setPersistentJobId(started.job_id);
-
-      while (true) {
-        const elapsed = Date.now() - deepStartedAt;
-        if (elapsed > RECOMMEND_TIMEOUT_MS) {
-          // Watchdog: stop polling silently if we already have results
-          break;
-        }
-
-        const status = await request<RecommendationJobStatusResponse>(
-          `/api/vacancies/recommend/status/${started.job_id}`
-        );
-
-        if (status.openai_usage) {
-          setOpenaiUsageMessage(
-            `OpenAI: ~$${status.openai_usage.estimated_cost_usd.toFixed(4)} / $${status.openai_usage.budget_usd.toFixed(2)}, токены: ${status.openai_usage.total_tokens}, вызовов: ${status.openai_usage.api_calls}.`
-          );
-        }
-
-        if (status.status === 'completed') {
-          const deepMetrics = status.metrics || {};
-          const deepMatches = excludeFeedbackVacancies(
-            status.matches || [],
-            dislikedVacancies,
-            selectedVacancies,
-            hiddenMatchIds
-          );
-          // Merge with existing matches: dedupe by vacancy_id, sort by score
-          // desc. The functional setter reads the latest committed state so
-          // Stage 1's instant matches (committed before Stage 2 ever started)
-          // are always present in `current` here — the deep-scan delta is
-          // additive, never a clobber.
-          setMatches((current) => {
-            const existingIds = new Set(current.map((m) => normalizeVacancyId(m.vacancy_id)));
-            const newOnes = deepMatches.filter((m) => !existingIds.has(normalizeVacancyId(m.vacancy_id)));
-            const merged = [...current, ...newOnes].sort((a, b) => b.similarity_score - a.similarity_score);
-            const metricsInfo = formatMetricsInfo(deepMetrics);
-            const headline = formatRecommendationHeadline(merged.length);
-            setMatchingMessage(metricsInfo ? `${headline} ${metricsInfo}` : headline);
-            return merged;
-          });
-          setLastSearchAt(new Date());
-          if (status.query) setLastMatchingQuery(status.query);
-          const sources = Array.isArray(deepMetrics.sources) ? deepMetrics.sources : [];
-          if (sources.length > 0) setLastSources(sources);
-          const analyzedCount = typeof deepMetrics.analyzed === 'number' ? deepMetrics.analyzed : null;
-          if (analyzedCount !== null) setLastAnalyzedCount(analyzedCount);
-          if (deepMetrics.partial === true) {
-            setShowPartialBanner(true);
-          }
-          setPrefetchEmpty(false);
-          break;
-        }
-
-        if (status.status === 'failed') {
-          // Don't show error if we already have results from Stage 1
-          setMatches((current) => {
-            if (current.length === 0) {
-              setMatchingMessage(status.error_message || 'Задача подбора завершилась с ошибкой.');
-            }
-            return current;
-          });
-          break;
-        }
-
-        if (!status.active && (status.status === 'queued' || status.status === 'running')) {
-          break;
-        }
-
-        await sleep(1200);
-      }
-    } catch {
-      // Deep scan error — silently stop if Stage 1 already gave results
-    } finally {
-      setDeepScanRunning(false);
       refreshInFlightRef.current = false;
       await loadDashboardStats(selectedResumeId);
     }

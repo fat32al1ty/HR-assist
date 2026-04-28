@@ -1,6 +1,6 @@
 # HR Assist — Roadmap
 
-**Статус (2026-04-28):** IT-MVP закрыт релизом `v0.14.0`, шлифовка UX подбора в `v0.15.0`, явное управление ролями/доменами в `v0.16.0`, отказ от auto-pin + multi-facet expansion + feedback loop в `v0.17.0`, дроп `/audit` в `v0.18.0`. Phase 6 (search architecture rework) — стартовала с `v0.19.0` (instant-snapshot persistence). Дальше — `v0.20-v0.22` по плану `.claude/skills/product-roadmap/phase-6-search-architecture-rework.md`.
+**Статус (2026-04-28):** IT-MVP закрыт релизом `v0.14.0`, шлифовка UX подбора в `v0.15.0`, явное управление ролями/доменами в `v0.16.0`, отказ от auto-pin + multi-facet expansion + feedback loop в `v0.17.0`, дроп `/audit` в `v0.18.0`. Phase 6 (search architecture rework) идёт: `v0.19.0` — instant-snapshot persistence, `v0.20.0` — decouple deep-scan от кнопки поиска. Дальше — `v0.21-v0.22` по плану `.claude/skills/product-roadmap/phase-6-search-architecture-rework.md`.
 
 Полный план и принципы — в [`.claude/skills/product-roadmap/SKILL.md`](../.claude/skills/product-roadmap/SKILL.md).
 
@@ -14,6 +14,9 @@ HR Assist — AI-ассистент для **соискателя** в IT. Не 
 - **AI-агрегаторы уровня getmatch** — умный ранжир поверх нескольких источников.
 
 ## Последние релизы
+
+### `v0.20.0` — Decouple deep-scan от кнопки поиска (2026-04-29)
+Phase 6, шаг 2. Кнопка «Подбор» больше не дёргает `POST /vacancies/recommend/start` — Stage 2 polling loop полностью удалён из `refreshVacancyIndex`. Теперь refresh = single instant call к `/recommend/instant/{resume_id}` (~<1 сек), читает только локальный prefetched index, никаких HH-запросов и LLM-анализов в request thread'е. Эндпоинт `/recommend/start` остаётся для admin/debug, но не в hot path. Causes: live HH crawl + LLM analyze inside request thread были корнем 60-сек latency, $0.50/search и race condition'ов в matcher loop. Industry-wide pattern (LinkedIn, Indeed, hh.ru сами): ingestion async, query = local index only. Live ingestion переходит в background warmup worker; cold-segment UX будет в v0.21 (lazy segment populate). Никаких backend-изменений: backend-API уже поддерживал instant-only flow с v0.15. Frontend: убран Stage 2 (deep_scan) call, polling loop, merge-by-id, `setMatches((current) => merged)`, openai_usage live-update внутри loop'а — всё это переехало в v0.21+ (lazy populate). Сообщения переписаны: «Найдено N подходящих» вместо «ищем ещё свежие…». Acceptance: p95 latency «Подбор» ≤1 сек, OpenAI cost/day падает на ~95% (только background warmup остаётся), instant-snapshot persistence из v0.19 гарантирует что refresh не регрессирует.
 
 ### `v0.19.0` — Persistence fix для instant-результатов (2026-04-28)
 Phase 6, шаг 1. Кнопка «Подбор» возвращает Stage 1 instant-матчи мгновенно, но они не персистились — refresh страницы поднимал `restoreRecommendationState` → `/recommend/latest` → возвращал последний deep_scan job, и хороший instant-результат заменялся худшим Stage 2. Фикс: instant-эндпоинт после успешного ответа пишет в `recommendation_jobs` строку со `status='completed'` через новый helper `record_instant_recommendation_snapshot` (sync, без воркера). Stage 1 и Stage 2 могут гонять — побеждает последний-завершённый. Никакой миграции (используем существующий status path), полностью совместимо с v0.18. Eval: 2 новых теста (refresh-after-instant возвращает те же matches; пустой instant тоже персистится). Подготавливает почву для v0.20 (полный decouple deep_scan от кнопки поиска).
