@@ -1724,22 +1724,10 @@ export default function DashboardPage() {
     : [];
   const ctaAutoDomains: string[] = _ctaAnalysis ? asStringArray(_ctaAnalysis.domains) : [];
 
-  function ctaBuildMerged(local: string[], auto: string[], cap: number): string[] {
-    const lowerSet = new Set(local.map((s) => s.toLowerCase()));
-    const extra = auto.filter((s) => !lowerSet.has(s.toLowerCase()));
-    return [...local, ...extra].slice(0, cap);
-  }
-
   function handleSaveAndRecommend() {
-    const mergedTitles = ctaBuildMerged(localRoles, ctaAutoRoles, 5);
-    const mergedDomains = ctaBuildMerged(localDomains, ctaAutoDomains, 3);
-    if (profileDraft) {
-      void saveProfileAndRecommend(mergedTitles, mergedDomains);
-    } else {
-      setLocalRoles(mergedTitles);
-      setLocalDomains(mergedDomains);
-      void saveProfileAndRecommend(mergedTitles, mergedDomains);
-    }
+    // F1: pass localRoles/localDomains as-is — no auto-pin merge.
+    // autoDetected values are visual hints only and do NOT participate in the save payload.
+    void saveProfileAndRecommend(localRoles, localDomains);
   }
 
   return (
@@ -1994,32 +1982,46 @@ export default function DashboardPage() {
                       <CardTitle>Что ищу</CardTitle>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-4 min-w-0">
-                      {/* Roles pills */}
-                      <PillsEditor
-                        label="Роли"
-                        values={localRoles}
-                        autoDetected={ctaAutoRoles}
-                        type="role"
-                        maxItems={5}
-                        isDirty={localRoles.join('\x00') !== savedRoles.join('\x00')}
-                        isSaving={prefsSaving}
-                        onChange={setLocalRoles}
-                        emptyHint="Загрузите резюме, чтобы система предложила роли"
-                        token={token}
-                      />
-                      {/* Domain pills */}
-                      <PillsEditor
-                        label="Домены"
-                        values={localDomains}
-                        autoDetected={ctaAutoDomains}
-                        type="domain"
-                        maxItems={3}
-                        isDirty={localDomains.join('\x00') !== savedDomains.join('\x00')}
-                        isSaving={prefsSaving}
-                        onChange={setLocalDomains}
-                        emptyHint="Загрузите резюме, чтобы система определила домены"
-                        token={token}
-                      />
+                      {/* F2: Pills demoted to collapsed disclosure — closed by default */}
+                      <details>
+                        <summary
+                          className="cursor-pointer text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] select-none list-none [&::-webkit-details-marker]:hidden"
+                          style={{ fontWeight: 400 }}
+                        >
+                          Дополнительные фильтры (необязательно)
+                        </summary>
+                        <div className="flex flex-col gap-4 mt-3">
+                          <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-snug)]">
+                            Обычно AI находит вакансии по резюме. Используй фильтры если хочешь сузить поиск или резюме читается неточно.
+                          </p>
+                          {/* Roles pills */}
+                          <PillsEditor
+                            label="Роли"
+                            values={localRoles}
+                            autoDetected={ctaAutoRoles}
+                            type="role"
+                            maxItems={5}
+                            isDirty={localRoles.join('\x00') !== savedRoles.join('\x00')}
+                            isSaving={prefsSaving}
+                            onChange={setLocalRoles}
+                            emptyHint="Загрузите резюме, чтобы система предложила роли"
+                            token={token}
+                          />
+                          {/* Domain pills */}
+                          <PillsEditor
+                            label="Домены"
+                            values={localDomains}
+                            autoDetected={ctaAutoDomains}
+                            type="domain"
+                            maxItems={3}
+                            isDirty={localDomains.join('\x00') !== savedDomains.join('\x00')}
+                            isSaving={prefsSaving}
+                            onChange={setLocalDomains}
+                            emptyHint="Загрузите резюме, чтобы система определила домены"
+                            token={token}
+                          />
+                        </div>
+                      </details>
 
                       {profileDraft ? (
                         <>
@@ -2428,6 +2430,43 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   ) : null}
+
+                  {/* F3: "Что мы поняли" — read-only AI summary, shown only when:
+                      1. active resume has analysis, AND
+                      2. user has NOT saved custom preferred_titles (empty = use resume analysis) */}
+                  {(() => {
+                    const activeResume = resumes.find((r) => r.is_active) ?? null;
+                    const activeAnalysis = activeResume?.analysis ?? null;
+                    const hasOverride = (userPrefs?.preferred_titles ?? []).length > 0;
+                    if (!activeAnalysis || hasOverride) return null;
+                    const summaryRole = typeof activeAnalysis.target_role === 'string' && activeAnalysis.target_role
+                      ? activeAnalysis.target_role
+                      : null;
+                    const summarySeniority = typeof activeAnalysis.seniority === 'string' && activeAnalysis.seniority
+                      ? activeAnalysis.seniority
+                      : null;
+                    const summaryDomains = asStringArray(activeAnalysis.domains).slice(0, 3);
+                    const roleLine = [summaryRole, summarySeniority, summaryDomains.join(', ')]
+                      .filter(Boolean)
+                      .join(' · ');
+                    if (!roleLine) return null;
+                    return (
+                      <div className="rounded-[var(--radius-lg)] border border-[color-mix(in_srgb,var(--color-ink-secondary)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-ink)_4%,transparent)] px-4 py-3 flex flex-col gap-1">
+                        <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink)] leading-[var(--leading-snug)]">
+                          <strong>Подбираем для тебя:</strong> {roleLine}
+                        </p>
+                        <p className="text-[length:var(--text-xs)] text-[color:var(--color-ink-secondary)]">
+                          Резюме читается не так?{' '}
+                          <a
+                            href={activeResume ? `/audit?resume_id=${activeResume.id}` : '/audit'}
+                            className="underline hover:text-[color:var(--color-ink)] transition-colors"
+                          >
+                            Открыть аудит резюме →
+                          </a>
+                        </p>
+                      </div>
+                    );
+                  })()}
 
                   {/* Match cards — flat list */}
                   <div className="flex flex-col gap-3">

@@ -14,6 +14,20 @@ PREFERRED_DOMAINS_MAX = 3
 WorkFormat = Literal["remote", "hybrid", "office", "any"]
 RelocationMode = Literal["home_only", "any_city"]
 
+_NOISE_PREFERRED_TITLE_TOKENS: frozenset[str] = frozenset(
+    {
+        "product",
+        "manager",
+        "lead",
+        "head",
+        "director",
+        "specialist",
+        "engineer",
+        "developer",
+        "analyst",
+    }
+)
+
 
 class UserRead(BaseModel):
     id: int
@@ -61,6 +75,10 @@ class UserPreferencesUpdate(BaseModel):
         for raw in value:
             title = raw.strip()
             if not title:
+                continue
+            if len(title) < 4:
+                continue
+            if title.lower() in _NOISE_PREFERRED_TITLE_TOKENS:
                 continue
             if len(title) > JOB_TITLE_MAX:
                 raise ValueError(f"title longer than {JOB_TITLE_MAX} characters")

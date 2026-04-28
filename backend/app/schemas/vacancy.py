@@ -4,6 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.user import (
+    _NOISE_PREFERRED_TITLE_TOKENS,
     DOMAIN_MAX,
     HOME_CITY_MAX,
     JOB_TITLE_MAX,
@@ -84,6 +85,10 @@ class PreferenceOverrides(BaseModel):
         for raw in value:
             title = raw.strip()
             if not title:
+                continue
+            if len(title) < 4:
+                continue
+            if title.lower() in _NOISE_PREFERRED_TITLE_TOKENS:
                 continue
             if len(title) > JOB_TITLE_MAX:
                 raise ValueError(f"title longer than {JOB_TITLE_MAX} characters")

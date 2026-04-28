@@ -1,3 +1,4 @@
+import logging
 import re
 import time
 from collections.abc import Callable
@@ -8,8 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.repositories.resumes import get_resume_for_user
+from app.schemas.user import _NOISE_PREFERRED_TITLE_TOKENS
 from app.services.matching_service import match_vacancies_for_resume
 from app.services.vacancy_pipeline import VacancyDiscoveryMetrics, discover_and_index_vacancies
+
+logger = logging.getLogger(__name__)
 
 MAX_DEEP_SCAN_QUERIES = 6
 # Phase 2.1: widen the HTTP scan budget 200→400. HH pagination is free (no
@@ -120,8 +124,19 @@ def _build_discovery_query(
     parts: list[str] = []
 
     if preferred_titles:
-        # User's explicit role overrides the analysis-derived role component
-        for title in preferred_titles[:2]:
+        noisy = [
+            t
+            for t in preferred_titles
+            if len(t.strip()) < 4 or t.strip().lower() in _NOISE_PREFERRED_TITLE_TOKENS
+        ]
+        if noisy:
+            logger.warning(
+                "discovery_query_noisy_pref preferred_titles=%s",
+                preferred_titles,
+            )
+        # Take all titles; the final 7-word cap (_short_query_from_tokens) decides
+        # what survives. Two-title hard cap was masking user intent silently.
+        for title in preferred_titles:
             normalized = _normalize_phrase(title)
             if normalized:
                 parts.append(normalized)
