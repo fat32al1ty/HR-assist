@@ -36,6 +36,22 @@ TITLE_BOOST_SCORE_CAP = 1.0
 DOMAIN_PREFERENCE_BOOST = 0.03
 
 MIN_SKILLS_FOR_OVERLAP_FLOOR = 3
+# Role families where hard-tech-skill overlap is the wrong signal entirely.
+# A PM/PO/marketer's "skills" are methodologies (OKR, Discovery, Roadmap),
+# not engineering stacks; vacancies for these roles list those methodologies
+# in must_have_skills, never tech tokens. Forcing tech-overlap drops 95%+
+# of legitimate candidates. For these families we skip the floor entirely.
+_SKILL_OVERLAP_FLOOR_SKIP_FAMILIES = {
+    "product_management",
+    "marketing_growth",
+    "sales_bd",
+    "customer_support",
+    "hr_talent",
+    "operations_admin",
+    "finance_accounting",
+    "legal_compliance",
+    "design",
+}
 SENIORITY_PENALTY = 0.15
 SENIORITY_MISMATCH_GAP = 2
 TITLE_BOOST_TOKEN_STOPWORDS = {
@@ -1945,6 +1961,7 @@ def _has_sufficient_skill_overlap(
     resume_skills: set[str],
     resume_hard_skills: list[str],
     vacancy_payload: dict,
+    resume_role_family: str | None = None,
 ) -> bool:
     """True when the floor doesn't apply OR at least one skill bridges both sides.
 
@@ -1952,7 +1969,16 @@ def _has_sufficient_skill_overlap(
     `MIN_SKILLS_FOR_OVERLAP_FLOOR` explicit skills — otherwise we don't trust the
     signal enough to hard-drop. When it does apply, we require at least one token
     overlap (alias-aware via resume_skills which already expands aliases).
+
+    For non-technical role families (PM, marketing, sales, etc.) the floor is
+    skipped — must_have_skills on those vacancies are methodologies, not tech
+    tokens, so hard-overlap is a false signal that drops 95%+ of valid matches.
     """
+    if (
+        isinstance(resume_role_family, str)
+        and resume_role_family in _SKILL_OVERLAP_FLOOR_SKIP_FAMILIES
+    ):
+        return True
     required_tokens = _required_skill_tokens(vacancy_payload)
     if len(resume_hard_skills) < MIN_SKILLS_FOR_OVERLAP_FLOOR:
         return True

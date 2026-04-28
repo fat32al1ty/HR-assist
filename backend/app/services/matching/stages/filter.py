@@ -91,8 +91,16 @@ class HardFilterStage(BaseStage):
                 cand.drop_reason = "geo"
                 diag.drop_geo += 1
                 continue
+            resume_role_family = (
+                ctx.analysis.get("role_family") if isinstance(ctx.analysis, dict) else None
+            )
             if not _has_sufficient_skill_overlap(
-                ctx.resume_skills, ctx.resume_hard_skills, cand.payload
+                ctx.resume_skills,
+                ctx.resume_hard_skills,
+                cand.payload,
+                resume_role_family=resume_role_family
+                if isinstance(resume_role_family, str)
+                else None,
             ):
                 cand.drop_reason = "no_skill_overlap"
                 diag.drop_no_skill_overlap += 1
