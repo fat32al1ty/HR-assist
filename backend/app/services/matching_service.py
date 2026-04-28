@@ -30,6 +30,10 @@ logger = logging.getLogger(__name__)
 TITLE_BOOST = 0.10
 TITLE_BOOST_PARTIAL = 0.05
 TITLE_BOOST_SCORE_CAP = 1.0
+# Additive boost when a vacancy's domain matches a user's preferred_domain.
+# Sized at 0.03 — same order as TITLE_BOOST_PARTIAL (0.05) but smaller so
+# a domain hint nudges ranking without overpowering semantic similarity.
+DOMAIN_PREFERENCE_BOOST = 0.03
 
 MIN_SKILLS_FOR_OVERLAP_FLOOR = 3
 SENIORITY_PENALTY = 0.15
@@ -1782,6 +1786,7 @@ def _resolve_user_preferences(
         "relocation_mode": getattr(user, "relocation_mode", "home_only") or "home_only",
         "home_city": getattr(user, "home_city", None),
         "preferred_titles": list(getattr(user, "preferred_titles", None) or []),
+        "preferred_domains": list(getattr(user, "preferred_domains", None) or []),
         "expected_salary_min": getattr(user, "expected_salary_min", None),
         "expected_salary_max": getattr(user, "expected_salary_max", None),
         "expected_salary_currency": getattr(user, "expected_salary_currency", "RUB") or "RUB",
@@ -1799,6 +1804,10 @@ def _resolve_user_preferences(
     if isinstance(titles, list):
         cleaned = [item.strip() for item in titles if isinstance(item, str) and item.strip()]
         base["preferred_titles"] = cleaned
+    domains = overrides.get("preferred_domains")
+    if isinstance(domains, list):
+        cleaned = [item.strip() for item in domains if isinstance(item, str) and item.strip()]
+        base["preferred_domains"] = cleaned
     return base
 
 
@@ -1903,6 +1912,30 @@ def _preferred_title_boost_score(vacancy_title: object, preferred_titles: list[s
         return TITLE_BOOST
     if best == 1:
         return TITLE_BOOST_PARTIAL
+    return 0.0
+
+
+def _domain_preference_boost(vacancy_payload: dict | None, preferred_domains: list[str]) -> float:
+    """Return DOMAIN_PREFERENCE_BOOST when vacancy domain overlaps user prefs, else 0.0.
+
+    Case-insensitive substring match: any preferred_domain token found inside
+    any vacancy domain string triggers the boost. Never drops a vacancy — only
+    nudges ranking upward.
+    """
+    if not preferred_domains or not isinstance(vacancy_payload, dict):
+        return 0.0
+    vacancy_domains = vacancy_payload.get("domains")
+    if not isinstance(vacancy_domains, list) or not vacancy_domains:
+        return 0.0
+    vac_text = " ".join(str(d).lower() for d in vacancy_domains if isinstance(d, str))
+    if not vac_text:
+        return 0.0
+    for pref in preferred_domains:
+        if not isinstance(pref, str):
+            continue
+        needle = pref.strip().lower()
+        if needle and needle in vac_text:
+            return DOMAIN_PREFERENCE_BOOST
     return 0.0
 
 
@@ -2034,6 +2067,7 @@ def _build_resume_context(
         leadership_preferred=_resume_prefers_leadership(resume_roles),
         preferences=prefs,
         preferred_titles=list(prefs.get("preferred_titles") or []),
+        preferred_domains=list(prefs.get("preferred_domains") or []),
         excluded_vacancy_ids=excluded_vacancy_ids,
         rejected_skill_norms=rejected_normalized,
     )

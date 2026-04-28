@@ -466,3 +466,119 @@ All three blocks carry `animate-fade-in` inside the `stagger-children` grid. The
 - Editor textarea's `min-height: 280px` holds — do not reduce below 200px even on tiny screens.
 - CTA link wraps below "Скопировать" in the flex row.
 - `--space-10` gap between blocks stays; do not tighten to `--space-6` on mobile — the editorial rhythm depends on it.
+
+---
+
+## Editable pills — roles & domains sidebar widget
+
+### Aesthetic direction
+
+The pill groups live inside the sidebar (`<aside>`) on the main `/` page. The visual language is deliberately calm: auto-detected values are near-invisible gray chips that occupy almost no visual weight, while user-pinned values snap to the brand accent (cardinal red) — making the user's intentional choices read as the dominant signal. The widget never fights with the vacancy feed.
+
+### Token table
+
+| Token | Value | Semantic role |
+|---|---|---|
+| `--color-pill-auto-bg` | oklch(0.94 0.008 240) | Auto-pill background — faint cool-gray tint |
+| `--color-pill-auto-fg` | oklch(0.30 0.02 240) | Auto-pill text — deep, 9:1 contrast on bg |
+| `--color-pill-auto-border` | oklch(0.80 0.018 240) | Auto-pill 1px solid border |
+| `--color-pill-pinned-bg` | `var(--color-accent)` | Pinned-pill fill — cardinal red |
+| `--color-pill-pinned-fg` | `var(--color-on-accent)` | Pinned-pill text — white, 7.2:1 contrast |
+| `--color-pill-pinned-border` | `var(--color-accent)` | Pinned-pill border (matches fill) |
+| `--color-pill-add-border` | oklch(0.72 0.018 240) | Dashed border for "+ добавить" button |
+| `--color-pill-add-fg` | `var(--color-ink-secondary)` | Text inside "+ добавить" |
+| `--color-pill-remove-icon` | oklch(0.60 0.02 240) | × in resting state — visually quiet |
+| `--color-pill-remove-icon-hover` | oklch(0.20 0.02 240) | × on hover — sharp, high contrast |
+| `--color-combobox-suggestion-bg` | `var(--color-surface-raised)` | Dropdown surface |
+| `--color-combobox-suggestion-bg-hover` | oklch(0.96 0.012 240) | Hovered suggestion row |
+| `--color-combobox-border` | `var(--color-border)` | Dropdown border |
+| `--color-pill-popular-bg` | oklch(0.97 0.025 145) | "· часто" badge background |
+| `--color-pill-popular-fg` | oklch(0.42 0.10 145) | "· часто" badge text |
+| `--color-unsaved-indicator-fg` | `var(--color-accent)` | Unsaved dot (7px circle) next to group label |
+
+### Anatomy
+
+```
+[Group label: РОЛИ ●]          ← ● = unsaved indicator (only when dirty)
+
+[Backend Developer ×]  [Tech Lead ×]       ← pinned pills (accent fill)
+[Software Architect ×]  [Data Engineer ×]  ← auto pills (gray)
+[+ добавить]                               ← add-pill (dashed border)
+
+[Group label: ДОМЕНЫ]
+
+[FinTech ×]  [E-Commerce ×]   ← mix of pinned / auto
+[+ добавить]
+```
+
+On click of "+ добавить", the pill is replaced by an inline combobox:
+
+```
+┌─[text input: "Prod Ma|"]──────[×]─┐
+└──────────────────────────────────────┘
+┌── dropdown (z-overlay) ──────────────┐
+│  Product Manager          · часто    │  ← highlighted row
+│  Project Manager                     │
+│  Product Owner            · часто    │
+│  Scrum Master                        │
+│  Product Analyst                     │
+└──────────────────────────────────────┘
+```
+
+### Pill sizing
+
+| Property | Value |
+|---|---|
+| Height | 28px |
+| Padding | 0 10px 0 12px (extra left for text breathing room, right for × button) |
+| Border-radius | `--radius-full` (9999px) |
+| Font size | `--text-sm` |
+| Font weight | 400 (auto) / 600 (pinned) |
+| Remove icon size | 16×16px circle button, font-size 14px |
+
+### Combobox sizing
+
+| Property | Value |
+|---|---|
+| Input height | 36px |
+| Dropdown max-height | 240px (overflow-y: auto) |
+| Suggestion row height | 32px |
+| Dropdown z-index | `var(--z-overlay)` |
+| Shadow | 0 4px 16px 8% ink tint |
+
+### Motion
+
+| Animation | Class | Duration | Trigger |
+|---|---|---|---|
+| Pill enter | `animate-pill-in` | `--duration-fast` (120ms) | Pill added to DOM |
+| Pill exit | `animate-pill-out` | `--duration-fast` (120ms) | Removal button clicked |
+
+Both keyframes are in `globals.css @layer utilities`. `prefers-reduced-motion` guard collapses all durations to `0.01ms` automatically — no extra work needed.
+
+The exit animation collapses `max-width` from 200px → 0 simultaneously with `opacity` and `scale` so the surrounding pills close the gap smoothly. Use `overflow: hidden; white-space: nowrap` on the exiting element.
+
+### Disabled / loading state
+
+When a save is in flight, set `opacity: 0.42; pointer-events: none` on the entire group container (both pill rows and add-button). Do NOT disable individual pills — the whole group becomes non-interactive as a unit.
+
+### Empty state
+
+When the user has no resume yet, render an italic `text-sm text-ink-muted` sentence in place of the pill row:
+
+> Загрузите резюме, чтобы система предложила роли
+
+No illustration, no button. The upload affordance is already above this widget in the sidebar.
+
+### DO / DON'T
+
+DO:
+- Render auto pills with `font-weight: 400` and a gray surface — they are suggestions, not decisions.
+- Render pinned pills with `font-weight: 600` and the full accent fill — these are the user's choices.
+- Announce pill removal to screen readers via `aria-label="Удалить {value}"` on the × button.
+- Keep the combobox input focused (`autoFocus`) when it opens; close on Esc.
+
+DON'T:
+- Use `--color-accent` directly on the auto-pill — only pinned pills use accent fill.
+- Add hover background on the pill chip itself (only the × changes on hover).
+- Animate the group label or the "+добавить" button — only the pill chips animate.
+- Show the unsaved dot on initial page load — only show after the user makes a change.

@@ -111,22 +111,40 @@ def _short_query_from_tokens(tokens: list[str], *, max_words: int = 7) -> str:
     return " ".join(words).strip()
 
 
-def _build_discovery_query(analysis: dict | None) -> str:
-    if not analysis:
-        return "python backend developer remote"
-
-    role = _normalize_phrase(analysis.get("target_role"))
-    specialization = _normalize_phrase(analysis.get("specialization"))
-    keywords = _as_strings(analysis.get("matching_keywords"))
-    hard_skills = _as_strings(analysis.get("hard_skills"))
-
+def _build_discovery_query(
+    analysis: dict | None,
+    *,
+    preferred_titles: list[str] | None = None,
+    preferred_domains: list[str] | None = None,
+) -> str:
     parts: list[str] = []
-    if role:
-        parts.append(role)
-    if specialization:
-        parts.append(specialization)
-    parts.extend(_normalize_phrase(item) for item in keywords[:4])
-    parts.extend(_normalize_phrase(item) for item in hard_skills[:4])
+
+    if preferred_titles:
+        # User's explicit role overrides the analysis-derived role component
+        for title in preferred_titles[:2]:
+            normalized = _normalize_phrase(title)
+            if normalized:
+                parts.append(normalized)
+    elif analysis:
+        role = _normalize_phrase(analysis.get("target_role"))
+        specialization = _normalize_phrase(analysis.get("specialization"))
+        if role:
+            parts.append(role)
+        if specialization:
+            parts.append(specialization)
+
+    if analysis:
+        keywords = _as_strings(analysis.get("matching_keywords"))
+        hard_skills = _as_strings(analysis.get("hard_skills"))
+        parts.extend(_normalize_phrase(item) for item in keywords[:4])
+        parts.extend(_normalize_phrase(item) for item in hard_skills[:4])
+
+    if preferred_domains:
+        # Append domain context so search engine surfaces industry-matching vacancies
+        for domain in preferred_domains[:2]:
+            normalized = _normalize_phrase(domain)
+            if normalized:
+                parts.append(normalized)
 
     compact = _dedupe([item for item in parts if item])
     short = _short_query_from_tokens(compact, max_words=7)
@@ -244,6 +262,7 @@ _METRIC_INT_FIELDS = (
     "seniority_penalty_applied",
     "archived_at_match_time",
     "title_boost_applied",
+    "domain_preference_boost_applied",
     "matcher_runs_total",
     "matcher_recall_count",
     "matcher_drop_listing_page",
@@ -302,6 +321,7 @@ def recommend_vacancies_for_resume(
         "seniority_penalty_applied": "seniority_penalty_applied",
         "archived_at_match_time": "archived_at_match_time",
         "title_boost_applied": "title_boost_applied",
+        "domain_preference_boost_applied": "domain_preference_boost_applied",
         "matcher_runs_total": "matcher_runs_total",
         "matcher_recall_count": "matcher_recall_count",
         "matcher_drop_listing_page": "matcher_drop_listing_page",
@@ -373,7 +393,14 @@ def recommend_vacancies_for_resume(
         db.add(user)
         db.commit()
 
-    query = _build_discovery_query(resume.analysis)
+    from app.services.matching_service import _resolve_user_preferences
+
+    prefs = _resolve_user_preferences(user, preference_overrides)
+    query = _build_discovery_query(
+        resume.analysis,
+        preferred_titles=prefs.get("preferred_titles") or None,
+        preferred_domains=prefs.get("preferred_domains") or None,
+    )
     aggregate_metrics = _empty_metrics()
     fetch_succeeded = False
     _cut_short = False

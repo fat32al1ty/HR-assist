@@ -50,9 +50,10 @@ class ResumeContext:
     resume_total_years: float | None
     leadership_preferred: bool
     preferences: dict[str, Any]
-    preferred_titles: list[str]
-    excluded_vacancy_ids: set[int]
-    rejected_skill_norms: set[str]
+    preferred_titles: list[str] = field(default_factory=list)
+    preferred_domains: list[str] = field(default_factory=list)
+    excluded_vacancy_ids: set[int] = field(default_factory=set)
+    rejected_skill_norms: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -107,6 +108,7 @@ class MatchingDiagnostics:
     drop_mmr_dedupe: int = 0
     seniority_penalty_applied: int = 0
     title_boost_applied: int = 0
+    domain_preference_boost_applied: int = 0
     custom: dict[str, int] = field(default_factory=dict)
 
     def export_to(self, metrics: dict[str, int] | None) -> None:
@@ -135,6 +137,7 @@ class MatchingDiagnostics:
         bump("seniority_penalty_applied", self.seniority_penalty_applied)
         bump("archived_at_match_time", self.drop_archived)
         bump("title_boost_applied", self.title_boost_applied)
+        bump("domain_preference_boost_applied", self.domain_preference_boost_applied)
         bump("matcher_recall_count", self.recall_count)
         bump("matcher_drop_listing_page", self.drop_listing_page)
         bump("matcher_drop_non_vacancy_page", self.drop_non_vacancy_page)

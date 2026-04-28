@@ -57,6 +57,7 @@ def update_preferences(
     relocation_mode: str | None = None,
     home_city: str | None = None,
     preferred_titles: list[str] | None = None,
+    preferred_domains: list[str] | None = None,
     clear_home_city: bool = False,
     expected_salary_min: int | None = None,
     expected_salary_max: int | None = None,
@@ -79,7 +80,11 @@ def update_preferences(
     elif clear_home_city:
         user.home_city = None
     if preferred_titles is not None:
+        # [] = clear, None = no change (sentinel pattern)
         user.preferred_titles = preferred_titles
+    if preferred_domains is not None:
+        # [] = clear, None = no change (sentinel pattern)
+        user.preferred_domains = preferred_domains
     if expected_salary_min is not None:
         user.expected_salary_min = expected_salary_min or None
     if expected_salary_max is not None:

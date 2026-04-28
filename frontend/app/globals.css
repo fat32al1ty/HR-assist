@@ -96,6 +96,42 @@
   --color-track-stretch-cta-border: oklch(0.80 0.10 68);                        /* CTA button border         */
   --color-track-stretch-cta-ink: oklch(0.40 0.12 68);                           /* CTA button text           */
 
+  /* ── Editable pills — roles & domains sidebar widget ─────────────────────
+     Two variants: auto (system-suggested, neutral) and pinned (user-confirmed,
+     brand-primary). Keep both at WCAG AA on --color-surface-muted backdrop.
+     ──────────────────────────────────────────────────────────────────────── */
+
+  /* auto pill — value came from resume analysis, passively suggested */
+  --color-pill-auto-bg:     oklch(0.94 0.008 240);   /* very faint blue-gray tint     */
+  --color-pill-auto-fg:     oklch(0.30 0.02  240);   /* deep ink, 9:1 on auto-bg      */
+  --color-pill-auto-border: oklch(0.80 0.018 240);   /* 1px outline, slightly cooler  */
+
+  /* pinned pill — user-confirmed preference, strong primary fill */
+  --color-pill-pinned-bg:     var(--color-accent);           /* cardinal red fill          */
+  --color-pill-pinned-fg:     var(--color-on-accent);        /* white text, 7.2:1          */
+  --color-pill-pinned-border: var(--color-accent);           /* hairline matches fill      */
+
+  /* add-button pill — dashed affordance, neutral, below pills */
+  --color-pill-add-border: oklch(0.72 0.018 240);    /* dashed 1px, muted cool-gray   */
+  --color-pill-add-fg:     var(--color-ink-secondary);
+
+  /* remove icon (×) */
+  --color-pill-remove-icon:       oklch(0.60 0.02 240);   /* resting: barely visible       */
+  --color-pill-remove-icon-hover: oklch(0.20 0.02 240);   /* hover: sharp, high contrast   */
+
+  /* combobox dropdown */
+  --color-combobox-suggestion-bg:       var(--color-surface-raised);
+  --color-combobox-suggestion-bg-hover: oklch(0.96 0.012 240);  /* cool-gray row highlight */
+  --color-combobox-border:              var(--color-border);
+  --color-combobox-shadow:              0 4px 16px color-mix(in oklch, var(--color-ink) 8%, transparent);
+
+  /* popular frequency badge inside suggestion rows */
+  --color-pill-popular-bg:  oklch(0.97 0.025 145);    /* muted green tint              */
+  --color-pill-popular-fg:  oklch(0.42 0.10  145);    /* deep green text               */
+
+  /* unsaved indicator dot next to group label */
+  --color-unsaved-indicator-fg: var(--color-accent);
+
   /* ── Strategy view tokens (Phase 5.2) ────────────────────────────────────
      Semantic tokens for /strategy page blocks. Intentionally separate from
      --color-track-* (which belong to vacancy-list sections in /).
@@ -243,6 +279,24 @@
   --color-strategy-gap-surface:       oklch(0.982 0.018 68);
   --color-strategy-gap-label:         oklch(0.46 0.11 68);
   --color-strategy-editor-surface:    oklch(0.995 0.008 80);
+
+  /* Editable pills — roles & domains sidebar widget */
+  --color-pill-auto-bg:               oklch(0.94 0.008 240);
+  --color-pill-auto-fg:               oklch(0.30 0.02  240);
+  --color-pill-auto-border:           oklch(0.80 0.018 240);
+  --color-pill-pinned-bg:             var(--primary);
+  --color-pill-pinned-fg:             var(--primary-foreground);
+  --color-pill-pinned-border:         var(--primary);
+  --color-pill-add-border:            oklch(0.72 0.018 240);
+  --color-pill-add-fg:                var(--muted-foreground);
+  --color-pill-remove-icon:           oklch(0.60 0.02 240);
+  --color-pill-remove-icon-hover:     oklch(0.20 0.02 240);
+  --color-combobox-suggestion-bg:     var(--card);
+  --color-combobox-suggestion-bg-hover: oklch(0.96 0.012 240);
+  --color-combobox-border:            var(--border);
+  --color-pill-popular-bg:            oklch(0.97 0.025 145);
+  --color-pill-popular-fg:            oklch(0.42 0.10  145);
+  --color-unsaved-indicator-fg:       var(--primary);
 }
 
 /* ── @layer base — prose + form defaults ─────────────────────────────────*/
@@ -415,6 +469,27 @@
   .animate-slide-up {
     animation: slide-up var(--duration-normal) var(--ease-out);
     overflow: hidden;
+  }
+
+  /* ── Pill enter / exit animations ──────────────────────────────────────── */
+  @keyframes pill-in {
+    from { opacity: 0; transform: scale(0.82); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes pill-out {
+    from { opacity: 1; transform: scale(1);    max-width: 200px; margin-right: 0; }
+    to   { opacity: 0; transform: scale(0.82); max-width: 0;     margin-right: -6px; }
+  }
+
+  .animate-pill-in {
+    animation: pill-in var(--duration-fast) var(--ease-out) both;
+  }
+
+  .animate-pill-out {
+    animation: pill-out var(--duration-fast) var(--ease-in-out) forwards;
+    overflow: hidden;
+    white-space: nowrap;
   }
 
   /* Utility to suppress anchor underline when overriding in JSX */

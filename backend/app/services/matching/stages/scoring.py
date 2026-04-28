@@ -33,6 +33,7 @@ class ScoringStage(BaseStage):
             TITLE_BOOST,
             TITLE_BOOST_SCORE_CAP,
             _build_vacancy_skill_set,
+            _domain_preference_boost,
             _hybrid_score,
             _overlap_score,
             _preferred_title_boost_score,
@@ -72,6 +73,10 @@ class ScoringStage(BaseStage):
                 hybrid = min(TITLE_BOOST_SCORE_CAP, hybrid + title_boost)
                 if title_boost >= TITLE_BOOST:
                     diag.title_boost_applied += 1
+            domain_boost = _domain_preference_boost(cand.payload, ctx.preferred_domains)
+            if domain_boost > 0.0:
+                hybrid = min(TITLE_BOOST_SCORE_CAP, hybrid + domain_boost)
+                diag.domain_preference_boost_applied += 1
             cand.lexical_score = overlap
             cand.hybrid_score = hybrid
             cand.annotations["leadership_hint"] = has_leadership_hint

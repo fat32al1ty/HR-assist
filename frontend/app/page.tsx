@@ -21,6 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/lib/session';
 import { type Resume, resumeDisplayName } from '@/types/resume';
+import PillsEditor from '@/components/preferences/PillsEditor';
 const MIN_PROGRESS_VISIBLE_MS = 1400;
 const RECOMMEND_TIMEOUT_MS = 360000;
 const LAST_JOB_ID_STORAGE_KEY = 'last_recommendation_job_id';
@@ -37,6 +38,7 @@ type UserPrefs = {
   relocation_mode: RelocationMode;
   home_city: string | null;
   preferred_titles: string[];
+  preferred_domains: string[];
   expected_salary_min: number | null;
   expected_salary_max: number | null;
   expected_salary_currency: string;
@@ -394,6 +396,10 @@ export default function DashboardPage() {
   const [warmupStatus, setWarmupStatus] = useState<WarmupStatusResponse | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [userPrefs, setUserPrefs] = useState<UserPrefs | null>(null);
+  const [localRoles, setLocalRoles] = useState<string[]>([]);
+  const [localDomains, setLocalDomains] = useState<string[]>([]);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsError, setPrefsError] = useState('');
   const [profileDraft, setProfileDraft] = useState<ProfileDraft | null>(null);
   const [profileConfirmed, setProfileConfirmed] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -633,6 +639,9 @@ export default function DashboardPage() {
     setLastMatchingQuery('');
     setLastSources([]);
     setUserPrefs(null);
+    setLocalRoles([]);
+    setLocalDomains([]);
+    setPrefsError('');
     setProfileDraft(null);
     setProfileConfirmed(false);
     setProfileMessage('');
@@ -922,15 +931,19 @@ export default function DashboardPage() {
   async function loadUserPrefs() {
     try {
       const data = await request<UserRead>('/api/users/me');
-      setUserPrefs({
+      const prefs: UserPrefs = {
         preferred_work_format: data.preferred_work_format,
         relocation_mode: data.relocation_mode,
         home_city: data.home_city,
         preferred_titles: data.preferred_titles,
+        preferred_domains: Array.isArray(data.preferred_domains) ? data.preferred_domains : [],
         expected_salary_min: data.expected_salary_min,
         expected_salary_max: data.expected_salary_max,
         expected_salary_currency: data.expected_salary_currency
-      });
+      };
+      setUserPrefs(prefs);
+      setLocalRoles(prefs.preferred_titles);
+      setLocalDomains(prefs.preferred_domains);
       // Sync is_admin + canonical user identity into context
       if (token) {
         setSession({
@@ -945,6 +958,39 @@ export default function DashboardPage() {
       }
     } catch {
       setUserPrefs(null);
+    }
+  }
+
+  async function savePrefsAndRefresh() {
+    setPrefsSaving(true);
+    setPrefsError('');
+    try {
+      const data = await request<UserRead>('/api/users/me/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          preferred_titles: localRoles,
+          preferred_domains: localDomains,
+        }),
+      });
+      const prefs: UserPrefs = {
+        preferred_work_format: data.preferred_work_format,
+        relocation_mode: data.relocation_mode,
+        home_city: data.home_city,
+        preferred_titles: data.preferred_titles,
+        preferred_domains: Array.isArray(data.preferred_domains) ? data.preferred_domains : [],
+        expected_salary_min: data.expected_salary_min,
+        expected_salary_max: data.expected_salary_max,
+        expected_salary_currency: data.expected_salary_currency,
+      };
+      setUserPrefs(prefs);
+      setLocalRoles(prefs.preferred_titles);
+      setLocalDomains(prefs.preferred_domains);
+      await refreshVacancyIndex();
+    } catch (error) {
+      setPrefsError(error instanceof Error ? error.message : 'Не удалось сохранить настройки');
+    } finally {
+      setPrefsSaving(false);
     }
   }
 
@@ -1794,6 +1840,123 @@ export default function DashboardPage() {
           <div className="workspace stagger-children">
             {/* ── Sidebar ─────────────────────────────────────────────── */}
             <aside className="flex flex-col gap-3.5 animate-fade-in">
+              {/* ── Role + Domain pills ───────────────────────────────── */}
+              {(() => {
+                const selectedResume = resumes.find((r) => r.id === selectedResumeId) ?? null;
+                const analysis = selectedResume?.analysis ?? null;
+                const autoRoles: string[] = analysis
+                  ? [
+                      ...(typeof analysis.target_role === 'string' && analysis.target_role ? [analysis.target_role] : []),
+                    ]
+                  : [];
+                const autoDomains: string[] = analysis ? asStringArray(analysis.domains) : [];
+                const savedRoles = userPrefs?.preferred_titles ?? [];
+                const savedDomains = userPrefs?.preferred_domains ?? [];
+                const prefsDirty =
+                  localRoles.join('\x00') !== savedRoles.join('\x00') ||
+                  localDomains.join('\x00') !== savedDomains.join('\x00');
+                return (
+                  <Card className="border-transparent shadow-none">
+                    <CardContent className="flex flex-col gap-4 pt-4">
+                      <PillsEditor
+                        label="Роли"
+                        values={localRoles}
+                        autoDetected={autoRoles}
+                        type="role"
+                        maxItems={5}
+                        isDirty={localRoles.join('\x00') !== savedRoles.join('\x00')}
+                        isSaving={prefsSaving}
+                        onChange={setLocalRoles}
+                        emptyHint="Загрузите резюме, чтобы система предложила роли"
+                        token={token}
+                      />
+                      <PillsEditor
+                        label="Домены"
+                        values={localDomains}
+                        autoDetected={autoDomains}
+                        type="domain"
+                        maxItems={3}
+                        isDirty={localDomains.join('\x00') !== savedDomains.join('\x00')}
+                        isSaving={prefsSaving}
+                        onChange={setLocalDomains}
+                        emptyHint="Загрузите резюме, чтобы система определила домены"
+                        token={token}
+                      />
+                      {prefsDirty && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            marginTop: 2,
+                          }}
+                        >
+                          <span
+                            aria-label="Несохранённые изменения"
+                            style={{
+                              display: 'inline-block',
+                              width: 7,
+                              height: 7,
+                              borderRadius: '50%',
+                              background: 'var(--color-unsaved-indicator-fg)',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontSize: 'var(--text-xs)',
+                              color: 'var(--color-ink-muted)',
+                            }}
+                          >
+                            Не сохранено
+                          </span>
+                        </div>
+                      )}
+                      {prefsError ? (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: 'var(--text-xs)',
+                            color: 'var(--color-danger)',
+                          }}
+                        >
+                          {prefsError}
+                        </p>
+                      ) : null}
+                      <Button
+                        type="button"
+                        disabled={!prefsDirty || prefsSaving}
+                        onClick={() => { void savePrefsAndRefresh(); }}
+                        className="w-full"
+                      >
+                        {prefsSaving ? 'Сохраняем…' : 'Сохранить и обновить подбор'}
+                      </Button>
+                      {prefsDirty && !prefsSaving && (
+                        <button
+                          type="button"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: 'var(--text-xs)',
+                            color: 'var(--color-ink-muted)',
+                            textAlign: 'center',
+                            padding: 0,
+                          }}
+                          onClick={() => {
+                            setLocalRoles(savedRoles);
+                            setLocalDomains(savedDomains);
+                            setPrefsError('');
+                          }}
+                        >
+                          Сбросить
+                        </button>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
               {/* Upload card */}
               <Card className="border-transparent shadow-none">
                 <CardHeader className="pb-3">

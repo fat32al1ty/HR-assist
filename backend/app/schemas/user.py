@@ -8,6 +8,8 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 HOME_CITY_MAX = 120
 JOB_TITLE_MAX = 100
 PREFERRED_TITLES_MAX = 10
+DOMAIN_MAX = 64
+PREFERRED_DOMAINS_MAX = 3
 
 WorkFormat = Literal["remote", "hybrid", "office", "any"]
 RelocationMode = Literal["home_only", "any_city"]
@@ -24,6 +26,7 @@ class UserRead(BaseModel):
     relocation_mode: RelocationMode
     home_city: str | None
     preferred_titles: list[str]
+    preferred_domains: list[str]
     expected_salary_min: int | None = None
     expected_salary_max: int | None = None
     expected_salary_currency: str = "RUB"
@@ -44,6 +47,7 @@ class UserPreferencesUpdate(BaseModel):
     relocation_mode: RelocationMode | None = None
     home_city: str | None = Field(default=None, max_length=HOME_CITY_MAX)
     preferred_titles: list[str] | None = Field(default=None, max_length=PREFERRED_TITLES_MAX)
+    preferred_domains: list[str] | None = Field(default=None, max_length=PREFERRED_DOMAINS_MAX)
     expected_salary_min: int | None = Field(default=None, ge=0, le=10_000_000)
     expected_salary_max: int | None = Field(default=None, ge=0, le=10_000_000)
     expected_salary_currency: str | None = Field(default=None, min_length=3, max_length=3)
@@ -61,6 +65,21 @@ class UserPreferencesUpdate(BaseModel):
             if len(title) > JOB_TITLE_MAX:
                 raise ValueError(f"title longer than {JOB_TITLE_MAX} characters")
             cleaned.append(title)
+        return cleaned
+
+    @field_validator("preferred_domains")
+    @classmethod
+    def _validate_domains(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        cleaned: list[str] = []
+        for raw in value:
+            domain = raw.strip()
+            if not domain:
+                continue
+            if len(domain) > DOMAIN_MAX:
+                raise ValueError(f"domain longer than {DOMAIN_MAX} characters")
+            cleaned.append(domain)
         return cleaned
 
     @field_validator("home_city")

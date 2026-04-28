@@ -3,7 +3,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.user import HOME_CITY_MAX, JOB_TITLE_MAX, PREFERRED_TITLES_MAX
+from app.schemas.user import (
+    DOMAIN_MAX,
+    HOME_CITY_MAX,
+    JOB_TITLE_MAX,
+    PREFERRED_DOMAINS_MAX,
+    PREFERRED_TITLES_MAX,
+)
 
 
 class VacancyDiscoverRequest(BaseModel):
@@ -67,6 +73,7 @@ class PreferenceOverrides(BaseModel):
     relocation_mode: Literal["home_only", "any_city"] | None = None
     home_city: str | None = Field(default=None, max_length=HOME_CITY_MAX)
     preferred_titles: list[str] | None = Field(default=None, max_length=PREFERRED_TITLES_MAX)
+    preferred_domains: list[str] | None = Field(default=None, max_length=PREFERRED_DOMAINS_MAX)
 
     @field_validator("preferred_titles")
     @classmethod
@@ -81,6 +88,21 @@ class PreferenceOverrides(BaseModel):
             if len(title) > JOB_TITLE_MAX:
                 raise ValueError(f"title longer than {JOB_TITLE_MAX} characters")
             cleaned.append(title)
+        return cleaned
+
+    @field_validator("preferred_domains")
+    @classmethod
+    def _validate_domains(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        cleaned: list[str] = []
+        for raw in value:
+            domain = raw.strip()
+            if not domain:
+                continue
+            if len(domain) > DOMAIN_MAX:
+                raise ValueError(f"domain longer than {DOMAIN_MAX} characters")
+            cleaned.append(domain)
         return cleaned
 
     @field_validator("home_city")

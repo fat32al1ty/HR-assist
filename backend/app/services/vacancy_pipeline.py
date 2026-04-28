@@ -76,6 +76,7 @@ class VacancyDiscoveryMetrics:
     seniority_penalty_applied: int = 0
     archived_at_match_time: int = 0
     title_boost_applied: int = 0
+    domain_preference_boost_applied: int = 0
     matcher_runs_total: int = 0
     matcher_recall_count: int = 0
     matcher_drop_listing_page: int = 0
