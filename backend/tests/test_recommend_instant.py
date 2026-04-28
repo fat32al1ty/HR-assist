@@ -5,6 +5,8 @@ Behaviour under test:
   T2  cold index  → 200, prefetch_empty=True, matches=[]
   T3  bad resume  → 404 for nonexistent and for another user's resume
   T4  no HH/Brave → discover_and_index_vacancies is NOT called by instant
+  T5  persistence → instant writes a completed recommendation_jobs row, so
+                    GET /recommend/latest returns the same matches/query.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from fastapi.testclient import TestClient
 from app.core.security import create_access_token, hash_password
 from app.db.session import SessionLocal
 from app.main import app
+from app.models.recommendation_job import RecommendationJob
 from app.models.resume import Resume
 from app.models.user import User
 from app.models.user_vacancy_feedback import UserVacancyFeedback
@@ -280,6 +283,119 @@ class InstantEndpointNoHHBraveTest(unittest.TestCase):
             )
 
         self.assertEqual(resp.status_code, 200, resp.text)
+
+
+class InstantEndpointPersistsSnapshotTest(unittest.TestCase):
+    """T5: instant writes a completed job so refresh restores the same matches.
+
+    Regression guard for the v0.18.0 bug where Stage 1 instant matches were
+    ephemeral, so refresh + restoreRecommendationState resurrected the worse
+    Stage 2 deep_scan snapshot and the user's high-quality view disappeared.
+    """
+
+    def setUp(self) -> None:
+        self.db = SessionLocal()
+        self.client = TestClient(app)
+        suffix = uuid.uuid4().hex[:10]
+        self.user = _make_user(self.db, suffix)
+        self.resume = _make_resume(self.db, self.user.id, suffix)
+        self.headers = _auth_header(self.user.email)
+
+    def tearDown(self) -> None:
+        self.db.execute(
+            RecommendationJob.__table__.delete().where(
+                RecommendationJob.user_id == self.user.id
+            )
+        )
+        self.db.execute(
+            UserVacancyFeedback.__table__.delete().where(
+                UserVacancyFeedback.user_id == self.user.id
+            )
+        )
+        self.db.execute(Resume.__table__.delete().where(Resume.id == self.resume.id))
+        self.db.execute(User.__table__.delete().where(User.id == self.user.id))
+        self.db.commit()
+        self.db.close()
+
+    @patch("app.services.vacancy_recommendation.match_vacancies_for_resume")
+    @patch("app.services.vacancy_recommendation.discover_and_index_vacancies")
+    def test_latest_returns_same_matches_as_instant_response(
+        self, mock_discover, mock_match
+    ) -> None:
+        mock_match.return_value = [
+            {
+                "vacancy_id": 7,
+                "title": "Senior Python Engineer",
+                "source_url": "https://hh.ru/vacancy/7",
+                "company": "PersistCo",
+                "location": "Moscow",
+                "similarity_score": 0.91,
+                "profile": {},
+                "tier": "strong",
+                "track": "match",
+                "track_reason": None,
+            },
+            {
+                "vacancy_id": 8,
+                "title": "Backend Developer",
+                "source_url": "https://hh.ru/vacancy/8",
+                "company": "PersistCo",
+                "location": "Remote",
+                "similarity_score": 0.78,
+                "profile": {},
+                "tier": "good",
+                "track": "match",
+                "track_reason": None,
+            },
+        ]
+        mock_discover.return_value = SimpleNamespace(metrics=VacancyDiscoveryMetrics())
+
+        instant_resp = self.client.post(
+            _INSTANT_URL.format(resume_id=self.resume.id),
+            json=_BASIC_BODY,
+            headers=self.headers,
+        )
+        self.assertEqual(instant_resp.status_code, 200, instant_resp.text)
+        instant_body = instant_resp.json()
+        self.assertEqual(len(instant_body["matches"]), 2)
+
+        latest_resp = self.client.get(
+            "/api/vacancies/recommend/latest",
+            headers=self.headers,
+        )
+        self.assertEqual(latest_resp.status_code, 200, latest_resp.text)
+        latest_body = latest_resp.json()
+
+        self.assertEqual(latest_body["status"], "completed")
+        self.assertEqual(latest_body["query"], instant_body["query"])
+        instant_ids = [m["vacancy_id"] for m in instant_body["matches"]]
+        latest_ids = [m["vacancy_id"] for m in latest_body["matches"]]
+        self.assertEqual(latest_ids, instant_ids)
+
+    @patch("app.services.vacancy_recommendation.match_vacancies_for_resume")
+    @patch("app.services.vacancy_recommendation.discover_and_index_vacancies")
+    def test_instant_persists_even_when_matches_are_empty(
+        self, mock_discover, mock_match
+    ) -> None:
+        # Cold-index path also writes a snapshot — otherwise refresh on a
+        # cold session resurrects an older deep_scan job and confuses the UI.
+        mock_match.return_value = []
+        mock_discover.return_value = SimpleNamespace(metrics=VacancyDiscoveryMetrics())
+
+        self.client.post(
+            _INSTANT_URL.format(resume_id=self.resume.id),
+            json=_BASIC_BODY,
+            headers=self.headers,
+        )
+
+        latest_resp = self.client.get(
+            "/api/vacancies/recommend/latest",
+            headers=self.headers,
+        )
+        self.assertEqual(latest_resp.status_code, 200, latest_resp.text)
+        latest_body = latest_resp.json()
+        self.assertEqual(latest_body["status"], "completed")
+        self.assertEqual(latest_body["matches"], [])
 
 
 if __name__ == "__main__":

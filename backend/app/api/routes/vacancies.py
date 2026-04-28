@@ -1,3 +1,5 @@
+from dataclasses import asdict
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -40,6 +42,7 @@ from app.services.recommendation_jobs import (
     cancel_job_for_user,
     get_job_snapshot_for_user,
     get_latest_job_snapshot_for_user,
+    record_instant_recommendation_snapshot,
     start_recommendation_job,
 )
 from app.services.user_preference_profile_pipeline import recompute_user_preference_profile
@@ -190,6 +193,18 @@ def recommend_vacancies_instant(
     # to zero, `metrics.fetched` is still > 0 — flag stays False and the
     # frontend renders the standard "no results" state instead of skeleton.
     prefetch_empty = len(matches) == 0 and metrics.fetched == 0 and metrics.indexed == 0
+    # Persist a completed-status snapshot so /recommend/latest can return the
+    # same matches after a page refresh. Without this, refresh would only see
+    # the last deep_scan job and regress a high-quality instant result.
+    record_instant_recommendation_snapshot(
+        user_id=current_user.id,
+        resume_id=resume_id,
+        request_payload=payload.model_dump(),
+        query=query,
+        metrics=asdict(metrics),
+        matches=matches,
+        openai_usage=usage,
+    )
     return VacancyRecommendResponse(
         query=query,
         indexed=metrics.indexed,

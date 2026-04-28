@@ -1,6 +1,6 @@
 # HR Assist — Roadmap
 
-**Статус (2026-04-28):** IT-MVP закрыт релизом `v0.14.0`, шлифовка UX подбора в `v0.15.0`, явное управление ролями/доменами в `v0.16.0`, отказ от auto-pin + multi-facet expansion + feedback loop в `v0.17.0`. Дальше — `v1.0.0` (Phase 5.3, domain expansion), запускается только после подтверждения PMF в IT.
+**Статус (2026-04-28):** IT-MVP закрыт релизом `v0.14.0`, шлифовка UX подбора в `v0.15.0`, явное управление ролями/доменами в `v0.16.0`, отказ от auto-pin + multi-facet expansion + feedback loop в `v0.17.0`, дроп `/audit` в `v0.18.0`. Phase 6 (search architecture rework) — стартовала с `v0.19.0` (instant-snapshot persistence). Дальше — `v0.20-v0.22` по плану `.claude/skills/product-roadmap/phase-6-search-architecture-rework.md`.
 
 Полный план и принципы — в [`.claude/skills/product-roadmap/SKILL.md`](../.claude/skills/product-roadmap/SKILL.md).
 
@@ -14,6 +14,9 @@ HR Assist — AI-ассистент для **соискателя** в IT. Не 
 - **AI-агрегаторы уровня getmatch** — умный ранжир поверх нескольких источников.
 
 ## Последние релизы
+
+### `v0.19.0` — Persistence fix для instant-результатов (2026-04-28)
+Phase 6, шаг 1. Кнопка «Подбор» возвращает Stage 1 instant-матчи мгновенно, но они не персистились — refresh страницы поднимал `restoreRecommendationState` → `/recommend/latest` → возвращал последний deep_scan job, и хороший instant-результат заменялся худшим Stage 2. Фикс: instant-эндпоинт после успешного ответа пишет в `recommendation_jobs` строку со `status='completed'` через новый helper `record_instant_recommendation_snapshot` (sync, без воркера). Stage 1 и Stage 2 могут гонять — побеждает последний-завершённый. Никакой миграции (используем существующий status path), полностью совместимо с v0.18. Eval: 2 новых теста (refresh-after-instant возвращает те же matches; пустой instant тоже персистится). Подготавливает почву для v0.20 (полный decouple deep_scan от кнопки поиска).
 
 ### `v0.18.0` — Drop `/audit` (2026-04-28)
 Страница аудита резюме (Phase 5.0/5.0.1) удалена. Причина: на не-engineering резюме фича выдавала ложные сигналы — Senior PM с 13 годами видел медианную ЗП 170к (engineering global median fallback), «топ-N навыков рынка» содержал Kafka/Kubernetes для PM-роли, а онбординг-вопросы (которые ДОЛЖНЫ были триггериться у PM) фронт не отрисовывал. Лучше убрать чем имитировать работу. Удалены: route `/audit` + компоненты, `resume_audit` сервис + кеш, `onboarding_questions` + YAML, admin-эндпоинты, eval-фикстуры. **Оставлены** (используются другими фичами): `salary_predictor`/`salary_baseline`/`track_classifier`/`llm_cost_accounting`. **БД**: таблицы `resume_audits` + `resume_clarifications` остаются (no destructive migration), орфаны.

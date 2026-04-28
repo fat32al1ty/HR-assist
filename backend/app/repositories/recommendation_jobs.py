@@ -29,6 +29,40 @@ def create_recommendation_job(
     return job
 
 
+def create_completed_recommendation_job(
+    db: Session,
+    *,
+    job_id: str,
+    user_id: int,
+    resume_id: int,
+    request_payload: dict | None,
+    query: str,
+    metrics: dict,
+    matches: list[dict],
+    openai_usage: dict | None,
+) -> RecommendationJob:
+    now = datetime.now(UTC)
+    job = RecommendationJob(
+        id=job_id,
+        user_id=user_id,
+        resume_id=resume_id,
+        status="completed",
+        stage="done",
+        progress=100,
+        request_payload=request_payload,
+        query=query,
+        metrics=metrics,
+        matches=matches,
+        openai_usage=openai_usage,
+        started_at=now,
+        finished_at=now,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 def get_recommendation_job_for_user(
     db: Session, *, job_id: str, user_id: int
 ) -> RecommendationJob | None:

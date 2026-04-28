@@ -13,6 +13,7 @@ from app.db.session import SessionLocal
 from app.models.recommendation_job import RecommendationJob
 from app.repositories.recommendation_jobs import (
     complete_job,
+    create_completed_recommendation_job,
     create_recommendation_job,
     fail_job,
     get_recommendation_job_for_user,
@@ -52,6 +53,43 @@ class RecommendationJobCancelled(RuntimeError):
     The worker catches this and transitions the job to failed with the
     Russian user-facing message so the frontend can show a friendly label.
     """
+
+
+def record_instant_recommendation_snapshot(
+    *,
+    user_id: int,
+    resume_id: int,
+    request_payload: dict | None,
+    query: str,
+    metrics: dict,
+    matches: list[dict],
+    openai_usage: dict | None,
+) -> str:
+    """Persist an instant-search result as a completed recommendation_job row.
+
+    Without this, the instant endpoint's matches were ephemeral — refresh
+    triggered restoreRecommendationState which only saw the last deep-scan
+    snapshot, regressing a high-quality instant result back to the worse
+    deep-scan one. Writing instant results here makes them survive refresh
+    and lets /recommend/latest return what the user just saw.
+    """
+    job_id = str(uuid4())
+    db = SessionLocal()
+    try:
+        create_completed_recommendation_job(
+            db,
+            job_id=job_id,
+            user_id=user_id,
+            resume_id=resume_id,
+            request_payload=request_payload,
+            query=query,
+            metrics=metrics,
+            matches=matches,
+            openai_usage=openai_usage,
+        )
+    finally:
+        db.close()
+    return job_id
 
 
 def start_recommendation_job(
