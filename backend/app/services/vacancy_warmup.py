@@ -15,6 +15,9 @@ from app.models.vacancy import Vacancy
 from app.repositories.recommendation_jobs import complete_job, fail_job, mark_job_running
 from app.services.openai_usage import system_budget_scope
 from app.services.recommendation_jobs import sweep_stale_running_jobs
+from app.services.segment_keys import (
+    query_from_resume_analysis as _query_from_resume_analysis,
+)
 from app.services.vacancy_pipeline import discover_and_index_vacancies, discover_with_429_backoff
 from app.services.vacancy_profile_backfill import backfill_missing_vacancy_profiles
 
@@ -38,18 +41,6 @@ _state: dict[str, object] = {
 }
 
 
-def _as_strings(value: object) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    result: list[str] = []
-    for item in value:
-        if isinstance(item, str):
-            text = item.strip()
-            if text:
-                result.append(text)
-    return result
-
-
 def _dedupe(items: list[str]) -> list[str]:
     seen: set[str] = set()
     output: list[str] = []
@@ -60,29 +51,6 @@ def _dedupe(items: list[str]) -> list[str]:
         seen.add(key)
         output.append(item.strip())
     return output
-
-
-def _query_from_resume_analysis(analysis: dict | None) -> str | None:
-    if not isinstance(analysis, dict):
-        return None
-
-    role = analysis.get("target_role")
-    specialization = analysis.get("specialization")
-    keywords = _as_strings(analysis.get("matching_keywords"))
-    hard_skills = _as_strings(analysis.get("hard_skills"))
-
-    parts: list[str] = []
-    if isinstance(role, str) and role.strip():
-        parts.append(role.strip())
-    if isinstance(specialization, str) and specialization.strip():
-        parts.append(specialization.strip())
-    parts.extend(keywords[:4])
-    parts.extend(hard_skills[:4])
-
-    compact = _dedupe(parts)
-    if not compact:
-        return None
-    return " ".join(compact[:10])
 
 
 def _collect_warmup_queries() -> list[str]:
@@ -340,8 +308,12 @@ def start_vacancy_warmup_worker() -> None:
                 )
         finally:
             startup_db.close()
-    except Exception:
-        pass
+    except Exception as recovery_err:
+        # Don't block worker startup on a stat error — but make the broken
+        # DB connection visible. Silent swallow here was making it hard to
+        # tell whether "0 segment_warmup_recovery" log line meant "no pending
+        # jobs" or "DB unreachable at startup".
+        logger.warning("segment_warmup_recovery_lookup_failed error=%s", recovery_err)
 
     _worker_thread = Thread(target=_worker_loop, daemon=True, name="vacancy-warmup-worker")
     _worker_thread.start()

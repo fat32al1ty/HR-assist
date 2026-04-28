@@ -47,11 +47,10 @@ from app.services.recommendation_jobs import (
     start_recommendation_job,
     start_segment_warmup_job,
 )
-from app.services.segment_keys import segment_key_from_analysis
+from app.services.segment_keys import query_from_resume_analysis, segment_key_from_analysis
 from app.services.user_preference_profile_pipeline import recompute_user_preference_profile
 from app.services.vacancy_pipeline import discover_and_index_vacancies
 from app.services.vacancy_recommendation import recommend_vacancies_for_resume
-from app.services.vacancy_warmup import _query_from_resume_analysis
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -229,7 +228,7 @@ def recommend_vacancies_instant(
                 else None
             )
             seg_query = (
-                _query_from_resume_analysis(resume_obj.analysis) if resume_obj is not None else None
+                query_from_resume_analysis(resume_obj.analysis) if resume_obj is not None else None
             ) or query
             if seg_key:
                 start_segment_warmup_job(
@@ -238,6 +237,16 @@ def recommend_vacancies_instant(
                     query=seg_query,
                 )
                 segment_warming = True
+            else:
+                # Without role_family/seniority/domains we can't dedup or
+                # serve a meaningful crawl. The frontend falls back to the
+                # bland skeleton; log so we can spot resumes that need a
+                # better analysis pass.
+                logger.info(
+                    "segment_warmup_skipped_no_seg_key user_id=%s resume_id=%s",
+                    current_user.id,
+                    resume_id,
+                )
         except Exception:
             logger.exception(
                 "segment_warmup_enqueue_failed user_id=%s resume_id=%s",

@@ -127,6 +127,13 @@ def start_segment_warmup_job(
         try:
             db.commit()
         except IntegrityError:
+            # Concurrent enqueue collided on the unique partial index. Re-read
+            # the surviving queued/running row and return its id. If we
+            # rolled back AND nothing survived the race, that means the
+            # partial index didn't trip — most likely a non-dedup IntegrityError
+            # (FK violation on notify_user_id, NULL job_type, etc.). Surface
+            # that as an exception instead of silently returning a phantom uuid
+            # the caller would later look up and find missing.
             db.rollback()
             fallback = db.scalar(
                 select(RecommendationJob).where(
@@ -134,7 +141,9 @@ def start_segment_warmup_job(
                     RecommendationJob.status.in_(["queued", "running"]),
                 )
             )
-            return fallback.id if fallback is not None else job_id
+            if fallback is None:
+                raise
+            return fallback.id
         db.refresh(job)
         return job.id
     finally:
@@ -228,9 +237,16 @@ def _force_fail_if_timed_out(db, job: RecommendationJob) -> RecommendationJob:
 
 
 def sweep_stale_running_jobs() -> int:
-    """Mark all running jobs that exceeded the timeout as failed.
+    """Mark all running deep_scan jobs that exceeded the timeout as failed.
 
     Called once per warmup cycle. Returns the count of jobs swept.
+
+    Excludes `job_type='segment_warmup'` because those jobs run on the
+    background warmup worker and legitimately take longer than the
+    user-facing `recommendation_job_timeout_seconds` (60 vacancies × LLM
+    analyze can run several minutes). Sweeping them under that timeout
+    would silently fail in-flight crawls and leave the daily counter
+    incremented but the index empty.
     """
     db = SessionLocal()
     try:
@@ -243,6 +259,7 @@ def sweep_stale_running_jobs() -> int:
             .where(RecommendationJob.status == "running")
             .where(RecommendationJob.started_at.is_not(None))
             .where(RecommendationJob.started_at < cutoff)
+            .where(RecommendationJob.job_type != "segment_warmup")
         ).all()
         swept = 0
         for job in stale:

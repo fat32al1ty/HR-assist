@@ -60,9 +60,7 @@ class DeriveSegmentKeyTest(unittest.TestCase):
         k1 = derive_segment_key(
             role_family="backend", seniority="mid", domains=["a", "b", "c", "d"]
         )
-        k2 = derive_segment_key(
-            role_family="backend", seniority="mid", domains=["a", "b", "c"]
-        )
+        k2 = derive_segment_key(role_family="backend", seniority="mid", domains=["a", "b", "c"])
         # sorted top-3 of [a,b,c,d] = [a,b,c], matches [a,b,c]
         self.assertEqual(k1, k2)
 
@@ -110,7 +108,8 @@ def _make_resume(db, user_id: int, analysis: dict | None = None) -> Resume:
         original_filename="cv.pdf",
         content_type="application/pdf",
         status="completed",
-        analysis=analysis or {
+        analysis=analysis
+        or {
             "role_family": "backend",
             "target_role": "Backend Engineer",
             "seniority": "senior",
@@ -320,3 +319,113 @@ class WorkerRecoveryTest(unittest.TestCase):
                 startup_db.close()
         except Exception as e:
             self.fail(f"Recovery query raised: {e}")
+
+
+# ---------------------------------------------------------------------------
+# T6': sweep_stale_running_jobs leaves segment_warmup jobs alone
+# ---------------------------------------------------------------------------
+
+
+class SweepDoesNotKillSegmentWarmupTest(unittest.TestCase):
+    """Regression guard for reviewer B2: a long-running segment-warmup job
+    (legitimate HH crawl + LLM analyze across 60 vacancies) MUST NOT be
+    swept by the deep_scan timeout. v0.21 hardening filters by job_type.
+    """
+
+    def test_sweep_skips_segment_warmup_jobs(self):
+        from datetime import UTC, datetime, timedelta
+
+        from app.core.config import settings as app_settings
+        from app.services.recommendation_jobs import sweep_stale_running_jobs
+
+        db = SessionLocal()
+        try:
+            user = _make_user(db)
+            resume = _make_resume(db, user.id)
+
+            # Build a "running for hours" segment_warmup row directly so the
+            # sweep cutoff guarantees it would have been swept if not for
+            # the job_type filter.
+            stale_job = RecommendationJob(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                resume_id=resume.id,
+                job_type="segment_warmup",
+                status="running",
+                stage="collecting",
+                progress=10,
+                segment_key="staletest" + uuid.uuid4().hex[:4],
+                notify_user_id=user.id,
+                started_at=datetime.now(UTC)
+                - timedelta(seconds=app_settings.recommendation_job_timeout_seconds + 600),
+            )
+            db.add(stale_job)
+            db.commit()
+            stale_id = stale_job.id
+        finally:
+            db.close()
+
+        sweep_stale_running_jobs()
+
+        verify_db = SessionLocal()
+        try:
+            row = verify_db.scalar(
+                select(RecommendationJob).where(RecommendationJob.id == stale_id)
+            )
+            self.assertIsNotNone(row)
+            self.assertEqual(
+                row.status,
+                "running",
+                "segment_warmup job was incorrectly swept by deep_scan timeout",
+            )
+            verify_db.delete(row)
+            verify_db.commit()
+        finally:
+            verify_db.close()
+
+
+# ---------------------------------------------------------------------------
+# T6: system_budget_scope isolates segment-warmup spend from user budgets
+# ---------------------------------------------------------------------------
+
+
+class SystemBudgetScopeIsolationTest(unittest.TestCase):
+    """T6: a segment-warmup crawl must NOT increment any user's daily spend.
+
+    Regression guard for v0.21 reviewer warning W4. Without this, a busy
+    background worker could deplete every user's daily budget pretending to
+    spend on their behalf.
+    """
+
+    def test_system_budget_scope_does_not_persist_user_daily_spend(self):
+        from app.repositories import user_daily_spend as user_spend_module
+        from app.services.openai_usage import system_budget_scope
+
+        db = SessionLocal()
+        try:
+            user = _make_user(db)
+            user_id = user.id
+        finally:
+            db.close()
+
+        # Patch the increment function so we can detect any persist attempt.
+        # If system_budget_scope correctly leaves user_id=None, this stays
+        # uncalled regardless of how much spend is recorded.
+        with patch.object(
+            user_spend_module, "increment_daily_spend", autospec=True
+        ) as increment_mock:
+            with system_budget_scope(budget_usd=0.20, budget_enforced=True) as tracker:
+                tracker.add_responses_usage(input_tokens=1000, output_tokens=500)
+                tracker.add_embeddings_usage(input_tokens=2000)
+
+        increment_mock.assert_not_called()
+        self.assertGreater(tracker.snapshot().estimated_cost_usd, 0)
+        self.assertIsNone(tracker.user_id)
+
+        # Cleanup
+        cleanup_db = SessionLocal()
+        try:
+            cleanup_db.execute(User.__table__.delete().where(User.id == user_id))
+            cleanup_db.commit()
+        finally:
+            cleanup_db.close()
