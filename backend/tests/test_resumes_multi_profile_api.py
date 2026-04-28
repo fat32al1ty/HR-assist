@@ -64,13 +64,19 @@ class MultiProfileApiTest(unittest.TestCase):
             content_type="application/pdf",
             storage_path=f"/tmp/ic-{suffix}.pdf",
         )
-        self.resume_b = create_resume_record(
-            self.db,
+        # Insert resume_b directly to bypass the upload cap — these tests
+        # exercise activate/patch API handlers, not the upload limit.
+        self.resume_b = Resume(
             user_id=self.user.id,
             original_filename="mgmt.pdf",
             content_type="application/pdf",
             storage_path=f"/tmp/mgmt-{suffix}.pdf",
+            status="uploaded",
+            is_active=False,
         )
+        self.db.add(self.resume_b)
+        self.db.commit()
+        self.db.refresh(self.resume_b)
 
     def tearDown(self) -> None:
         self.db.execute(delete(Resume).where(Resume.user_id == self.user.id))

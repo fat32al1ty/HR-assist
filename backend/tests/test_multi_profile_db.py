@@ -59,65 +59,33 @@ class ResumeLifecycleTest(unittest.TestCase):
         self.assertIsNotNone(active)
         self.assertEqual(active.id, resume.id)
 
-    def test_second_resume_starts_inactive(self) -> None:
-        first = create_resume_record(
-            self.db,
-            user_id=self.user.id,
-            original_filename="r1.pdf",
-            content_type="application/pdf",
-            storage_path="/tmp/r1.pdf",
-        )
-        second = create_resume_record(
-            self.db,
-            user_id=self.user.id,
-            original_filename="r2.pdf",
-            content_type="application/pdf",
-            storage_path="/tmp/r2.pdf",
-        )
-        self.assertTrue(first.is_active)
-        self.assertFalse(second.is_active)
-
-    def test_third_resume_is_rejected(self) -> None:
+    def test_second_resume_is_rejected(self) -> None:
         create_resume_record(
             self.db,
             user_id=self.user.id,
             original_filename="r1.pdf",
             content_type="application/pdf",
             storage_path="/tmp/r1.pdf",
-        )
-        create_resume_record(
-            self.db,
-            user_id=self.user.id,
-            original_filename="r2.pdf",
-            content_type="application/pdf",
-            storage_path="/tmp/r2.pdf",
         )
         with self.assertRaises(ResumeLimitExceeded) as ctx:
             create_resume_record(
                 self.db,
                 user_id=self.user.id,
-                original_filename="r3.pdf",
+                original_filename="r2.pdf",
                 content_type="application/pdf",
-                storage_path="/tmp/r3.pdf",
+                storage_path="/tmp/r2.pdf",
             )
         self.assertEqual(ctx.exception.limit, RESUME_LIMIT_PER_USER)
 
-    def test_activate_flips_active_flag_atomically(self) -> None:
-        first = create_resume_record(
+    def test_activate_is_idempotent_for_only_resume(self) -> None:
+        resume = create_resume_record(
             self.db,
             user_id=self.user.id,
             original_filename="r1.pdf",
             content_type="application/pdf",
             storage_path="/tmp/r1.pdf",
         )
-        second = create_resume_record(
-            self.db,
-            user_id=self.user.id,
-            original_filename="r2.pdf",
-            content_type="application/pdf",
-            storage_path="/tmp/r2.pdf",
-        )
-        activate_resume(self.db, resume=second)
+        activate_resume(self.db, resume=resume)
 
         active_count = int(
             self.db.scalar(
@@ -128,32 +96,22 @@ class ResumeLifecycleTest(unittest.TestCase):
         )
         self.assertEqual(active_count, 1)
 
-        self.db.refresh(first)
-        self.db.refresh(second)
-        self.assertFalse(first.is_active)
-        self.assertTrue(second.is_active)
+        self.db.refresh(resume)
+        self.assertTrue(resume.is_active)
 
-    def test_deleting_active_promotes_next_most_recent(self) -> None:
-        first = create_resume_record(
+    def test_deleting_only_resume_leaves_no_active(self) -> None:
+        resume = create_resume_record(
             self.db,
             user_id=self.user.id,
             original_filename="r1.pdf",
             content_type="application/pdf",
             storage_path="/tmp/r1.pdf",
         )
-        second = create_resume_record(
-            self.db,
-            user_id=self.user.id,
-            original_filename="r2.pdf",
-            content_type="application/pdf",
-            storage_path="/tmp/r2.pdf",
-        )
-        # first is active (created first -> was the only one)
-        self.assertTrue(first.is_active)
-        delete_resume(self.db, first)
+        self.assertTrue(resume.is_active)
+        delete_resume(self.db, resume)
 
-        self.db.refresh(second)
-        self.assertTrue(second.is_active)
+        active = get_active_resume_for_user(self.db, user_id=self.user.id)
+        self.assertIsNone(active)
 
 
 class FeedbackScopedToResumeTest(unittest.TestCase):
@@ -177,13 +135,19 @@ class FeedbackScopedToResumeTest(unittest.TestCase):
             content_type="application/pdf",
             storage_path=f"/tmp/ic-{suffix}.pdf",
         )
-        self.resume_b = create_resume_record(
-            self.db,
+        # Insert resume_b directly to bypass the upload cap (this test validates
+        # the FK / feedback-scoping schema, not the upload limit).
+        self.resume_b = Resume(
             user_id=self.user.id,
             original_filename="mgmt.pdf",
             content_type="application/pdf",
             storage_path=f"/tmp/mgmt-{suffix}.pdf",
+            status="uploaded",
+            is_active=False,
         )
+        self.db.add(self.resume_b)
+        self.db.commit()
+        self.db.refresh(self.resume_b)
         self.vacancy = Vacancy(
             source="hh_api",
             source_url=f"https://hh.ru/vacancy/{uuid.uuid4().int % 1000000}",

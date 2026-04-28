@@ -1,12 +1,14 @@
 import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.models.user_vacancy_seen import UserVacancySeen
 from app.repositories.resume_user_skills import (
     count_recent_added_curations,
     delete_curated_skill,
@@ -14,7 +16,6 @@ from app.repositories.resume_user_skills import (
     upsert_curated_skill,
 )
 from app.repositories.resumes import (
-    ResumeLimitExceeded,
     activate_resume,
     count_resumes_for_user,
     delete_resume,
@@ -81,16 +82,31 @@ async def upload_resume(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File is too large"
         )
 
-    try:
-        return process_resume_upload(db, user_id=current_user.id, upload=file, content=content)
-    except ResumeLimitExceeded as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error": "resume_limit_exceeded",
-                "limit": error.limit,
-            },
-        ) from error
+    # Uploading a new resume replaces the existing one (cap = 1).
+    # Delete the current resume before creating, so the user always ends
+    # in a clean state rather than hitting a 409.
+    existing_resumes = list_resumes_for_user(db, user_id=current_user.id)
+    for existing in existing_resumes:
+        try:
+            delete_resume_profile_vector(resume_id=existing.id)
+            delete_resume(db, existing)
+            if count_resumes_for_user(db, user_id=current_user.id) == 0:
+                current_user.preferred_titles = []
+                current_user.preferred_domains = []
+                db.add(current_user)
+                db.execute(
+                    delete(UserVacancySeen).where(UserVacancySeen.user_id == current_user.id)
+                )
+                db.commit()
+        except Exception as del_err:
+            logger.warning(
+                "resume_replace_delete_failed user_id=%s resume_id=%s error=%s",
+                current_user.id,
+                existing.id,
+                del_err,
+            )
+
+    return process_resume_upload(db, user_id=current_user.id, upload=file, content=content)
 
 
 @router.get("/active", response_model=ResumeRead)
@@ -155,13 +171,14 @@ def remove_resume(
     delete_resume_profile_vector(resume_id=resume.id)
     delete_resume(db, resume)
 
-    # If this was the user's last resume, clear preferred_titles/domains too —
-    # those values were originally derived from resume context, so leaving
-    # them would re-poison the next resume's matching with stale tags.
+    # If this was the user's last resume, clear preferred_titles/domains and
+    # user_vacancy_seen — all were derived from resume context, so leaving
+    # them would re-poison the next resume's matching with stale data.
     if count_resumes_for_user(db, user_id=current_user.id) == 0:
         current_user.preferred_titles = []
         current_user.preferred_domains = []
         db.add(current_user)
+        db.execute(delete(UserVacancySeen).where(UserVacancySeen.user_id == current_user.id))
         db.commit()
 
 

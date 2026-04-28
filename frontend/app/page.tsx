@@ -417,6 +417,10 @@ export default function DashboardPage() {
   const [deepScanRunning, setDeepScanRunning] = useState(false);
   const [showPartialBanner, setShowPartialBanner] = useState(false);
   const [prefetchEmpty, setPrefetchEmpty] = useState(false);
+  /** Fires refreshVacancyIndex once the next selectedResumeId is set (post-replace). */
+  const postReplaceRefreshRef = useRef(false);
+  /** Hidden file input ref for the "Заменить резюме" button in the resume card. */
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
 
   /** Syncs resumes into both local state and the Session context. */
   function setResumes(next: Resume[] | ((prev: Resume[]) => Resume[])) {
@@ -469,6 +473,15 @@ export default function DashboardPage() {
     }
     void restoreRecommendationState();
   }, [token]);
+
+  // After a resume replace, trigger vacancy refresh once selectedResumeId is set.
+  useEffect(() => {
+    if (postReplaceRefreshRef.current && selectedResumeId) {
+      postReplaceRefreshRef.current = false;
+      void refreshVacancyIndex();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedResumeId]);
 
   useEffect(() => {
     setMatches((current) => {
@@ -1192,15 +1205,25 @@ export default function DashboardPage() {
     }
   }
 
-  async function uploadResume(targetFile: File) {
+  async function uploadResume(targetFile: File, isReplace = false) {
     setBusy(true);
-    setMessage('Анализируем резюме…');
+    setMessage(isReplace ? 'Загружаем новое резюме…' : 'Анализируем резюме…');
 
     try {
       const formData = new FormData();
       formData.append('file', targetFile);
       const resume = await request<Resume>('/api/resumes', { method: 'POST', body: formData });
-      setResumes((current) => [resume, ...current]);
+      if (isReplace) {
+        // Backend auto-replaced the old resume. Replace local state entirely.
+        setResumes([resume]);
+        setMatches([]);
+        setLastMatchingQuery('');
+        setHiddenMatchIds([]);
+        setSelectedResumeId(resume.id);
+        postReplaceRefreshRef.current = true;
+      } else {
+        setResumes((current) => [resume, ...current]);
+      }
       setFile(null);
 
       if (resume.status !== 'completed') {
@@ -1222,6 +1245,10 @@ export default function DashboardPage() {
               break;
             }
             if (updated.status === 'failed') {
+              if (isReplace) {
+                // Backend already deleted old resume — show upload area
+                setResumes([]);
+              }
               setMessage(updated.error_message || 'Не удалось обработать резюме');
               break;
             }
@@ -1231,6 +1258,10 @@ export default function DashboardPage() {
         }
       }
     } catch (error) {
+      if (isReplace) {
+        // Backend deleted old resume before the error — show upload area
+        setResumes([]);
+      }
       setMessage(error instanceof Error ? error.message : 'Не удалось загрузить резюме');
     } finally {
       setBusy(false);
@@ -1243,6 +1274,17 @@ export default function DashboardPage() {
     if (picked) {
       void uploadResume(picked);
     }
+    // Reset so the same file can be re-selected if needed
+    event.target.value = '';
+  }
+
+  function handleReplaceFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const picked = event.target.files?.[0] ?? null;
+    if (picked) {
+      void uploadResume(picked, true);
+    }
+    // Reset so the same file can be re-selected
+    event.target.value = '';
   }
 
   async function deleteResume(resumeId: number) {
@@ -1950,48 +1992,50 @@ export default function DashboardPage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-[length:var(--text-2xl)]">Резюме</CardTitle>
                   <CardDescription>
-                    PDF или DOCX · до {RESUME_LIMIT} профилей
+                    PDF или DOCX
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
-                  {/* Drop zone */}
-                  <label
-                    className={[
-                      'flex flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-dashed',
-                      'px-4 py-6 cursor-pointer transition-colors duration-[var(--duration-fast)]',
-                      dragOver
-                        ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)]'
-                        : 'border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)]',
-                      (busy || resumes.length >= RESUME_LIMIT) ? 'opacity-50 pointer-events-none' : '',
-                    ].join(' ')}
-                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setDragOver(false);
-                      const f = e.dataTransfer.files[0];
-                      if (f) void uploadResume(f);
-                    }}
-                  >
-                    <svg className="w-8 h-8 text-[color:var(--color-ink-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
-                    <div className="text-center select-none">
-                      <span className="block text-[color:var(--color-ink)] text-[length:var(--text-sm)] font-semibold">
-                        {busy ? 'Анализируем резюме…' : dragOver ? 'Отпустите файл' : 'Загрузите резюме'}
-                      </span>
-                      {!busy && !dragOver ? (
-                        <span className="block text-[color:var(--color-ink-muted)] text-[length:var(--text-xs)] mt-0.5">PDF или DOCX · перетащите или нажмите</span>
-                      ) : null}
-                    </div>
-                    <input
-                      type="file"
-                      className="sr-only"
-                      accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                      disabled={busy || resumes.length >= RESUME_LIMIT}
-                      onChange={handleFileChange}
-                    />
-                  </label>
+                  {/* Drop zone — only shown when user has no resume yet */}
+                  {resumes.length === 0 ? (
+                    <label
+                      className={[
+                        'flex flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-dashed',
+                        'px-4 py-6 cursor-pointer transition-colors duration-[var(--duration-fast)]',
+                        dragOver
+                          ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)]'
+                          : 'border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)]',
+                        busy ? 'opacity-50 pointer-events-none' : '',
+                      ].join(' ')}
+                      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                      onDragLeave={() => setDragOver(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragOver(false);
+                        const f = e.dataTransfer.files[0];
+                        if (f) void uploadResume(f);
+                      }}
+                    >
+                      <svg className="w-8 h-8 text-[color:var(--color-ink-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                      </svg>
+                      <div className="text-center select-none">
+                        <span className="block text-[color:var(--color-ink)] text-[length:var(--text-sm)] font-semibold">
+                          {busy ? 'Анализируем резюме…' : dragOver ? 'Отпустите файл' : 'Загрузите резюме'}
+                        </span>
+                        {!busy && !dragOver ? (
+                          <span className="block text-[color:var(--color-ink-muted)] text-[length:var(--text-xs)] mt-0.5">PDF или DOCX · перетащите или нажмите</span>
+                        ) : null}
+                      </div>
+                      <input
+                        type="file"
+                        className="sr-only"
+                        accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        disabled={busy}
+                        onChange={handleFileChange}
+                      />
+                    </label>
+                  ) : null}
                   {message ? (
                     <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
                       {message}
@@ -2333,75 +2377,59 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   ) : null}
-                  {resumes.map((resume) => (
-                    <article
-                      key={resume.id}
-                      className={[
-                        'grid gap-2 border rounded-[var(--radius-xl)] p-4 bg-[var(--color-surface)]',
-                        resume.is_active
-                          ? 'border-[var(--color-accent)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_18%,transparent)]'
-                          : 'border-[var(--color-border)] shadow-[var(--shadow-xs)]',
-                      ].join(' ')}
-                    >
-                      <div className="flex justify-between gap-3 items-start">
-                        <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                          <h3 className="text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.03em] break-words">
-                            {resume.analysis
-                              ? (asText(resume.analysis.target_role, '') || resume.original_filename)
-                              : resume.original_filename}
-                            {resume.is_active ? (
-                              <span className="resume-active-tag ml-2">активный</span>
+                  {resumes.length > 0 ? (() => {
+                    const resume = resumes[0];
+                    return (
+                      <article className="grid gap-2 border border-[var(--color-border)] rounded-[var(--radius-xl)] p-4 bg-[var(--color-surface)] shadow-[var(--shadow-xs)]">
+                        <div className="flex justify-between gap-3 items-start">
+                          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                            <h3 className="text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.03em] break-words">
+                              {resume.analysis
+                                ? (asText(resume.analysis.target_role, '') || resume.original_filename)
+                                : resume.original_filename}
+                            </h3>
+                            <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] break-words">{resume.original_filename}</span>
+                            {resume.status === 'failed' || resume.status === 'processing' ? (
+                              <span className={`status ${resume.status}`}>
+                                {statusLabels[resume.status]}
+                              </span>
                             ) : null}
-                          </h3>
-                          <span className="text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] break-words">{resume.original_filename}</span>
-                          {resume.status === 'failed' || resume.status === 'processing' ? (
-                            <span className={`status ${resume.status}`}>
-                              {statusLabels[resume.status]}
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="inline-flex gap-2 items-center justify-end shrink-0">
-                          {!resume.is_active ? (
+                          </div>
+                          <div className="inline-flex gap-2 items-center justify-end shrink-0">
+                            {/* "Заменить резюме" — opens hidden file picker, no confirm dialog */}
                             <button
                               type="button"
                               disabled={busy}
-                              onClick={() => void activateResumeProfile(resume.id)}
-                              className="text-[length:var(--text-xs)] font-medium text-[color:var(--color-accent)] hover:opacity-70 transition-opacity disabled:opacity-40"
+                              onClick={() => replaceFileInputRef.current?.click()}
+                              className="text-[length:var(--text-xs)] font-medium text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors disabled:opacity-40"
                             >
-                              Сделать активным
+                              {busy ? 'Загружаем…' : 'Заменить резюме'}
                             </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => {
-                              if (window.confirm('Удалить резюме? Это действие нельзя отменить.')) {
-                                void deleteResume(resume.id);
-                              }
-                            }}
-                            className="w-7 h-7 flex items-center justify-center rounded-full text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-danger)] hover:bg-[var(--color-danger-subtle)] transition-colors disabled:opacity-40"
-                            title="Удалить резюме"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                              <path d="M2 2l10 10M12 2L2 12"/>
-                            </svg>
-                          </button>
+                            <input
+                              ref={replaceFileInputRef}
+                              type="file"
+                              className="sr-only"
+                              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                              disabled={busy}
+                              onChange={handleReplaceFileChange}
+                            />
+                          </div>
                         </div>
-                      </div>
-                      {resume.error_message ? (
-                        <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
-                          {resume.error_message}
-                        </p>
-                      ) : null}
-                      {resume.analysis ? (
-                        <Analysis
-                          data={resume.analysis}
-                          expectedSalaryMin={userPrefs?.expected_salary_min}
-                          expectedSalaryMax={userPrefs?.expected_salary_max}
-                        />
-                      ) : null}
-                    </article>
-                  ))}
+                        {resume.error_message ? (
+                          <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
+                            {resume.error_message}
+                          </p>
+                        ) : null}
+                        {resume.analysis ? (
+                          <Analysis
+                            data={resume.analysis}
+                            expectedSalaryMin={userPrefs?.expected_salary_min}
+                            expectedSalaryMax={userPrefs?.expected_salary_max}
+                          />
+                        ) : null}
+                      </article>
+                    );
+                  })() : null}
                 </CardContent>
               </Card>
 

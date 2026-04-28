@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.resume import Resume
 
-RESUME_LIMIT_PER_USER = 2
+RESUME_LIMIT_PER_USER = 1
 
 
 class ResumeLimitExceeded(RuntimeError):
