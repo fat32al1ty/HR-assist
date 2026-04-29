@@ -9,7 +9,11 @@ Clicks and dwell come in from the frontend. Rate-limited per user so a
 misbehaving client can't DoS the table.
 """
 
-from __future__ import annotations
+# NOTE: do NOT add `from __future__ import annotations` here. FastAPI's
+# body-vs-query parameter inference relies on real class objects in the
+# function signature; with PEP 563 deferred evaluation Pydantic body
+# models get registered as query params and every POST starts returning
+# 422 "field required (query)". Discovered the hard way during v0.23.
 
 import uuid
 
@@ -18,14 +22,17 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.api.middleware.request_id import current_request_id
 from app.core.rate_limit import limiter
 from app.db.session import get_db
+from app.models.match_event import MatchEvent
 from app.models.user import User
 from app.services.match_telemetry import (
     ALLOWED_CLICK_KINDS,
     log_click,
     log_dwell_batch,
 )
+from app.services.metrics_registry import record_match_event
 
 CLICK_RATE_LIMIT = "120/minute"
 DWELL_RATE_LIMIT = "60/minute"
@@ -37,12 +44,8 @@ ALLOWED_EVENT_NAMES = frozenset(
         "track_gap_clicked",
         "softer_subset_clicked",
         "apply_from_track",
-        "strategy_view",
-        "strategy_match_highlight_corrected",
-        "strategy_gap_mitigation_corrected",
         "cover_letter_copied",
         "cover_letter_edited",
-        "apply_after_strategy_view",
     }
 )
 
@@ -130,8 +133,25 @@ def post_event(
     request: Request,
     response: Response,
     payload: EventPayload,
-    current_user: User = Depends(get_current_user),  # noqa: ARG001 — auth gate only
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> Response:
     if payload.event not in ALLOWED_EVENT_NAMES:
         return Response(status_code=status.HTTP_400_BAD_REQUEST)
+    # v0.23.0: persist instead of accept-and-drop. Best-effort — a DB hiccup
+    # must not 500 a telemetry beacon. Counter still ticks even on DB
+    # failure so /metrics is never a strict subset of the table.
+    record_match_event(event=payload.event)
+    try:
+        db.add(
+            MatchEvent(
+                user_id=current_user.id,
+                event=payload.event,
+                payload=payload.payload or None,
+                request_id=current_request_id(),
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

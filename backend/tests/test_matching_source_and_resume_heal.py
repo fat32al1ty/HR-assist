@@ -79,6 +79,10 @@ class MatchingSourceAndResumeHealTest(unittest.TestCase):
             ),
             patch("app.services.matching_service.list_disliked_vacancy_ids", return_value=[]),
             patch("app.services.matching_service.list_liked_vacancy_ids", return_value=[]),
+            patch(
+                "app.services.matching_service.list_seen_vacancy_ids_from_feedback",
+                return_value=set(),
+            ),
             patch("app.services.matching_service.list_seen_vacancy_ids", return_value=set()),
             patch("app.services.matching_service.list_added_skill_texts", return_value=[]),
             patch("app.services.matching_service.list_rejected_skill_texts", return_value=[]),
@@ -139,6 +143,10 @@ class MatchingSourceAndResumeHealTest(unittest.TestCase):
             ),
             patch("app.services.matching_service.list_disliked_vacancy_ids", return_value=[]),
             patch("app.services.matching_service.list_liked_vacancy_ids", return_value=[]),
+            patch(
+                "app.services.matching_service.list_seen_vacancy_ids_from_feedback",
+                return_value=set(),
+            ),
             patch("app.services.matching_service.list_seen_vacancy_ids", return_value=set()),
             patch("app.services.matching_service.list_added_skill_texts", return_value=[]),
             patch("app.services.matching_service.list_rejected_skill_texts", return_value=[]),

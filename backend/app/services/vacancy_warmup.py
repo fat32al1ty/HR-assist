@@ -13,6 +13,7 @@ from app.models.resume import Resume
 from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
 from app.repositories.recommendation_jobs import complete_job, fail_job, mark_job_running
+from app.services.metrics_registry import record_segment_warmup
 from app.services.openai_usage import system_budget_scope
 from app.services.recommendation_jobs import (
     sweep_stale_running_jobs,
@@ -169,6 +170,10 @@ def _drain_segment_warmup_jobs(db) -> dict[str, int]:
                 _state["segment_warmup_daily_count"] = (
                     int(_state.get("segment_warmup_daily_count", 0)) + 1
                 )
+            try:
+                record_segment_warmup(status="completed")
+            except Exception:
+                pass
         except Exception as err:
             logger.warning(
                 "segment_warmup_job_failed job_id=%s segment_key=%s error=%s",
@@ -178,6 +183,10 @@ def _drain_segment_warmup_jobs(db) -> dict[str, int]:
             )
             try:
                 fail_job(db, job, error_message=str(err))
+            except Exception:
+                pass
+            try:
+                record_segment_warmup(status="failed")
             except Exception:
                 pass
 

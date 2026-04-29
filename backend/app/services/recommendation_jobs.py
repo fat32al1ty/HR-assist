@@ -412,11 +412,18 @@ def _is_job_active(job_id: str) -> bool:
 
 
 def _run_recommendation_job(job_id: str) -> None:
+    import time as _time
+
+    from app.services.metrics_registry import record_search
+
     db = SessionLocal()
+    job_type_label = "deep_scan"
+    started_monotonic = _time.monotonic()
     try:
         job = db.scalar(select(RecommendationJob).where(RecommendationJob.id == job_id))
         if job is None:
             return
+        job_type_label = (job.job_type or "deep_scan") if hasattr(job, "job_type") else "deep_scan"
 
         mark_job_running(db, job)
         payload = job.request_payload or {}
@@ -503,4 +510,24 @@ def _run_recommendation_job(job_id: str) -> None:
     finally:
         with _active_lock:
             _active_jobs.discard(job_id)
+        # Emit Prometheus signal for the wall-clock duration + terminal status.
+        # Best-effort — pulling status fresh from DB may already have been
+        # closed; fall back to "unknown" so the counter still ticks.
+        try:
+            terminal_status = "unknown"
+            try:
+                fresh = db.scalar(
+                    select(RecommendationJob.status).where(RecommendationJob.id == job_id)
+                )
+                if fresh is not None:
+                    terminal_status = str(fresh)
+            except Exception:
+                pass
+            record_search(
+                job_type=job_type_label,
+                status=terminal_status,
+                duration_seconds=max(0.0, _time.monotonic() - started_monotonic),
+            )
+        except Exception:
+            pass
         db.close()

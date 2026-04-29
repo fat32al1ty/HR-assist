@@ -100,7 +100,7 @@ class Settings(BaseSettings):
     feature_superjob_enabled: bool = False
     feature_habr_enabled: bool = False
     feature_public_sources_enabled: bool = False
-    matching_pipeline_version: str = "3.0"
+    matching_pipeline_version: str = "3.1"
     matching_score_cache_ttl_days: int = 7
     matching_score_cache_enabled: bool = True
     feature_salary_predictor_enabled: bool = True
@@ -110,10 +110,6 @@ class Settings(BaseSettings):
     feature_onboarding_llm_classifier_enabled: bool = False
     resume_audit_cost_cap_usd_per_day: float = 0.05
     resume_audit_cache_ttl_days: int = 7
-    feature_vacancy_strategy_enabled: bool = True
-    feature_vacancy_strategy_template_mode_enabled: bool = False
-    vacancy_strategy_cost_cap_usd_per_day: float = 0.05
-    vacancy_strategy_cache_ttl_days: int = 30
     segment_warmup_max_analyzed: int = 30
     segment_warmup_daily_cap: int = 100
     segment_warmup_discover_count: int = 60

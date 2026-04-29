@@ -1,22 +1,22 @@
 """LLM rerank stage (Phase 2.5b).
 
 Takes the top-K candidates after cross-encoder + MMR + tier labelling
-and asks a cheap LLM to re-rank them and emit a ``reason_ru`` per card.
-Runs after ``TierStage`` so the LLM only burns budget on strong/maybe
-candidates — relaxed fallback cards skip the call.
+and asks a cheap LLM to re-rank them and emit a ``requirements_check``
+per card.  Runs after ``TierStage`` so the LLM only burns budget on
+strong/maybe candidates — relaxed fallback cards skip the call.
 
 Off by default (``llm_rerank_enabled=False``). When enabled:
 
 1. Build a compact prompt with the resume profile + per-vacancy rows.
 2. Hit ``openai.responses.create`` with a strict JSON schema.
 3. Cache by ``(resume_id, sorted vacancy ids, model)`` — 24 h TTL.
-4. Apply the returned order + write ``reason_ru`` onto each candidate's
-   ``annotations`` so ``_candidate_to_match_dict`` surfaces it in the
-   public match-result profile.
+4. Apply the returned order + write ``requirements_check`` onto each
+   candidate's ``annotations`` so ``_candidate_to_match_dict`` surfaces
+   it in the public match-result profile.
 
 Budget guard: skip when daily spend + estimated cost >= user budget.
 The matching request is still allowed through — the UI gets
-``rerank_skipped=True`` and hides the "Почему показали" block.
+``rerank_skipped=True``.
 """
 
 from __future__ import annotations
@@ -37,10 +37,26 @@ from .base import BaseStage
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
-    "You rerank vacancies for a jobseeker. Input: a resume profile and up to 20 vacancies. "
-    "Output: a ranked list with a short Russian reason (10-20 words) per vacancy explaining "
-    "why it's a match or a stretch — concrete, not vague. No 'подходит по навыкам' filler. "
-    "Confidence in [0,1] reflects certainty. Never invent vacancies that weren't in the input."
+    "You rerank vacancies for a jobseeker and produce a structured requirements checklist per vacancy. "
+    "Input: a resume profile and up to 20 vacancies, each with must_have_skills, nice_to_have_skills, "
+    "requirements, and summary. "
+    "For every vacancy output a ranked entry with: "
+    "(1) position (1-based), "
+    "(2) confidence in [0,1], "
+    "(3) requirements_check — an object with: "
+    "  must_have: include EVERY item from the input must_have_skills AND every standalone requirement "
+    "  from the input requirements list as a SEPARATE checklist entry. Do NOT merge, summarize, or "
+    "  drop items. Cap at 12 only if input exceeds 12 — pick the 12 most critical. "
+    "  Each entry is {text, status, evidence}. text is the requirement copied (or lightly normalized) "
+    "  from input. "
+    "  nice_to_have: include EVERY item from input nice_to_have_skills as a separate entry, same rules, "
+    "  cap at 12. If input nice_to_have_skills is empty, return an empty list. "
+    "  experience: {required_years, candidate_years, status} or null if no explicit year count is stated "
+    "  in the requirements text. "
+    "status must be exactly one of: ok, partial, missing, unknown. "
+    "evidence is a short Russian phrase (5-10 words): for ok/partial/missing — what in the resume confirms it; "
+    "for unknown — why the requirement is ambiguous. "
+    "All text in Russian. Never invent requirements not present in the input."
 )
 
 
@@ -159,7 +175,8 @@ def _build_prompt_payload(state: MatchingState, head: list) -> dict[str, Any]:
         "specialization": analysis.get("specialization"),
         "seniority": analysis.get("seniority"),
         "role_family": analysis.get("role_family"),
-        "top_skills": (state.resume_context.resume_hard_skills or [])[:10],
+        "skills": state.resume_context.resume_hard_skills or [],
+        "total_years": analysis.get("total_years"),
         "location": analysis.get("home_city"),
     }
     vacancies = []
@@ -171,15 +188,17 @@ def _build_prompt_payload(state: MatchingState, head: list) -> dict[str, Any]:
                 "title": getattr(cand.vacancy, "title", "") or "",
                 "company": getattr(cand.vacancy, "company", None),
                 "role_family": payload.get("role_family"),
-                "must_have_skills": (payload.get("must_have_skills") or [])[:10],
-                "summary": (payload.get("summary") or "")[:400],
+                "must_have_skills": payload.get("must_have_skills") or [],
+                "nice_to_have_skills": payload.get("nice_to_have_skills") or [],
+                "requirements": payload.get("requirements") or [],
+                "summary": payload.get("summary") or "",
             }
         )
     return {"resume": resume, "vacancies": vacancies}
 
 
 def _reorder_from_ranked(head: list, result: dict[str, Any]) -> list:
-    """Return the reordered head with reason_ru annotations applied.
+    """Return the reordered head with requirements_check annotations applied.
 
     Candidates the LLM didn't rank are kept at the end in their original
     order. Score is nudged so the LLM-chosen order survives any
@@ -196,10 +215,15 @@ def _reorder_from_ranked(head: list, result: dict[str, Any]) -> list:
         cand = by_id.pop(entry.get("vacancy_id"), None)
         if cand is None:
             continue
-        reason = entry.get("reason_ru")
+        req_check = entry.get("requirements_check")
         confidence = entry.get("confidence")
-        if isinstance(reason, str) and reason.strip():
-            cand.annotations["reason_ru"] = reason.strip()
+        if isinstance(req_check, dict):
+            # Enforce list length caps
+            if isinstance(req_check.get("must_have"), list):
+                req_check["must_have"] = req_check["must_have"][:12]
+            if isinstance(req_check.get("nice_to_have"), list):
+                req_check["nice_to_have"] = req_check["nice_to_have"][:12]
+            cand.annotations["requirements_check"] = req_check
         if isinstance(confidence, (int, float)):
             cand.annotations["llm_confidence"] = float(confidence)
         new_order.append(cand)
@@ -207,8 +231,16 @@ def _reorder_from_ranked(head: list, result: dict[str, Any]) -> list:
     for cand in head:
         if cand.vacancy_id in by_id:
             new_order.append(cand)
-    for rank, cand in enumerate(new_order):
-        cand.hybrid_score = max(cand.hybrid_score, 1.0 - rank * 0.01)
+    # Preserve real hybrid_score magnitudes — just redistribute existing scores
+    # along the LLM-chosen order so the top vacancy keeps the top number, etc.
+    # This stops the percentage in the UI from collapsing to 100%/99%/98%...
+    # while still letting any downstream re-sort by hybrid_score honour the
+    # rerank order.
+    sorted_scores = sorted((c.hybrid_score for c in new_order), reverse=True)
+    for i, cand in enumerate(new_order):
+        if i < len(sorted_scores):
+            cand.hybrid_score = sorted_scores[i]
+        cand.annotations["llm_rerank_position"] = i + 1
     return new_order
 
 
@@ -224,6 +256,39 @@ def _splice_head(state: MatchingState, reordered: list, *, size: int) -> None:
     state.candidates = reordered + tail + dropped
 
 
+_CHECKLIST_ITEM_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "text": {"type": "string"},
+        "status": {"type": "string", "enum": ["ok", "partial", "missing", "unknown"]},
+        "evidence": {"type": "string"},
+    },
+    "required": ["text", "status", "evidence"],
+}
+
+_EXPERIENCE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "required_years": {"type": "number"},
+        "candidate_years": {"type": ["number", "null"]},
+        "status": {"type": "string", "enum": ["ok", "partial", "missing", "unknown"]},
+    },
+    "required": ["required_years", "candidate_years", "status"],
+}
+
+_REQUIREMENTS_CHECK_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "must_have": {"type": "array", "items": _CHECKLIST_ITEM_SCHEMA},
+        "nice_to_have": {"type": "array", "items": _CHECKLIST_ITEM_SCHEMA},
+        "experience": {"anyOf": [_EXPERIENCE_SCHEMA, {"type": "null"}]},
+    },
+    "required": ["must_have", "nice_to_have", "experience"],
+}
+
 _RESULT_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -236,10 +301,10 @@ _RESULT_SCHEMA = {
                 "properties": {
                     "vacancy_id": {"type": "integer"},
                     "position": {"type": "integer"},
-                    "reason_ru": {"type": "string"},
                     "confidence": {"type": "number"},
+                    "requirements_check": _REQUIREMENTS_CHECK_SCHEMA,
                 },
-                "required": ["vacancy_id", "position", "reason_ru", "confidence"],
+                "required": ["vacancy_id", "position", "confidence", "requirements_check"],
             },
         }
     },
