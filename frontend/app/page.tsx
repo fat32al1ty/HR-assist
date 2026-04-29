@@ -420,10 +420,6 @@ export default function DashboardPage() {
   const [showPartialBanner, setShowPartialBanner] = useState(false);
   const [prefetchEmpty, setPrefetchEmpty] = useState(false);
   const [segmentWarming, setSegmentWarming] = useState(false);
-  /** Fires refreshVacancyIndex once the next selectedResumeId is set (post-replace). */
-  const postReplaceRefreshRef = useRef(false);
-  /** Hidden file input ref for the "Заменить резюме" button in the resume card. */
-  const replaceFileInputRef = useRef<HTMLInputElement>(null);
 
   /** Syncs resumes into both local state and the Session context. */
   function setResumes(next: Resume[] | ((prev: Resume[]) => Resume[])) {
@@ -476,15 +472,6 @@ export default function DashboardPage() {
     }
     void restoreRecommendationState();
   }, [token]);
-
-  // After a resume replace, trigger vacancy refresh once selectedResumeId is set.
-  useEffect(() => {
-    if (postReplaceRefreshRef.current && selectedResumeId) {
-      postReplaceRefreshRef.current = false;
-      void refreshVacancyIndex();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedResumeId]);
 
   useEffect(() => {
     setMatches((current) => {
@@ -1208,25 +1195,15 @@ export default function DashboardPage() {
     }
   }
 
-  async function uploadResume(targetFile: File, isReplace = false) {
+  async function uploadResume(targetFile: File) {
     setBusy(true);
-    setMessage(isReplace ? 'Загружаем новое резюме…' : 'Анализируем резюме…');
+    setMessage('Анализируем резюме…');
 
     try {
       const formData = new FormData();
       formData.append('file', targetFile);
       const resume = await request<Resume>('/api/resumes', { method: 'POST', body: formData });
-      if (isReplace) {
-        // Backend auto-replaced the old resume. Replace local state entirely.
-        setResumes([resume]);
-        setMatches([]);
-        setLastMatchingQuery('');
-        setHiddenMatchIds([]);
-        setSelectedResumeId(resume.id);
-        postReplaceRefreshRef.current = true;
-      } else {
-        setResumes((current) => [resume, ...current]);
-      }
+      setResumes((current) => [resume, ...current]);
       setFile(null);
 
       if (resume.status !== 'completed') {
@@ -1248,10 +1225,6 @@ export default function DashboardPage() {
               break;
             }
             if (updated.status === 'failed') {
-              if (isReplace) {
-                // Backend already deleted old resume — show upload area
-                setResumes([]);
-              }
               setMessage(updated.error_message || 'Не удалось обработать резюме');
               break;
             }
@@ -1261,10 +1234,6 @@ export default function DashboardPage() {
         }
       }
     } catch (error) {
-      if (isReplace) {
-        // Backend deleted old resume before the error — show upload area
-        setResumes([]);
-      }
       setMessage(error instanceof Error ? error.message : 'Не удалось загрузить резюме');
     } finally {
       setBusy(false);
@@ -1278,15 +1247,6 @@ export default function DashboardPage() {
       void uploadResume(picked);
     }
     // Reset so the same file can be re-selected if needed
-    event.target.value = '';
-  }
-
-  function handleReplaceFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const picked = event.target.files?.[0] ?? null;
-    if (picked) {
-      void uploadResume(picked, true);
-    }
-    // Reset so the same file can be re-selected
     event.target.value = '';
   }
 
@@ -2318,23 +2278,18 @@ export default function DashboardPage() {
                             ) : null}
                           </div>
                           <div className="inline-flex gap-2 items-center justify-end shrink-0">
-                            {/* "Заменить резюме" — opens hidden file picker, no confirm dialog */}
                             <button
                               type="button"
                               disabled={busy}
-                              onClick={() => replaceFileInputRef.current?.click()}
-                              className="text-[length:var(--text-xs)] font-medium text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-ink)] transition-colors disabled:opacity-40"
+                              onClick={() => {
+                                if (window.confirm('Удалить резюме? Это очистит подбор и историю показов.')) {
+                                  void deleteResume(resume.id);
+                                }
+                              }}
+                              className="text-[length:var(--text-xs)] font-medium text-[color:var(--color-ink-secondary)] hover:text-[color:var(--color-danger)] transition-colors disabled:opacity-40"
                             >
-                              {busy ? 'Загружаем…' : 'Заменить резюме'}
+                              {busy ? 'Удаляем…' : 'Удалить резюме'}
                             </button>
-                            <input
-                              ref={replaceFileInputRef}
-                              type="file"
-                              className="sr-only"
-                              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                              disabled={busy}
-                              onChange={handleReplaceFileChange}
-                            />
                           </div>
                         </div>
                         {resume.error_message ? (
