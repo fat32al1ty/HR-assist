@@ -24,7 +24,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # Bump when the LLM result schema changes; old SHA keys stop matching.
-_KEY_VERSION = "3"
+_KEY_VERSION = "4"
 
 
 def _cache_dir() -> Path:

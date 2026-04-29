@@ -81,7 +81,7 @@ type VacancyMatch = {
   salary_min?: number | null;
   salary_max?: number | null;
   salary_currency?: string | null;
-  profile: (Record<string, unknown> & { requirements_check?: RequirementsCheck | null }) | null;
+  profile: (Record<string, unknown> & { requirements_check?: RequirementsCheck | null; match_percent?: number | null }) | null;
   tier?: 'strong' | 'maybe' | null;
   match_run_id?: string | null;
 };
@@ -2524,33 +2524,46 @@ export default function DashboardPage() {
                             </h3>
                             {/* Score bar + salary right-aligned */}
                             <div className="flex flex-col items-end gap-1 shrink-0">
-                              {/* Progress bar + percentage */}
-                              <div className="flex items-center gap-1.5">
-                                <div
-                                  role="progressbar"
-                                  aria-valuenow={Math.round(match.similarity_score * 100)}
-                                  aria-valuemin={0}
-                                  aria-valuemax={100}
-                                  aria-label={`Релевантность ${scoreToPercent(match.similarity_score)}`}
-                                  style={{ width: '80px', height: '6px', borderRadius: 'var(--radius-full)', background: 'var(--color-surface-muted)', overflow: 'hidden' }}
-                                >
-                                  <div
-                                    style={{
-                                      width: scoreToPercent(match.similarity_score),
-                                      height: '100%',
-                                      background: 'var(--color-accent)',
-                                      borderRadius: 'var(--radius-full)',
-                                      transition: 'width 0.35s var(--ease-out)',
-                                    }}
-                                  />
-                                </div>
-                                <span
-                                  className="font-[var(--font-mono)] text-[length:var(--text-xs)] font-semibold text-[color:var(--color-ink)]"
-                                  style={{ minWidth: '2.5rem', textAlign: 'right' }}
-                                >
-                                  {scoreToPercent(match.similarity_score)}
-                                </span>
-                              </div>
+                              {/* Progress bar + percentage — uses match_percent (checklist-based) if available, falls back to similarity_score */}
+                              {(() => {
+                                const checklistPercent =
+                                  typeof match.profile?.match_percent === 'number'
+                                    ? Math.max(0, Math.min(100, Math.round(match.profile.match_percent)))
+                                    : null;
+                                const percent =
+                                  checklistPercent !== null
+                                    ? checklistPercent
+                                    : Math.round(match.similarity_score * 100);
+                                const percentLabel = `${percent}%`;
+                                return (
+                                  <div className="flex items-center gap-1.5">
+                                    <div
+                                      role="progressbar"
+                                      aria-valuenow={percent}
+                                      aria-valuemin={0}
+                                      aria-valuemax={100}
+                                      aria-label={`Релевантность ${percentLabel}`}
+                                      style={{ width: '80px', height: '6px', borderRadius: 'var(--radius-full)', background: 'var(--color-surface-muted)', overflow: 'hidden' }}
+                                    >
+                                      <div
+                                        style={{
+                                          width: `${percent}%`,
+                                          height: '100%',
+                                          background: 'var(--color-accent)',
+                                          borderRadius: 'var(--radius-full)',
+                                          transition: 'width 0.35s var(--ease-out)',
+                                        }}
+                                      />
+                                    </div>
+                                    <span
+                                      className="font-[var(--font-mono)] text-[length:var(--text-xs)] font-semibold text-[color:var(--color-ink)]"
+                                      style={{ minWidth: '2.5rem', textAlign: 'right' }}
+                                    >
+                                      {percentLabel}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                               {/* Salary badge if present */}
                               {(() => {
                                 const badge = renderSalaryBadge(match);

@@ -140,17 +140,22 @@ def _call_llm(state: MatchingState, head: list) -> dict[str, Any]:
         timeout=settings.openai_analysis_timeout_seconds,
     )
     prompt_payload = _build_prompt_payload(state, head)
+    head_size = len(head)
+    system_prompt = (
+        f"{_SYSTEM_PROMPT} Output exactly {head_size} entries in `ranked`, "
+        "one per input vacancy. Do not omit any vacancy."
+    )
     response = client.responses.create(
         model=settings.llm_rerank_model,
         input=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": json.dumps(prompt_payload, ensure_ascii=False)},
         ],
         text={
             "format": {
                 "type": "json_schema",
                 "name": "rerank_result",
-                "schema": _RESULT_SCHEMA,
+                "schema": _build_result_schema(head_size),
                 "strict": True,
             }
         },
@@ -289,24 +294,39 @@ _REQUIREMENTS_CHECK_SCHEMA = {
     "required": ["must_have", "nice_to_have", "experience"],
 }
 
-_RESULT_SCHEMA = {
-    "type": "object",
-    "additionalProperties": False,
-    "properties": {
-        "ranked": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "vacancy_id": {"type": "integer"},
-                    "position": {"type": "integer"},
-                    "confidence": {"type": "number"},
-                    "requirements_check": _REQUIREMENTS_CHECK_SCHEMA,
+
+def _build_result_schema(head_size: int) -> dict[str, Any]:
+    """Build the JSON schema for the LLM rerank response with strict array length.
+
+    The OpenAI Responses API in strict mode honours minItems/maxItems, so
+    forcing exactly head_size entries prevents the LLM from returning a
+    shorter ranked list (which we previously saw — only top-12 of 20).
+    """
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "ranked": {
+                "type": "array",
+                "minItems": head_size,
+                "maxItems": head_size,
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "vacancy_id": {"type": "integer"},
+                        "position": {"type": "integer"},
+                        "confidence": {"type": "number"},
+                        "requirements_check": _REQUIREMENTS_CHECK_SCHEMA,
+                    },
+                    "required": [
+                        "vacancy_id",
+                        "position",
+                        "confidence",
+                        "requirements_check",
+                    ],
                 },
-                "required": ["vacancy_id", "position", "confidence", "requirements_check"],
-            },
-        }
-    },
-    "required": ["ranked"],
-}
+            }
+        },
+        "required": ["ranked"],
+    }
