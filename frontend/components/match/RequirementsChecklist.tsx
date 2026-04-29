@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import type { RequirementsCheck, RequirementItem, RequirementCheckStatus } from '@/types/requirementsCheck';
 
 type Section = 'must_have' | 'nice_to_have';
@@ -32,7 +31,6 @@ const STATUS_COLOR_VAR: Record<RequirementCheckStatus, string> = {
   unknown: 'var(--color-ink-muted)',
 };
 
-const COLLAPSE_THRESHOLD = 5;
 
 type ChipItemProps = {
   text: string;
@@ -118,13 +116,7 @@ type SectionProps = {
 };
 
 function Section({ title, items }: SectionProps) {
-  const [expanded, setExpanded] = useState(false);
-
   if (items.length === 0) return null;
-
-  const visible =
-    !expanded && items.length > COLLAPSE_THRESHOLD ? items.slice(0, COLLAPSE_THRESHOLD) : items;
-  const hiddenCount = items.length - COLLAPSE_THRESHOLD;
 
   return (
     <div className="flex flex-col gap-2">
@@ -132,9 +124,9 @@ function Section({ title, items }: SectionProps) {
         {title}
       </p>
 
-      {/* Chip row — flex-wrap */}
+      {/* Chip row — flex-wrap, all items always visible */}
       <div className="flex flex-wrap gap-1.5">
-        {visible.map((item, i) => (
+        {items.map((item, i) => (
           <ChipItem
             key={i}
             text={item.text}
@@ -144,25 +136,6 @@ function Section({ title, items }: SectionProps) {
           />
         ))}
       </div>
-
-      {/* Collapse / expand toggle */}
-      {items.length > COLLAPSE_THRESHOLD ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="self-start inline-flex items-center gap-1 text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-ink-secondary)] underline underline-offset-2 transition-colors"
-        >
-          {expanded ? (
-            <>
-              Свернуть <span aria-hidden="true" className="text-[10px] leading-none">▴</span>
-            </>
-          ) : (
-            <>
-              Показать ещё {hiddenCount} <span aria-hidden="true" className="text-[10px] leading-none">▾</span>
-            </>
-          )}
-        </button>
-      ) : null}
     </div>
   );
 }
