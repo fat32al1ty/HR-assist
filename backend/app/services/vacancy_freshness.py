@@ -108,6 +108,22 @@ def sweep_stale_vacancies(
     warmup worker for ~46 minutes (worst case = limit × (httpx_timeout + sleep)).
     The remaining rows roll into the next nightly window.
     """
+    # v0.23.0: persistent log row so we can SQL-graph the nightly yield
+    # over time. Best-effort — if the import or insert breaks, the sweep
+    # itself still runs.
+    sweep_log_id: int | None = None
+    sweep_started_dt = datetime.now(UTC)
+    try:
+        from app.models.freshness_sweep_log import FreshnessSweepLog
+
+        log_row = FreshnessSweepLog(started_at=sweep_started_dt, checked=0, archived=0)
+        db.add(log_row)
+        db.commit()
+        db.refresh(log_row)
+        sweep_log_id = log_row.id
+    except Exception:
+        db.rollback()
+
     rows = db.scalars(
         select(Vacancy)
         .where(Vacancy.status == "indexed", Vacancy.source == "hh_api")
@@ -144,6 +160,32 @@ def sweep_stale_vacancies(
         archived,
         stopped_early,
     )
+
+    # Update the persistent log row + bump Prometheus archive counter.
+    if sweep_log_id is not None:
+        try:
+            from app.models.freshness_sweep_log import FreshnessSweepLog
+
+            log_row = db.scalar(
+                select(FreshnessSweepLog).where(FreshnessSweepLog.id == sweep_log_id)
+            )
+            if log_row is not None:
+                log_row.finished_at = datetime.now(UTC)
+                log_row.checked = checked
+                log_row.archived = archived
+                log_row.stopped_early = stopped_early
+                db.add(log_row)
+                db.commit()
+        except Exception:
+            db.rollback()
+    if archived > 0:
+        try:
+            from app.services.metrics_registry import record_freshness_archived
+
+            record_freshness_archived(source="hh_api", count=archived)
+        except Exception:
+            pass
+
     return {"checked": checked, "archived": archived, "stopped_early": stopped_early}
 
 

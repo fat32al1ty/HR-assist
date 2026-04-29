@@ -49,6 +49,11 @@ class ArchivedAtMatchTimeTest(unittest.TestCase):
             patch("app.services.matching_service.list_disliked_vacancy_ids", return_value=[]),
             patch("app.services.matching_service.list_liked_vacancy_ids", return_value=[]),
             patch(
+                "app.services.matching_service.list_seen_vacancy_ids_from_feedback",
+                return_value=set(),
+            ),
+            patch("app.services.matching_service.list_seen_vacancy_ids", return_value=set()),
+            patch(
                 "app.services.matching_service.get_vacancy_by_id",
                 side_effect=lambda _db, vacancy_id: vacancy,
             ),

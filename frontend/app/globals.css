@@ -132,21 +132,6 @@
   /* unsaved indicator dot next to group label */
   --color-unsaved-indicator-fg: var(--color-accent);
 
-  /* ── Strategy view tokens (Phase 5.2) ────────────────────────────────────
-     Semantic tokens for /strategy page blocks. Intentionally separate from
-     --color-track-* (which belong to vacancy-list sections in /).
-     ──────────────────────────────────────────────────────────────────────── */
-  /* Match highlight block — calm, positive, uses muted blue-green rule */
-  --color-strategy-match-rule:    oklch(0.52 0.12 200);   /* teal-adjacent left rule + ordinal chip */
-
-  /* Gap mitigation block — warm amber, reads as "caution" not "error" */
-  --color-strategy-gap-rule:      oklch(0.62 0.12 68);    /* amber left rule (same hue as --color-warning, lower chroma) */
-  --color-strategy-gap-surface:   oklch(0.982 0.018 68);  /* barely-there amber card wash            */
-  --color-strategy-gap-label:     oklch(0.46 0.11 68);    /* eyebrow + requirement label color        */
-
-  /* Cover letter editor surface — slightly warmer than generic surface */
-  --color-strategy-editor-surface: oklch(0.995 0.008 80); /* near-white with faint warmth            */
-
   /* Typography scale — keep as we had */
   --text-xs:   0.75rem;
   --text-sm:   0.875rem;
@@ -272,13 +257,6 @@
   --color-track-stretch-cta-bg:    oklch(0.96 0.05 68);
   --color-track-stretch-cta-border: oklch(0.80 0.10 68);
   --color-track-stretch-cta-ink:   oklch(0.40 0.12 68);
-
-  /* Strategy view (Phase 5.2 — /strategy page) */
-  --color-strategy-match-rule:        oklch(0.52 0.12 200);
-  --color-strategy-gap-rule:          oklch(0.62 0.12 68);
-  --color-strategy-gap-surface:       oklch(0.982 0.018 68);
-  --color-strategy-gap-label:         oklch(0.46 0.11 68);
-  --color-strategy-editor-surface:    oklch(0.995 0.008 80);
 
   /* Editable pills — roles & domains sidebar widget */
   --color-pill-auto-bg:               oklch(0.94 0.008 240);
@@ -1009,57 +987,6 @@
 .missing-title { margin: 0 0 6px; font-weight: 700; color: var(--color-warning); }
 .missing-box ul { margin: 0; padding-left: 18px; color: var(--color-warning); }
 
-.fit-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: 0.625rem; margin-top: 0.625rem; }
-@media (max-width: 640px) { .fit-grid { grid-template-columns: 1fr; } }
-
-.fit-box    { border-radius: var(--radius-md); padding: 0.625rem 0.75rem; border: 1px solid transparent; }
-.fit-box ul { margin: 0; padding-left: 18px; list-style-type: disc; }
-.fit-box ul li { padding-left: 2px; }
-.fit-title  { margin: 0 0 6px; font-weight: 700; }
-.fit-empty  { margin: 0; font-size: var(--text-sm); font-style: italic; opacity: 0.85; }
-
-.fit-matched { border-color: color-mix(in srgb, var(--color-accent) 30%, transparent); background: color-mix(in srgb, var(--color-accent) 6%, transparent); }
-.fit-matched .fit-title,
-.fit-matched ul,
-.fit-matched .fit-empty { color: color-mix(in srgb, var(--color-accent) 85%, black); }
-
-.fit-missing { border-color: color-mix(in srgb, var(--color-ink-muted) 35%, transparent); background: color-mix(in srgb, var(--color-ink-muted) 8%, transparent); }
-.fit-missing .fit-title,
-.fit-missing ul,
-.fit-missing .fit-empty { color: var(--color-ink); }
-.fit-missing ul { list-style: none; padding-left: 0; }
-.fit-missing-item    { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; padding: 2px 0; }
-.fit-missing-item::before { content: '•'; flex-shrink: 0; margin-right: 4px; opacity: 0.6; }
-.fit-missing-text    { flex: 1; }
-.fit-missing-actions { display: inline-flex; gap: 4px; flex-shrink: 0; margin-left: 4px; }
-
-.fit-micro-btn {
-  width: 22px;
-  height: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  font-size: var(--text-sm);
-  line-height: 1;
-  padding: 0;
-  color: inherit;
-  transition: background-color var(--duration-fast) var(--ease-out),
-              border-color var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out);
-}
-.fit-micro-btn:hover:not(:disabled) { border-color: currentColor; }
-.fit-micro-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.fit-micro-add:hover:not(:disabled)    { background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-accent); border-color: var(--color-accent); }
-.fit-micro-reject:hover:not(:disabled) { background: var(--color-danger-subtle); color: var(--color-danger); }
-.fit-micro-undo:hover:not(:disabled)   { background: var(--color-surface-muted); }
-
-.fit-item-added { display: flex; align-items: center; gap: 6px; list-style: none; }
-.fit-item-added::before { content: '•'; flex-shrink: 0; opacity: 0.6; }
-
 .curated-badge {
   display: inline-flex;
   width: 18px;
@@ -1282,7 +1209,6 @@
   .topbar-nav { gap: 2px; }
   .topbar-nav-link { padding: 6px 10px; font-size: var(--text-xs); }
   .salary-range-row { gap: 0.375rem; }
-  .fit-grid { gap: 0.5rem; }
   .profile-card h4 { font-size: var(--text-base); }
 }
 

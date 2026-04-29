@@ -7,6 +7,75 @@ from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
 
 
+def set_vacancy_seen(
+    db: Session,
+    *,
+    user_id: int,
+    resume_id: int,
+    vacancy_id: int,
+    seen: bool = True,
+) -> UserVacancyFeedback:
+    feedback = db.scalar(
+        select(UserVacancyFeedback).where(
+            UserVacancyFeedback.user_id == user_id,
+            UserVacancyFeedback.resume_id == resume_id,
+            UserVacancyFeedback.vacancy_id == vacancy_id,
+        )
+    )
+    if feedback is None:
+        feedback = UserVacancyFeedback(
+            user_id=user_id,
+            resume_id=resume_id,
+            vacancy_id=vacancy_id,
+            disliked=False,
+            liked=False,
+            seen=seen,
+        )
+    else:
+        feedback.seen = seen
+    db.add(feedback)
+    db.commit()
+    db.refresh(feedback)
+    return feedback
+
+
+def list_seen_vacancy_ids_from_feedback(
+    db: Session,
+    *,
+    user_id: int,
+    resume_id: int,
+) -> set[int]:
+    rows = db.scalars(
+        select(UserVacancyFeedback.vacancy_id).where(
+            UserVacancyFeedback.user_id == user_id,
+            UserVacancyFeedback.resume_id == resume_id,
+            UserVacancyFeedback.seen.is_(True),
+        )
+    ).all()
+    return {int(row) for row in rows}
+
+
+def list_seen_vacancies(
+    db: Session,
+    *,
+    user_id: int,
+    resume_id: int,
+    limit: int = 100,
+) -> list[Vacancy]:
+    stmt = (
+        select(Vacancy)
+        .join(UserVacancyFeedback, UserVacancyFeedback.vacancy_id == Vacancy.id)
+        .where(
+            UserVacancyFeedback.user_id == user_id,
+            UserVacancyFeedback.resume_id == resume_id,
+            UserVacancyFeedback.seen.is_(True),
+        )
+        .order_by(UserVacancyFeedback.updated_at.desc())
+        .limit(limit)
+    )
+    return list(db.scalars(stmt))
+
+
 def set_vacancy_disliked(
     db: Session,
     *,

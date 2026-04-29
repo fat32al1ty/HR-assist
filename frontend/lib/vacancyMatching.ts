@@ -51,7 +51,8 @@ export function excludeFeedbackVacancies<T extends VacancyLike>(
   list: T[],
   disliked: VacancyLike[],
   selected: VacancyLike[],
-  hiddenIds: number[] = []
+  hiddenIds: number[] = [],
+  seen: VacancyLike[] = []
 ): T[] {
   if (list.length === 0) {
     return list;
@@ -59,6 +60,7 @@ export function excludeFeedbackVacancies<T extends VacancyLike>(
   const excludedIds = new Set<number>([
     ...disliked.map((item) => normalizeVacancyId(item.vacancy_id)),
     ...selected.map((item) => normalizeVacancyId(item.vacancy_id)),
+    ...seen.map((item) => normalizeVacancyId(item.vacancy_id)),
     ...hiddenIds.map((item) => normalizeVacancyId(item))
   ]);
   if (excludedIds.size === 0) {

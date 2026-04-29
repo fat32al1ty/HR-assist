@@ -11,6 +11,7 @@ Scenarios:
   * LLM failure → fallback annotations, no crash
   * budget exhausted → skip with ``rerank_skipped`` annotation
   * ``_splice_head`` preserves dropped candidates and tail beyond head
+  * requirements_check shape validation
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ def _ctx() -> ResumeContext:
             "seniority": "senior",
             "role_family": "software_engineering",
             "home_city": "Moscow",
+            "total_years": 5,
         },
         query_vector=[0.0],
         resume_skills=set(),
@@ -64,13 +66,46 @@ def _cand(vac_id: int, *, hybrid: float) -> Candidate:
         ),
         payload={
             "summary": f"summary-{vac_id}",
-            "must_have_skills": ["python"],
+            "must_have_skills": ["python", "postgresql"],
+            "nice_to_have_skills": ["kubernetes"],
+            "requirements": ["Опыт разработки на Python от 3 лет", "Знание SQL"],
             "role_family": "software_engineering",
         },
         vector_score=0.9,
     )
     cand.hybrid_score = hybrid
     return cand
+
+
+def _req_check(vacancy_id: int) -> dict:
+    return {
+        "must_have": [
+            {"text": "Python", "status": "ok", "evidence": "коммерческий опыт 5 лет"},
+            {"text": "PostgreSQL", "status": "partial", "evidence": "упомянут в проектах"},
+        ],
+        "nice_to_have": [
+            {"text": "Kubernetes", "status": "ok", "evidence": "сертификат CKA"},
+        ],
+        "experience": {
+            "required_years": 3,
+            "candidate_years": 5.0,
+            "status": "ok",
+        },
+    }
+
+
+def _llm_payload(*vacancy_ids: int) -> dict:
+    return {
+        "ranked": [
+            {
+                "vacancy_id": vid,
+                "position": i + 1,
+                "confidence": 0.9 - i * 0.1,
+                "requirements_check": _req_check(vid),
+            }
+            for i, vid in enumerate(vacancy_ids)
+        ]
+    }
 
 
 class LLMRerankStageTest(unittest.TestCase):
@@ -103,9 +138,8 @@ class LLMRerankStageTest(unittest.TestCase):
             diagnostics=MatchingDiagnostics(),
         )
         LLMRerankStage().run(state)
-        # No annotations, no splice.
         self.assertEqual([c.vacancy_id for c in state.candidates], [1])
-        self.assertNotIn("reason_ru", state.candidates[0].annotations)
+        self.assertNotIn("requirements_check", state.candidates[0].annotations)
 
     def test_cache_hit_reorders_and_annotates_without_calling_llm(self) -> None:
         state = MatchingState(
@@ -113,22 +147,7 @@ class LLMRerankStageTest(unittest.TestCase):
             candidates=[_cand(1, hybrid=0.8), _cand(2, hybrid=0.6)],
             diagnostics=MatchingDiagnostics(),
         )
-        cached = {
-            "ranked": [
-                {
-                    "vacancy_id": 2,
-                    "position": 1,
-                    "reason_ru": "Прямое совпадение по Kafka и платформенным задачам",
-                    "confidence": 0.9,
-                },
-                {
-                    "vacancy_id": 1,
-                    "position": 2,
-                    "reason_ru": "Чуть меньше платформы, но стек совпадает",
-                    "confidence": 0.7,
-                },
-            ]
-        }
+        cached = _llm_payload(2, 1)
         with (
             mock.patch.object(llm_rerank, "_budget_ok", return_value=True),
             mock.patch("app.services.rerank_cache.read", return_value=cached) as read_mock,
@@ -140,12 +159,11 @@ class LLMRerankStageTest(unittest.TestCase):
         read_mock.assert_called_once()
         write_mock.assert_not_called()
         llm_mock.assert_not_called()
-        # Reordered: cand 2 first.
         self.assertEqual([c.vacancy_id for c in state.candidates], [2, 1])
-        self.assertEqual(
-            state.candidates[0].annotations["reason_ru"],
-            "Прямое совпадение по Kafka и платформенным задачам",
-        )
+        req = state.candidates[0].annotations["requirements_check"]
+        self.assertIn("must_have", req)
+        self.assertIn("nice_to_have", req)
+        self.assertIn("experience", req)
         self.assertAlmostEqual(state.candidates[0].annotations["llm_confidence"], 0.9)
         self.assertEqual(state.diagnostics.custom.get("llm_rerank_cache_hit"), 1)
 
@@ -155,27 +173,12 @@ class LLMRerankStageTest(unittest.TestCase):
             candidates=[_cand(1, hybrid=0.7), _cand(2, hybrid=0.6)],
             diagnostics=MatchingDiagnostics(),
         )
-        llm_payload = {
-            "ranked": [
-                {
-                    "vacancy_id": 2,
-                    "position": 1,
-                    "reason_ru": "Ядро бизнеса на Python, близкий домен",
-                    "confidence": 0.85,
-                },
-                {
-                    "vacancy_id": 1,
-                    "position": 2,
-                    "reason_ru": "Платформа, но стек меньше совпадает",
-                    "confidence": 0.6,
-                },
-            ]
-        }
+        llm_result = _llm_payload(2, 1)
         with (
             mock.patch.object(llm_rerank, "_budget_ok", return_value=True),
             mock.patch("app.services.rerank_cache.read", return_value=None),
             mock.patch("app.services.rerank_cache.write") as write_mock,
-            mock.patch.object(llm_rerank, "_call_llm", return_value=llm_payload) as llm_mock,
+            mock.patch.object(llm_rerank, "_call_llm", return_value=llm_result) as llm_mock,
         ):
             LLMRerankStage().run(state)
 
@@ -183,7 +186,6 @@ class LLMRerankStageTest(unittest.TestCase):
         write_mock.assert_called_once()
         self.assertEqual([c.vacancy_id for c in state.candidates], [2, 1])
         self.assertEqual(state.diagnostics.custom.get("llm_rerank_applied"), 2)
-        # hybrid_score nudged so LLM order survives a downstream sort.
         self.assertGreaterEqual(state.candidates[0].hybrid_score, state.candidates[1].hybrid_score)
 
     def test_llm_failure_falls_back_and_marks_skipped(self) -> None:
@@ -220,7 +222,6 @@ class LLMRerankStageTest(unittest.TestCase):
         self.assertEqual(state.diagnostics.custom.get("llm_rerank_skipped_budget"), 1)
 
     def test_splice_head_preserves_dropped_and_tail(self) -> None:
-        # Head: 1 and 2. Tail: 3. Dropped: 4.
         head1 = _cand(1, hybrid=0.8)
         head2 = _cand(2, hybrid=0.7)
         tail = _cand(3, hybrid=0.4)
@@ -231,23 +232,7 @@ class LLMRerankStageTest(unittest.TestCase):
             candidates=[head1, head2, tail, dropped],
             diagnostics=MatchingDiagnostics(),
         )
-        cached = {
-            "ranked": [
-                {
-                    "vacancy_id": 2,
-                    "position": 1,
-                    "reason_ru": "сильнее совпадение",
-                    "confidence": 0.9,
-                },
-                {
-                    "vacancy_id": 1,
-                    "position": 2,
-                    "reason_ru": "близко, но слабее",
-                    "confidence": 0.7,
-                },
-            ]
-        }
-        # Force head-size = 2 by shrinking llm_rerank_top_k for this test.
+        cached = _llm_payload(2, 1)
         with (
             mock.patch.object(settings, "llm_rerank_top_k", 2),
             mock.patch.object(llm_rerank, "_budget_ok", return_value=True),
@@ -257,7 +242,6 @@ class LLMRerankStageTest(unittest.TestCase):
             LLMRerankStage().run(state)
 
         ids_in_order = [c.vacancy_id for c in state.candidates]
-        # Reordered head first, then tail 3, then dropped 4.
         self.assertEqual(ids_in_order, [2, 1, 3, 4])
         self.assertEqual(state.candidates[3].drop_reason, "domain_mismatch")
 
@@ -269,17 +253,7 @@ class LLMRerankStageTest(unittest.TestCase):
             candidates=[head1, head2],
             diagnostics=MatchingDiagnostics(),
         )
-        cached = {
-            "ranked": [
-                # LLM skipped candidate 2 entirely.
-                {
-                    "vacancy_id": 1,
-                    "position": 1,
-                    "reason_ru": "стек сходится",
-                    "confidence": 0.8,
-                },
-            ]
-        }
+        cached = _llm_payload(1)
         with (
             mock.patch.object(llm_rerank, "_budget_ok", return_value=True),
             mock.patch("app.services.rerank_cache.read", return_value=cached),
@@ -288,6 +262,72 @@ class LLMRerankStageTest(unittest.TestCase):
             LLMRerankStage().run(state)
 
         self.assertEqual([c.vacancy_id for c in state.candidates], [1, 2])
+
+    def test_requirements_check_shape_is_correct(self) -> None:
+        state = MatchingState(
+            resume_context=_ctx(),
+            candidates=[_cand(1, hybrid=0.8)],
+            diagnostics=MatchingDiagnostics(),
+        )
+        llm_result = _llm_payload(1)
+        with (
+            mock.patch.object(llm_rerank, "_budget_ok", return_value=True),
+            mock.patch("app.services.rerank_cache.read", return_value=None),
+            mock.patch("app.services.rerank_cache.write"),
+            mock.patch.object(llm_rerank, "_call_llm", return_value=llm_result),
+        ):
+            LLMRerankStage().run(state)
+
+        cand = state.candidates[0]
+        req = cand.annotations.get("requirements_check")
+        self.assertIsInstance(req, dict)
+        self.assertIsInstance(req["must_have"], list)
+        self.assertIsInstance(req["nice_to_have"], list)
+        # experience may be dict or None
+        self.assertIn("experience", req)
+        for item in req["must_have"]:
+            self.assertIn(item["status"], {"ok", "partial", "missing", "unknown"})
+            self.assertIsInstance(item["text"], str)
+            self.assertIsInstance(item["evidence"], str)
+
+    def test_requirements_check_list_capped_at_12(self) -> None:
+        oversized_check = {
+            "must_have": [
+                {"text": f"req-{i}", "status": "ok", "evidence": "присутствует"}
+                for i in range(15)
+            ],
+            "nice_to_have": [
+                {"text": f"nice-{i}", "status": "missing", "evidence": "отсутствует"}
+                for i in range(14)
+            ],
+            "experience": None,
+        }
+        result = {
+            "ranked": [
+                {
+                    "vacancy_id": 1,
+                    "position": 1,
+                    "confidence": 0.8,
+                    "requirements_check": oversized_check,
+                }
+            ]
+        }
+        state = MatchingState(
+            resume_context=_ctx(),
+            candidates=[_cand(1, hybrid=0.8)],
+            diagnostics=MatchingDiagnostics(),
+        )
+        with (
+            mock.patch.object(llm_rerank, "_budget_ok", return_value=True),
+            mock.patch("app.services.rerank_cache.read", return_value=None),
+            mock.patch("app.services.rerank_cache.write"),
+            mock.patch.object(llm_rerank, "_call_llm", return_value=result),
+        ):
+            LLMRerankStage().run(state)
+
+        req = state.candidates[0].annotations["requirements_check"]
+        self.assertLessEqual(len(req["must_have"]), 12)
+        self.assertLessEqual(len(req["nice_to_have"]), 12)
 
 
 if __name__ == "__main__":

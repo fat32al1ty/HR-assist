@@ -170,6 +170,27 @@ class VacancyFeedbackResponse(BaseModel):
     liked: bool
 
 
+class VacancyFeedbackSeenResponse(BaseModel):
+    vacancy_id: int
+    seen: bool
+    liked: bool
+    disliked: bool
+
+
+class RequirementOverrideRequest(BaseModel):
+    section: Literal["must_have", "nice_to_have"]
+    text: str
+    # null clears the override and falls back to the LLM-derived status.
+    status: Literal["ok", "missing"] | None = None
+
+
+class RequirementOverrideResponse(BaseModel):
+    vacancy_id: int
+    section: Literal["must_have", "nice_to_have"]
+    text: str
+    status: Literal["ok", "missing"] | None
+
+
 class RecommendationJobStartResponse(BaseModel):
     job_id: str
     status: str

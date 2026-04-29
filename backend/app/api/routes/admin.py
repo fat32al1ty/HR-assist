@@ -37,7 +37,7 @@ from app.schemas.admin import (
     QdrantStatsRead,
     ResumeStatsRead,
 )
-from app.services import salary_predictor
+from app.services import admin_metrics, salary_predictor
 from app.services.recommendation_jobs import cancel_job_as_admin
 from app.services.salary_pipeline import populate_predicted_salary
 from app.services.vacancy_sources import (
@@ -638,3 +638,88 @@ def salary_predictor_backfill(
     db.commit()
 
     return AdminSalaryBackfillResult(processed=len(rows), updated=updated)
+
+
+# ---------------------------------------------------------------------------
+# Metrics dashboards (v0.23.0)
+# ---------------------------------------------------------------------------
+
+
+def _validate_range(range_label: str) -> str:
+    if range_label not in admin_metrics.ALLOWED_RANGES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"range must be one of: {sorted(admin_metrics.ALLOWED_RANGES)}",
+        )
+    return range_label
+
+
+@router.get("/metrics/latency")
+def metrics_latency(
+    range: str = Query("7d"),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    return admin_metrics.latency_distribution(db, range_label=_validate_range(range))
+
+
+@router.get("/metrics/cost")
+def metrics_cost(
+    range: str = Query("7d"),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    return admin_metrics.cost_breakdown(db, range_label=_validate_range(range))
+
+
+@router.get("/metrics/activation-funnel")
+def metrics_activation_funnel(
+    range: str = Query("30d"),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    return admin_metrics.activation_funnel(db, range_label=_validate_range(range))
+
+
+@router.get("/metrics/retention")
+def metrics_retention(
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    return admin_metrics.retention_cohort(db)
+
+
+@router.get("/metrics/quality")
+def metrics_quality(
+    range: str = Query("7d"),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    return admin_metrics.quality_metrics(db, range_label=_validate_range(range))
+
+
+@router.get("/metrics/segment-warmup")
+def metrics_segment_warmup(
+    range: str = Query("7d"),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    return admin_metrics.segment_warmup_metrics(db, range_label=_validate_range(range))
+
+
+@router.get("/metrics/freshness")
+def metrics_freshness(
+    range: str = Query("7d"),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    return admin_metrics.freshness_sweep_history(db, range_label=_validate_range(range))
+
+
+@router.get("/metrics/match-events")
+def metrics_match_events(
+    range: str = Query("7d"),
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    return admin_metrics.match_events_summary(db, range_label=_validate_range(range))

@@ -23,6 +23,9 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Bump when the LLM result schema changes; old SHA keys stop matching.
+_KEY_VERSION = "3"
+
 
 def _cache_dir() -> Path:
     directory = Path(settings.storage_dir) / "rerank_cache"
@@ -31,7 +34,7 @@ def _cache_dir() -> Path:
 
 
 def _key(resume_id: int, vacancy_ids: list[int], model: str) -> str:
-    raw = f"{resume_id}|{','.join(str(v) for v in sorted(vacancy_ids))}|{model}"
+    raw = f"v{_KEY_VERSION}|{resume_id}|{','.join(str(v) for v in sorted(vacancy_ids))}|{model}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 

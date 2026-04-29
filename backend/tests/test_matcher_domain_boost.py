@@ -102,6 +102,9 @@ def _run_match(*, preferred_domains: list[str]) -> tuple[list[dict], dict]:
         patch("app.services.matching_service.list_applied_vacancy_ids_for_user", return_value=[]),
         patch("app.services.matching_service.list_disliked_vacancy_ids", return_value=[]),
         patch("app.services.matching_service.list_liked_vacancy_ids", return_value=[]),
+        patch(
+            "app.services.matching_service.list_seen_vacancy_ids_from_feedback", return_value=set()
+        ),
         patch("app.services.matching_service.list_seen_vacancy_ids", return_value=set()),
         patch("app.services.matching_service.list_added_skill_texts", return_value=[]),
         patch("app.services.matching_service.list_rejected_skill_texts", return_value=[]),

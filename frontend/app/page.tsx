@@ -2,7 +2,6 @@
 
 import { FormEvent, Fragment, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -24,6 +23,8 @@ import { useSession } from '@/lib/session';
 import { type Resume, resumeDisplayName } from '@/types/resume';
 import PillsEditor from '@/components/preferences/PillsEditor';
 import { fetchDomainDisplayMap } from '@/lib/preferences';
+import RequirementsChecklist from '@/components/match/RequirementsChecklist';
+import type { RequirementsCheck } from '@/types/requirementsCheck';
 const MIN_PROGRESS_VISIBLE_MS = 1400;
 const RESTORE_POLL_TIMEOUT_MS = 360000;
 const LAST_JOB_ID_STORAGE_KEY = 'last_recommendation_job_id';
@@ -80,7 +81,7 @@ type VacancyMatch = {
   salary_min?: number | null;
   salary_max?: number | null;
   salary_currency?: string | null;
-  profile: Record<string, unknown> | null;
+  profile: (Record<string, unknown> & { requirements_check?: RequirementsCheck | null }) | null;
   tier?: 'strong' | 'maybe' | null;
   match_run_id?: string | null;
 };
@@ -188,35 +189,6 @@ function asText(value: unknown, fallback: string): string {
 
 function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function missingRequirementsFromMatch(match: VacancyMatch): string[] {
-  if (!match.profile || typeof match.profile !== 'object') {
-    return [];
-  }
-  return asStringArray(match.profile.missing_requirements).slice(0, 8);
-}
-
-function matchedSkillsFromMatch(match: VacancyMatch): string[] {
-  if (!match.profile || typeof match.profile !== 'object') {
-    return [];
-  }
-  return asStringArray(match.profile.matched_skills).slice(0, 10);
-}
-
-function matchedRequirementsFromMatch(match: VacancyMatch): string[] {
-  if (!match.profile || typeof match.profile !== 'object') {
-    return [];
-  }
-  return asStringArray(match.profile.matched_requirements).slice(0, 10);
-}
-
-function reasonFromMatch(match: VacancyMatch): string | null {
-  if (!match.profile || typeof match.profile !== 'object') {
-    return null;
-  }
-  const raw = match.profile.reason_ru;
-  return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : null;
 }
 
 function scoreToPercent(score: number): string {
@@ -381,6 +353,7 @@ export default function DashboardPage() {
   const [selectedVacancies, setSelectedVacancies] = useState<VacancyMatch[]>([]);
   const [dislikedVacancies, setDislikedVacancies] = useState<VacancyMatch[]>([]);
   const [appliedVacancies, setAppliedVacancies] = useState<VacancyMatch[]>([]);
+  const [seenVacancies, setSeenVacancies] = useState<VacancyMatch[]>([]);
   const [expandedResumeIds, setExpandedResumeIds] = useState<Record<number, boolean>>({});
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
   const [message, setMessage] = useState('');
@@ -444,6 +417,7 @@ export default function DashboardPage() {
     void loadResumes(token);
     void loadSelectedVacancies();
     void loadDislikedVacancies();
+    void loadSeenVacancies();
     void loadUserPrefs();
   }, [token]);
 
@@ -475,13 +449,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setMatches((current) => {
-      const filtered = excludeFeedbackVacancies(current, dislikedVacancies, [...selectedVacancies, ...appliedVacancies], hiddenMatchIds);
+      const filtered = excludeFeedbackVacancies(current, dislikedVacancies, [...selectedVacancies, ...appliedVacancies], hiddenMatchIds, seenVacancies);
       if (filtered.length === current.length) {
         return current;
       }
       return filtered;
     });
-  }, [dislikedVacancies, selectedVacancies, appliedVacancies, hiddenMatchIds]);
+  }, [dislikedVacancies, selectedVacancies, appliedVacancies, hiddenMatchIds, seenVacancies]);
 
   // Seed pills from resume analysis when the user hasn't saved any yet.
   // We can't auto-write to the DB (that was the v0.16.0 disaster), but we
@@ -565,7 +539,7 @@ export default function DashboardPage() {
     setSelectedResumeId(completed ? completed.id : resumes[0].id);
   }, [resumes, selectedResumeId]);
 
-  const visibleMatches = excludeFeedbackVacancies(matches, dislikedVacancies, [...selectedVacancies, ...appliedVacancies], hiddenMatchIds);
+  const visibleMatches = excludeFeedbackVacancies(matches, dislikedVacancies, [...selectedVacancies, ...appliedVacancies], hiddenMatchIds, seenVacancies);
 
   const currentMatchRunId = visibleMatches[0]?.match_run_id ?? null;
   const matchRunIdRef = useRef<string | null>(null);
@@ -644,7 +618,8 @@ export default function DashboardPage() {
         status.matches || [],
         dislikedVacancies,
         selectedVacancies,
-        hiddenMatchIds
+        hiddenMatchIds,
+        seenVacancies
       );
       setMatches(visibleMatches);
       setMatchesPageSize(10);
@@ -843,7 +818,7 @@ export default function DashboardPage() {
       setMatches([]);
       setLastMatchingQuery('');
       setHiddenMatchIds([]);
-      await Promise.all([loadSelectedVacancies(), loadDislikedVacancies()]);
+      await Promise.all([loadSelectedVacancies(), loadDislikedVacancies(), loadSeenVacancies()]);
       setMessage(`Активный профиль: ${resumeDisplayName(updated)}.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Не удалось переключить профиль');
@@ -1176,6 +1151,15 @@ export default function DashboardPage() {
     }
   }
 
+  async function loadSeenVacancies() {
+    try {
+      const data = await request<VacancyMatch[]>('/api/vacancies/feedback/seen');
+      setSeenVacancies(data);
+    } catch {
+      setSeenVacancies([]);
+    }
+  }
+
   async function loadDashboardStats(resumeId: number | null) {
     try {
       const suffix = resumeId ? `?resume_id=${resumeId}` : '';
@@ -1206,7 +1190,9 @@ export default function DashboardPage() {
       setResumes((current) => [resume, ...current]);
       setFile(null);
 
-      if (resume.status !== 'completed') {
+      if (resume.status === 'completed') {
+        setMessage('');
+      } else {
         // Resume is still processing — poll until completed
         setMessage('Анализируем резюме…');
         const MAX_POLL_MS = 120_000;
@@ -1222,6 +1208,7 @@ export default function DashboardPage() {
             // Keep local state in sync
             setResumes(list);
             if (updated.status === 'completed') {
+              setMessage('');
               break;
             }
             if (updated.status === 'failed') {
@@ -1365,7 +1352,8 @@ export default function DashboardPage() {
           instant.matches || [],
           dislikedVacancies,
           selectedVacancies,
-          hiddenMatchIds
+          hiddenMatchIds,
+          seenVacancies
         );
         setMatches(visibleInstant);
         setMatchesPageSize(10);
@@ -1518,20 +1506,6 @@ export default function DashboardPage() {
     }
     setApplyingVacancyIds((current) => ({ ...current, [vacancyId]: true }));
     try {
-      // Fire apply_after_strategy_view if user already viewed strategy for this pair
-      try {
-        const strategySeen = sessionStorage.getItem(
-          `strategy_seen:${selectedResumeId}:${vacancy.vacancy_id}`
-        );
-        if (strategySeen === '1') {
-          trackEvent('apply_after_strategy_view', {
-            resume_id: selectedResumeId ?? undefined,
-            vacancy_id: vacancy.vacancy_id,
-          });
-        }
-      } catch {
-        // sessionStorage may be blocked — not critical
-      }
       const response = await fetch(`${API_BASE_URL}/api/applications`, {
         method: 'POST',
         headers: {
@@ -1668,6 +1642,105 @@ export default function DashboardPage() {
     }
   }
 
+  async function seenVacancy(vacancy: VacancyMatch) {
+    setMatchingBusy(true);
+    const vacancyId = normalizeVacancyId(vacancy.vacancy_id);
+    setHiddenMatchIds((current) => (current.includes(vacancyId) ? current : [vacancyId, ...current]));
+    setMatches((current) => removeVacancyMatchEntry(current, vacancy));
+    try {
+      await request<{ vacancy_id: number; seen: boolean; liked: boolean; disliked: boolean }>('/api/vacancies/feedback/seen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vacancy_id: vacancy.vacancy_id })
+      });
+      setSeenVacancies((current) => {
+        if (current.some((item) => normalizeVacancyId(item.vacancy_id) === vacancyId)) {
+          return current;
+        }
+        return [vacancy, ...current];
+      });
+      setSelectedVacancies((current) => removeVacancyFromList(current, vacancyId));
+      setDislikedVacancies((current) => removeVacancyFromList(current, vacancyId));
+      trackEvent('vacancy_seen', { vacancy_id: vacancy.vacancy_id });
+    } catch (error) {
+      setMatchingMessage(error instanceof Error ? error.message : 'Не удалось пометить вакансию как просмотренную');
+    } finally {
+      setMatchingBusy(false);
+    }
+  }
+
+  async function unseenVacancy(vacancyId: number) {
+    setMatchingBusy(true);
+    const normalizedVacancyId = normalizeVacancyId(vacancyId);
+    try {
+      await request<{ vacancy_id: number; seen: boolean; liked: boolean; disliked: boolean }>('/api/vacancies/feedback/unseen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vacancy_id: vacancyId })
+      });
+      setSeenVacancies((current) => removeVacancyFromList(current, normalizedVacancyId));
+      setHiddenMatchIds((current) => current.filter((item) => item !== normalizedVacancyId));
+    } catch (error) {
+      setMatchingMessage(error instanceof Error ? error.message : 'Не удалось вернуть вакансию из просмотренных');
+    } finally {
+      setMatchingBusy(false);
+    }
+  }
+
+  async function toggleRequirementOverride(
+    vacancyId: number,
+    section: 'must_have' | 'nice_to_have',
+    text: string,
+    currentStatus: 'ok' | 'partial' | 'missing' | 'unknown'
+  ) {
+    // Two-state toggle: ok ↔ missing. Anything else (partial/unknown) → ok on first click.
+    const nextStatus: 'ok' | 'missing' = currentStatus === 'ok' ? 'missing' : 'ok';
+    // Optimistic update.
+    setMatches((current) =>
+      current.map((m) => {
+        if (m.vacancy_id !== vacancyId) return m;
+        const profile = m.profile && typeof m.profile === 'object' ? { ...m.profile } : {};
+        const rc = profile.requirements_check;
+        if (!rc) return m;
+        const updatedRc = {
+          ...rc,
+          [section]: rc[section].map((item) =>
+            item.text === text ? { ...item, status: nextStatus, user_overridden: true } : item
+          )
+        };
+        return { ...m, profile: { ...profile, requirements_check: updatedRc } };
+      })
+    );
+    try {
+      await request<{ vacancy_id: number; section: string; text: string; status: string | null }>(
+        `/api/vacancies/${vacancyId}/requirement-override`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ section, text, status: nextStatus })
+        }
+      );
+    } catch (error) {
+      // Revert on failure.
+      setMatches((current) =>
+        current.map((m) => {
+          if (m.vacancy_id !== vacancyId) return m;
+          const profile = m.profile && typeof m.profile === 'object' ? { ...m.profile } : {};
+          const rc = profile.requirements_check;
+          if (!rc) return m;
+          const revertedRc = {
+            ...rc,
+            [section]: rc[section].map((item) =>
+              item.text === text ? { ...item, status: currentStatus } : item
+            )
+          };
+          return { ...m, profile: { ...profile, requirements_check: revertedRc } };
+        })
+      );
+      setMatchingMessage(error instanceof Error ? error.message : 'Не удалось обновить статус требования');
+    }
+  }
+
   function logout() {
     clearSession();
   }
@@ -1731,8 +1804,7 @@ export default function DashboardPage() {
                   Твой карьерный <span className="text-[color:var(--color-accent)]">AI</span> консультант.
                 </h1>
                 <p className="text-[length:var(--text-lg)] leading-[var(--leading-relaxed)] text-[color:var(--color-ink-secondary)] max-w-[560px]">
-                  Резюме на входе — на выходе аудит под рынок, умный подбор и
-                  стратегия отклика на каждую вакансию.
+                  Резюме на входе — на выходе аудит под рынок и умный подбор под твой профиль.
                 </p>
               </div>
 
@@ -1741,7 +1813,6 @@ export default function DashboardPage() {
                   ['AI-анализ твоего резюме', 'Роль, грейд, сильные стороны и пробелы. AI читает резюме как рекрутёр и ставит тебя на карту рынка.'],
                   ['Рекомендации под цели и рынок', 'Топ-навыки из живых вакансий, зарплатный коридор по твоей роли и гео — что реально добрать, чтобы дойти до нужной позиции.'],
                   ['Умный подбор по смыслу, не по ключевым словам', 'AI понимает суть опыта, а не совпадение строк — нерелевантный спам не попадает в список.'],
-                  ['Стратегия отклика и карьерного развития', 'На каждую вакансию: что в опыте релевантно, чего не хватает и сопроводительное под позицию по одной кнопке.'],
                   ['Обучается на твоих правках', 'Помечаешь «не я / не моё» — следующий подбор учитывает корректировку и точнее попадает в твой профиль.'],
                 ].map(([title, body]) => (
                   <li key={title} className="flex gap-3">
@@ -2429,32 +2500,6 @@ export default function DashboardPage() {
                   {/* Match cards — flat list */}
                   <div className="flex flex-col gap-3">
                   {visibleMatches.slice(0, matchesPageSize).map((match, matchIndex) => {
-                      const matchedSkills = matchedSkillsFromMatch(match);
-                      const matchedRequirements = matchedRequirementsFromMatch(match);
-                      const missingRequirements = missingRequirementsFromMatch(match);
-                      const matchedEntries = matchedRequirements.length > 0 ? matchedRequirements : matchedSkills;
-                      const curatedForResume = curatedSkills;
-                      const curatedAddedLower = new Set(
-                        curatedForResume.filter((row) => row.direction === 'added').map((row) => row.skill_text.toLowerCase())
-                      );
-                      const curatedRejectedLower = new Set(
-                        curatedForResume.filter((row) => row.direction === 'rejected').map((row) => row.skill_text.toLowerCase())
-                      );
-                      const locallyAddedForMatch = curatedForResume
-                        .filter(
-                          (row) =>
-                            row.direction === 'added' &&
-                            row.source_vacancy_id === match.vacancy_id &&
-                            !matchedEntries.some((item) => item.toLowerCase() === row.skill_text.toLowerCase())
-                        )
-                        .map((row) => row.skill_text);
-                      const visibleMissing = missingRequirements.filter(
-                        (item) =>
-                          !curatedAddedLower.has(item.toLowerCase()) &&
-                          !curatedRejectedLower.has(item.toLowerCase())
-                      );
-                      const isCurating = (skill: string, direction: CuratedDirection) =>
-                        curatingSkillKey === `${match.vacancy_id}::${direction}::${skill.toLowerCase()}`;
                       return (
                         <article
                           key={normalizeVacancyId(match.vacancy_id)}
@@ -2505,94 +2550,15 @@ export default function DashboardPage() {
                             {match.location || 'Локация не указана'}
                           </p>
 
-                          {/* Почему показали */}
-                          {reasonFromMatch(match) ? (
-                            <Collapsible>
-                              <CollapsibleTrigger className="group flex items-center justify-end w-full text-right text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-ink-secondary)] transition-colors py-0.5 gap-1">
-                                <span>Почему показали</span>
-                                <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
-                              </CollapsibleTrigger>
-                              <CollapsibleContent className="data-[state=open]:animate-slide-down">
-                                <p className="match-reason text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] leading-[var(--leading-snug)] mt-1">
-                                  {reasonFromMatch(match)}
-                                </p>
-                              </CollapsibleContent>
-                            </Collapsible>
+                          {/* Requirements checklist */}
+                          {match.profile?.requirements_check ? (
+                            <RequirementsChecklist
+                              data={match.profile.requirements_check}
+                              onToggle={(section, text, currentStatus) =>
+                                toggleRequirementOverride(match.vacancy_id, section, text, currentStatus)
+                              }
+                            />
                           ) : null}
-
-                          {/* Fit grid — pill badges */}
-                          <div className="fit-grid">
-                            <div className="fit-box fit-matched">
-                              <p className="fit-title">Подходишь</p>
-                              {matchedEntries.length > 0 || locallyAddedForMatch.length > 0 ? (
-                                <ul>
-                                  {matchedEntries.map((item) => (
-                                    <li key={`${match.vacancy_id}-match-${item}`}>{item}</li>
-                                  ))}
-                                  {locallyAddedForMatch.map((item) => (
-                                    <li
-                                      key={`${match.vacancy_id}-match-added-${item}`}
-                                      className="fit-item-added"
-                                    >
-                                      {item}
-                                      <span className="curated-badge" title="Добавлено вручную">
-                                        ✓
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <p className="fit-empty">совпадение по ключевым словам</p>
-                              )}
-                            </div>
-                            <div className="fit-box fit-missing">
-                              <p className="fit-title">Не хватает</p>
-                              {visibleMissing.length > 0 ? (
-                                <ul>
-                                  {visibleMissing.map((item) => (
-                                    <li
-                                      key={`${match.vacancy_id}-miss-${item}`}
-                                      className="fit-missing-item"
-                                    >
-                                      <span className="fit-missing-text">{item}</span>
-                                      <span className="fit-missing-actions">
-                                        <button
-                                          type="button"
-                                          className="fit-micro-btn fit-micro-add"
-                                          title="Добавить в профиль"
-                                          aria-label={`Добавить навык «${item}» в профиль`}
-                                          disabled={
-                                            !selectedResumeId ||
-                                            matchingBusy ||
-                                            Boolean(curatingSkillKey)
-                                          }
-                                          onClick={() => void curateMatchSkill(match, item, 'added')}
-                                        >
-                                          {isCurating(item, 'added') ? '…' : '✓'}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="fit-micro-btn fit-micro-reject"
-                                          title="Отметить как не моё"
-                                          aria-label={`Отметить «${item}» как не моё`}
-                                          disabled={
-                                            !selectedResumeId ||
-                                            matchingBusy ||
-                                            Boolean(curatingSkillKey)
-                                          }
-                                          onClick={() => void curateMatchSkill(match, item, 'rejected')}
-                                        >
-                                          {isCurating(item, 'rejected') ? '…' : '✗'}
-                                        </button>
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <p className="fit-empty">все требования закрыты</p>
-                              )}
-                            </div>
-                          </div>
 
                           {/* Actions */}
                           <div className="flex items-center gap-2 flex-wrap pt-1">
@@ -2618,13 +2584,6 @@ export default function DashboardPage() {
                                 ? 'Создаём…'
                                 : 'Откликнуться'}
                             </Button>
-                            {selectedResumeId && (
-                              <Link
-                                href={`/strategy?resume_id=${selectedResumeId}&vacancy_id=${match.vacancy_id}`}
-                              >
-                                <Button variant="secondary" size="sm">Стратегия</Button>
-                              </Link>
-                            )}
                             <button
                               type="button"
                               disabled={matchingBusy}
@@ -2663,6 +2622,18 @@ export default function DashboardPage() {
                               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 6h10"/></svg>
                               Не подходит
                             </button>
+                            <button
+                              type="button"
+                              disabled={matchingBusy}
+                              title="Уже видел"
+                              onClick={() => {
+                                void seenVacancy(match);
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-md)] text-[length:var(--text-xs)] font-medium border border-transparent text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-danger)] hover:bg-[var(--color-danger-subtle)] hover:border-[color-mix(in_srgb,var(--color-danger)_30%,transparent)] transition-colors disabled:opacity-40"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="2"/><path d="M1 6c1.5-3 8.5-3 10 0"/><path d="M1 6c1.5 3 8.5 3 10 0"/></svg>
+                              Уже видел
+                            </button>
                             <a
                               href={match.source_url}
                               target="_blank"
@@ -2688,6 +2659,15 @@ export default function DashboardPage() {
                         </article>
                       );
                     })}
+                    {visibleMatches.length > matchesPageSize ? (
+                      <button
+                        type="button"
+                        onClick={() => setMatchesPageSize((current) => current + 10)}
+                        className="self-center mt-2 px-4 py-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[length:var(--text-sm)] font-medium text-[color:var(--color-ink-secondary)] hover:bg-[var(--color-surface-muted)] hover:text-[color:var(--color-ink)] transition-colors"
+                      >
+                        Показать ещё {Math.min(10, visibleMatches.length - matchesPageSize)} из {visibleMatches.length - matchesPageSize}
+                      </button>
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>
@@ -2789,6 +2769,62 @@ export default function DashboardPage() {
                               onClick={() => void unlikeVacancy(item.vacancy_id)}
                             >
                               Убрать
+                            </Button>
+                          </div>
+                        </article>
+                      ))}
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+
+              <Card className="animate-fade-in border-transparent shadow-none">
+                <Collapsible>
+                  <CardHeader className="pb-3">
+                    <CollapsibleTrigger className="group flex items-center justify-between w-full text-left gap-3">
+                      <CardTitle>Просмотренные</CardTitle>
+                      <span className="flex items-center gap-2 text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">
+                        <span className="text-[length:var(--text-xs)] bg-[var(--color-surface-muted)] px-2 py-0.5 rounded-full">
+                          {seenVacancies.length}
+                        </span>
+                        <span className="transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180">▼</span>
+                      </span>
+                    </CollapsibleTrigger>
+                  </CardHeader>
+                  <CollapsibleContent className="data-[state=open]:animate-slide-down">
+                    <CardContent className="pt-0 flex flex-col gap-3">
+                      {seenVacancies.length === 0 ? (
+                        <p className="text-[color:var(--color-ink-secondary)] text-[length:var(--text-sm)] italic">
+                          Пока нет просмотренных вакансий.
+                        </p>
+                      ) : null}
+                      {seenVacancies.map((item) => (
+                        <article
+                          key={`seen-${item.vacancy_id}`}
+                          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-4 flex flex-col gap-2 shadow-[var(--shadow-xs)]"
+                        >
+                          <h3 className="text-[length:var(--text-lg)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.02em]">
+                            {item.title}
+                          </h3>
+                          <p className="text-[length:var(--text-sm)] text-[color:var(--color-ink-muted)] m-0">
+                            {item.company || 'Компания не указана'} · {item.location || 'Локация не указана'}
+                          </p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <a
+                              href={item.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-accent)] hover:text-[color:var(--color-accent-hover)] transition-colors no-underline"
+                            >
+                              Источник →
+                            </a>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              disabled={matchingBusy}
+                              onClick={() => void unseenVacancy(item.vacancy_id)}
+                            >
+                              Вернуть
                             </Button>
                           </div>
                         </article>

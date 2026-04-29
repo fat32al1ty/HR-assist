@@ -14,7 +14,11 @@ from app.repositories.resume_user_skills import (
     list_rejected_skill_texts,
 )
 from app.repositories.resumes import get_resume_for_user
-from app.repositories.user_vacancy_feedback import list_disliked_vacancy_ids, list_liked_vacancy_ids
+from app.repositories.user_vacancy_feedback import (
+    list_disliked_vacancy_ids,
+    list_liked_vacancy_ids,
+    list_seen_vacancy_ids_from_feedback,
+)
 from app.repositories.user_vacancy_seen import list_seen_vacancy_ids
 from app.repositories.vacancies import (
     get_vacancy_by_id,  # noqa: F401  — re-exported for stages + existing test patches
@@ -2136,9 +2140,9 @@ def _candidate_to_match_dict(
     if tier_reason is not None:
         profile["tier_reason"] = tier_reason
     annotations = cand.annotations if isinstance(cand.annotations, dict) else {}
-    reason_ru = annotations.get("reason_ru")
-    if isinstance(reason_ru, str) and reason_ru.strip():
-        profile["reason_ru"] = reason_ru
+    req_check = annotations.get("requirements_check")
+    if isinstance(req_check, dict):
+        profile["requirements_check"] = req_check
     if annotations.get("rerank_skipped"):
         profile["rerank_skipped"] = True
     confidence = annotations.get("llm_confidence")
@@ -2512,12 +2516,13 @@ def match_vacancies_for_resume(
     pos, neg = vector_store.get_user_preference_vectors(user_id=user_id, resume_id=resume_id)
     query_vector = _blend_resume_with_preferences(query_vector, pos, neg)
 
-    # Hard excludes: explicit user intent — applied, disliked, liked.
+    # Hard excludes: explicit user intent — applied, disliked, liked, seen.
     # These remain excluded even when the seen-dedup fallback fires.
     hard_excluded_set = (
         set(list_disliked_vacancy_ids(db, user_id=user_id, resume_id=resume_id))
         .union(list_liked_vacancy_ids(db, user_id=user_id, resume_id=resume_id))
         .union(list_applied_vacancy_ids_for_user(db, user_id=user_id, resume_id=resume_id))
+        .union(list_seen_vacancy_ids_from_feedback(db, user_id=user_id, resume_id=resume_id))
     )
     # Soft excludes: recently-seen vacancies. Dropped on fallback so the
     # user gets previously-shown-but-still-relevant results instead of an
@@ -2571,6 +2576,58 @@ def match_vacancies_for_resume(
     return _stamp_and_log_impressions(db, user_id=user_id, resume_id=resume_id, matches=merged)
 
 
+def _apply_requirement_overrides(db: Session, *, resume_id: int, matches: list[dict]) -> None:
+    """Layer per-(resume,vacancy,requirement) status overrides on top of LLM output.
+
+    User-set ✓/✗ wins. Best-effort — telemetry-style; failures never fail
+    the response.
+    """
+    try:
+        from app.repositories.requirement_overrides import (  # noqa: PLC0415
+            list_for_resume,
+        )
+
+        vac_ids: list[int] = []
+        for match in matches:
+            vid = match.get("vacancy_id") if isinstance(match, dict) else None
+            if isinstance(vid, int):
+                vac_ids.append(vid)
+        if not vac_ids:
+            return
+        rows = list_for_resume(db, resume_id=resume_id, vacancy_ids=vac_ids)
+        if not rows:
+            return
+        # index: (vacancy_id, section, lower(text)) -> status
+        idx: dict[tuple[int, str, str], str] = {}
+        for row in rows:
+            idx[(row.vacancy_id, row.section, row.requirement_text.strip().lower())] = row.status
+        for match in matches:
+            if not isinstance(match, dict):
+                continue
+            vacancy_id = match.get("vacancy_id")
+            profile = match.get("profile") if isinstance(match.get("profile"), dict) else None
+            req_check = profile.get("requirements_check") if profile else None
+            if not isinstance(req_check, dict) or not isinstance(vacancy_id, int):
+                continue
+            for section in ("must_have", "nice_to_have"):
+                items = req_check.get(section)
+                if not isinstance(items, list):
+                    continue
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    text_value = item.get("text")
+                    if not isinstance(text_value, str):
+                        continue
+                    key = (vacancy_id, section, text_value.strip().lower())
+                    overridden = idx.get(key)
+                    if overridden:
+                        item["status"] = overridden
+                        item["user_overridden"] = True
+    except Exception as error:  # noqa: BLE001
+        logger.warning("requirement override merge skipped (resume=%s): %s", resume_id, error)
+
+
 def _stamp_and_log_impressions(
     db: Session,
     *,
@@ -2591,6 +2648,7 @@ def _stamp_and_log_impressions(
 
     if not matches:
         return matches
+    _apply_requirement_overrides(db, resume_id=resume_id, matches=matches)
     run_id = _uuid.uuid4()
     for match in matches:
         match["match_run_id"] = str(run_id)

@@ -46,17 +46,64 @@ def log_openai_call(
     duration_ms: int,
     event: str = OPENAI_CALL_EVENT,
 ) -> None:
-    """Emit one JSON line per OpenAI call for audit + cost attribution."""
+    """Emit one JSON line per OpenAI call for audit + cost attribution.
+
+    v0.23.0: also writes a persistent row to `openai_call_log` and bumps
+    the Prometheus counter+histogram. Both DB write and counter are
+    best-effort — never let observability break an OpenAI request.
+    """
+    safe_prompt = int(max(0, prompt_tokens))
+    safe_completion = int(max(0, completion_tokens))
+    safe_cost = round(float(cost_usd), 6)
+    safe_duration_ms = int(max(0, duration_ms))
+
     payload = {
         "event": event,
         "model": model,
-        "prompt_tokens": int(max(0, prompt_tokens)),
-        "completion_tokens": int(max(0, completion_tokens)),
-        "cost_usd": round(float(cost_usd), 6),
+        "prompt_tokens": safe_prompt,
+        "completion_tokens": safe_completion,
+        "cost_usd": safe_cost,
         "user_id": user_id,
-        "duration_ms": int(max(0, duration_ms)),
+        "duration_ms": safe_duration_ms,
     }
     OPENAI_CALL_LOGGER.info(json.dumps(payload, ensure_ascii=False))
+
+    # Prometheus counter + duration histogram. Convert ms→seconds for
+    # downstream Grafana rate() friendliness.
+    try:
+        from app.services.metrics_registry import record_openai_call as _record_metric
+
+        _record_metric(model=model, status="ok", duration_seconds=safe_duration_ms / 1000.0)
+    except Exception:
+        pass
+
+    # Persistent DB row. Local imports to avoid a circular import at
+    # module load — `openai_usage.py` is imported very early.
+    try:
+        from app.api.middleware.request_id import current_request_id
+        from app.db.session import SessionLocal
+        from app.models.openai_call_log import OpenaiCallLog
+
+        db = SessionLocal()
+        try:
+            db.add(
+                OpenaiCallLog(
+                    model=model,
+                    prompt_tokens=safe_prompt,
+                    completion_tokens=safe_completion,
+                    cost_usd=safe_cost,
+                    duration_ms=safe_duration_ms,
+                    user_id=user_id,
+                    request_id=current_request_id(),
+                )
+            )
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        # Don't let observability shake an OpenAI flow. The stdout JSON
+        # line above is the always-on safety net.
+        pass
 
 
 def _current_user_id() -> int | None:

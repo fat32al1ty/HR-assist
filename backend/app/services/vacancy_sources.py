@@ -521,6 +521,20 @@ def _format_hh_date_from(value: datetime) -> str:
 def _fetch_hh_page(
     *, query: str, per_page: int, page: int, date_from: datetime | None
 ) -> list[dict[str, Any]]:
+    # Local import to avoid circular: metrics_registry → SessionLocal → models → ...
+    try:
+        from app.services.metrics_registry import record_hh_api as _record_hh_api
+    except Exception:
+        _record_hh_api = None  # type: ignore[assignment]
+
+    def _bump(status_code: int) -> None:
+        if _record_hh_api is None:
+            return
+        try:
+            _record_hh_api(status_code=status_code)
+        except Exception:
+            pass
+
     params: dict[str, Any] = {
         "text": query,
         "per_page": per_page,
@@ -535,17 +549,21 @@ def _fetch_hh_page(
         response.raise_for_status()
     except httpx.HTTPStatusError as exc:
         body = (exc.response.text or "")[:200] if exc.response is not None else ""
+        status_code = exc.response.status_code if exc.response is not None else 0
+        _bump(status_code)
         logger.warning(
             "hh_api_http_error status=%s page=%s query=%r body=%s",
-            exc.response.status_code if exc.response is not None else "?",
+            status_code if status_code else "?",
             page,
             query,
             body,
         )
         return []
     except httpx.RequestError as exc:
+        _bump(0)  # 0 → "network" bucket
         logger.warning("hh_api_request_error page=%s query=%r error=%s", page, query, exc)
         return []
+    _bump(response.status_code)
     try:
         payload = response.json()
     except ValueError as exc:

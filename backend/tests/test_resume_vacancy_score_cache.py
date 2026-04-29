@@ -105,7 +105,7 @@ class ResumeVacancyScoreCacheTest(unittest.TestCase):
         upsert_scores(
             self.db,
             resume_id=self.resume.id,
-            pipeline_version="3.0",
+            pipeline_version="3.1",
             scores=[{"vacancy_id": vid, "similarity_score": 0.75, "vector_score": 0.80}],
         )
 
@@ -113,7 +113,7 @@ class ResumeVacancyScoreCacheTest(unittest.TestCase):
             self.db,
             resume_id=self.resume.id,
             vacancy_ids=[vid],
-            pipeline_version="3.0",
+            pipeline_version="3.1",
             ttl_days=7,
         )
 
@@ -126,7 +126,7 @@ class ResumeVacancyScoreCacheTest(unittest.TestCase):
         upsert_scores(
             self.db,
             resume_id=self.resume.id,
-            pipeline_version="3.0",
+            pipeline_version="3.1",
             scores=[{"vacancy_id": vid, "similarity_score": 0.70}],
         )
         # Backdate computed_at to 10 days ago
@@ -144,7 +144,7 @@ class ResumeVacancyScoreCacheTest(unittest.TestCase):
             self.db,
             resume_id=self.resume.id,
             vacancy_ids=[vid],
-            pipeline_version="3.0",
+            pipeline_version="3.1",
             ttl_days=7,
         )
 
@@ -174,7 +174,7 @@ class ResumeVacancyScoreCacheTest(unittest.TestCase):
             self.db,
             resume_id=self.resume.id,
             vacancy_ids=[],
-            pipeline_version="3.0",
+            pipeline_version="3.1",
             ttl_days=7,
         )
         self.assertEqual(result, {})
@@ -189,13 +189,13 @@ class ResumeVacancyScoreCacheTest(unittest.TestCase):
         upsert_scores(
             self.db,
             resume_id=self.resume.id,
-            pipeline_version="3.0",
+            pipeline_version="3.1",
             scores=[{"vacancy_id": vid, "similarity_score": 0.60}],
         )
         upsert_scores(
             self.db,
             resume_id=self.resume.id,
-            pipeline_version="3.0",
+            pipeline_version="3.1",
             scores=[{"vacancy_id": vid, "similarity_score": 0.85}],
         )
 
@@ -205,7 +205,7 @@ class ResumeVacancyScoreCacheTest(unittest.TestCase):
             select(ResumeVacancyScore).where(
                 ResumeVacancyScore.resume_id == self.resume.id,
                 ResumeVacancyScore.vacancy_id == vid,
-                ResumeVacancyScore.pipeline_version == "3.0",
+                ResumeVacancyScore.pipeline_version == "3.1",
             )
         ).all()
         self.assertEqual(len(rows), 1)
@@ -219,7 +219,7 @@ class ResumeVacancyScoreCacheTest(unittest.TestCase):
         upsert_scores(
             self.db,
             resume_id=self.resume.id,
-            pipeline_version="3.0",
+            pipeline_version="3.1",
             scores=[
                 {"vacancy_id": vid, "similarity_score": 0.70}
                 for vid in self.vids
@@ -233,7 +233,7 @@ class ResumeVacancyScoreCacheTest(unittest.TestCase):
             self.db,
             resume_id=self.resume.id,
             vacancy_ids=self.vids,
-            pipeline_version="3.0",
+            pipeline_version="3.1",
             ttl_days=7,
         )
         self.assertEqual(result, {})
@@ -309,6 +309,10 @@ class CacheInterpositionTest(unittest.TestCase):
             ),
             patch("app.services.matching_service.list_disliked_vacancy_ids", return_value=[]),
             patch("app.services.matching_service.list_liked_vacancy_ids", return_value=[]),
+            patch(
+                "app.services.matching_service.list_seen_vacancy_ids_from_feedback",
+                return_value=set(),
+            ),
             patch("app.services.matching_service.list_seen_vacancy_ids", return_value=set()),
             patch("app.services.matching_service.list_added_skill_texts", return_value=[]),
             patch("app.services.matching_service.list_rejected_skill_texts", return_value=[]),
@@ -330,7 +334,7 @@ class CacheInterpositionTest(unittest.TestCase):
             patch(
                 "app.services.matching_service.settings",
                 matching_score_cache_enabled=True,
-                matching_pipeline_version="3.0",
+                matching_pipeline_version="3.1",
                 matching_score_cache_ttl_days=7,
                 feature_exclude_seen_enabled=False,
                 rerank_enabled=False,

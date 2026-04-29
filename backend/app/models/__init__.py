@@ -6,9 +6,12 @@ from app.models.esco import (
     EscoSkill,
     EscoSkillRelation,
 )
+from app.models.freshness_sweep_log import FreshnessSweepLog
+from app.models.match_event import MatchEvent
 from app.models.match_telemetry import MatchClick, MatchDwell, MatchImpression
-from app.models.recommendation_correction import RecommendationCorrection
+from app.models.openai_call_log import OpenaiCallLog
 from app.models.recommendation_job import RecommendationJob
+from app.models.requirement_override import RequirementOverride
 from app.models.resume import Resume
 from app.models.resume_audit import ResumeAudit
 from app.models.resume_clarification import ResumeClarification
@@ -23,7 +26,6 @@ from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.user_vacancy_seen import UserVacancySeen
 from app.models.vacancy import Vacancy
 from app.models.vacancy_profile import VacancyProfile
-from app.models.vacancy_strategy import VacancyStrategy
 
 __all__ = [
     "Application",
@@ -32,11 +34,14 @@ __all__ = [
     "EscoOccupationSkill",
     "EscoSkill",
     "EscoSkillRelation",
+    "FreshnessSweepLog",
     "MatchClick",
     "MatchDwell",
+    "MatchEvent",
     "MatchImpression",
-    "RecommendationCorrection",
+    "OpenaiCallLog",
     "RecommendationJob",
+    "RequirementOverride",
     "Resume",
     "ResumeAudit",
     "ResumeClarification",
@@ -51,5 +56,4 @@ __all__ = [
     "TrackGapAnalysis",
     "Vacancy",
     "VacancyProfile",
-    "VacancyStrategy",
 ]

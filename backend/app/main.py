@@ -4,20 +4,20 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 
+from app.api.middleware.request_id import RequestIdMiddleware
 from app.api.routes import (
     admin,
     applications,
     auth,
     dashboard,
     health,
-    recommendation_corrections,
+    metrics,
     resumes,
     system,
     telemetry,
     track_gaps,
     users,
     vacancies,
-    vacancy_strategy,
 )
 from app.core.config import settings, validate_runtime_settings
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
@@ -45,8 +45,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Request-ID middleware is added AFTER CORS so the X-Request-ID we put on
+# the response is preserved through CORS handling.
+app.add_middleware(RequestIdMiddleware)
 
 app.include_router(health.router)
+app.include_router(metrics.router)
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(system.router, prefix="/api/system", tags=["system"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
@@ -57,9 +61,3 @@ app.include_router(vacancies.router, prefix="/api/vacancies", tags=["vacancies"]
 app.include_router(track_gaps.router, prefix="/api", tags=["track-gaps"])
 app.include_router(applications.router, prefix="/api/applications", tags=["applications"])
 app.include_router(telemetry.router, prefix="/api/telemetry", tags=["telemetry"])
-app.include_router(vacancy_strategy.router, prefix="/api", tags=["vacancy-strategy"])
-app.include_router(
-    recommendation_corrections.router,
-    prefix="/api",
-    tags=["recommendation-corrections"],
-)

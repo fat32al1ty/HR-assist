@@ -12,23 +12,35 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.vacancy import Vacancy
 from app.repositories.applications import list_applied_vacancy_ids_for_user
+from app.repositories.requirement_overrides import (
+    delete_override as delete_requirement_override,
+)
+from app.repositories.requirement_overrides import (
+    upsert_override as upsert_requirement_override,
+)
 from app.repositories.resumes import get_active_resume_for_user, get_resume_for_user
 from app.repositories.user_vacancy_feedback import (
     list_disliked_vacancies,
     list_disliked_vacancy_ids,
     list_liked_vacancies,
     list_liked_vacancy_ids,
+    list_seen_vacancies,
+    list_seen_vacancy_ids_from_feedback,
     set_vacancy_disliked,
     set_vacancy_liked,
+    set_vacancy_seen,
 )
 from app.repositories.vacancies import get_vacancy_by_id, list_vacancies
 from app.schemas.vacancy import (
     RecommendationJobStartResponse,
     RecommendationJobStatusResponse,
+    RequirementOverrideRequest,
+    RequirementOverrideResponse,
     VacancyDiscoverRequest,
     VacancyDiscoverResponse,
     VacancyFeedbackRequest,
     VacancyFeedbackResponse,
+    VacancyFeedbackSeenResponse,
     VacancyMatchRead,
     VacancyRead,
     VacancyRecommendRequest,
@@ -76,6 +88,7 @@ def _excluded_ids_for_active_resume(db: Session, user: User) -> set[int]:
         list_disliked_vacancy_ids(db, user_id=user.id, resume_id=resume_id)
         .union(list_liked_vacancy_ids(db, user_id=user.id, resume_id=resume_id))
         .union(list_applied_vacancy_ids_for_user(db, user_id=user.id, resume_id=resume_id))
+        .union(list_seen_vacancy_ids_from_feedback(db, user_id=user.id, resume_id=resume_id))
     )
 
 
@@ -676,3 +689,114 @@ def disliked_vacancies(
         )
         for item in disliked
     ]
+
+
+@router.post("/feedback/seen", response_model=VacancyFeedbackSeenResponse)
+def mark_vacancy_seen(
+    payload: VacancyFeedbackRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> VacancyFeedbackSeenResponse:
+    resume_id = _require_active_resume_id(db, current_user)
+    feedback = set_vacancy_seen(
+        db,
+        user_id=current_user.id,
+        resume_id=resume_id,
+        vacancy_id=payload.vacancy_id,
+        seen=True,
+    )
+    return VacancyFeedbackSeenResponse(
+        vacancy_id=feedback.vacancy_id,
+        seen=feedback.seen,
+        liked=feedback.liked,
+        disliked=feedback.disliked,
+    )
+
+
+@router.post("/feedback/unseen", response_model=VacancyFeedbackSeenResponse)
+def unmark_vacancy_seen(
+    payload: VacancyFeedbackRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> VacancyFeedbackSeenResponse:
+    resume_id = _require_active_resume_id(db, current_user)
+    feedback = set_vacancy_seen(
+        db,
+        user_id=current_user.id,
+        resume_id=resume_id,
+        vacancy_id=payload.vacancy_id,
+        seen=False,
+    )
+    return VacancyFeedbackSeenResponse(
+        vacancy_id=feedback.vacancy_id,
+        seen=feedback.seen,
+        liked=feedback.liked,
+        disliked=feedback.disliked,
+    )
+
+
+@router.get("/feedback/seen", response_model=list[VacancyMatchRead])
+def seen_vacancies(
+    limit: int = Query(default=100, ge=1, le=200),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[VacancyMatchRead]:
+    resume_id = _require_active_resume_id(db, current_user)
+    seen = list_seen_vacancies(db, user_id=current_user.id, resume_id=resume_id, limit=limit)
+    return [
+        VacancyMatchRead(
+            vacancy_id=item.id,
+            title=item.title,
+            source_url=item.source_url,
+            company=item.company,
+            location=item.location,
+            similarity_score=0.0,
+            profile={"seen": True},
+        )
+        for item in seen
+    ]
+
+
+@router.post(
+    "/{vacancy_id}/requirement-override",
+    response_model=RequirementOverrideResponse,
+)
+def upsert_requirement_status_override(
+    vacancy_id: int,
+    payload: RequirementOverrideRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> RequirementOverrideResponse:
+    """Set or clear a manual ✓/✗ override for a single requirement on a match card.
+
+    Bound to the active resume (same pattern as /feedback/*).
+    """
+    resume_id = _require_active_resume_id(db, current_user)
+    if payload.status is None:
+        delete_requirement_override(
+            db,
+            resume_id=resume_id,
+            vacancy_id=vacancy_id,
+            section=payload.section,
+            requirement_text=payload.text,
+        )
+        return RequirementOverrideResponse(
+            vacancy_id=vacancy_id,
+            section=payload.section,
+            text=payload.text,
+            status=None,
+        )
+    row = upsert_requirement_override(
+        db,
+        resume_id=resume_id,
+        vacancy_id=vacancy_id,
+        section=payload.section,
+        requirement_text=payload.text,
+        status=payload.status,
+    )
+    return RequirementOverrideResponse(
+        vacancy_id=vacancy_id,
+        section=row.section,
+        text=row.requirement_text,
+        status=row.status,
+    )
