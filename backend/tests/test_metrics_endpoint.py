@@ -33,7 +33,7 @@ class PrometheusMetricsEndpointTest(unittest.TestCase):
         record_freshness_archived(source="hh_api", count=1)
         record_match_event(event="track_section_expanded")
 
-        resp = self.client.get("/metrics")
+        resp = self.client.get("/api/metrics")
         self.assertEqual(resp.status_code, 200)
         self.assertIn("text/plain", resp.headers.get("content-type", ""))
         body = resp.text

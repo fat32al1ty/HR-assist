@@ -50,7 +50,10 @@ app.add_middleware(
 app.add_middleware(RequestIdMiddleware)
 
 app.include_router(health.router)
-app.include_router(metrics.router)
+# Prometheus exposition: mounted under /api/metrics (not /metrics) because
+# the prod Caddy only proxies /api/* upstream. Same path locally for
+# consistency.
+app.include_router(metrics.router, prefix="/api")
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(system.router, prefix="/api/system", tags=["system"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
