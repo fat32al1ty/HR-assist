@@ -34,23 +34,77 @@ const STATUS_COLOR_VAR: Record<RequirementCheckStatus, string> = {
 
 const COLLAPSE_THRESHOLD = 5;
 
-type StatusIconProps = {
+type ChipItemProps = {
+  text: string;
   status: RequirementCheckStatus;
+  userOverridden?: boolean;
+  onClick?: () => void;
+  tooltip?: string;
 };
 
-function StatusIcon({ status }: StatusIconProps) {
+function ChipItem({ text, status, userOverridden, onClick, tooltip }: ChipItemProps) {
+  const interactive = typeof onClick === 'function';
+  const chipContent = (
+    <>
+      <span
+        aria-hidden="true"
+        style={{ color: STATUS_COLOR_VAR[status] }}
+        className="shrink-0 font-bold leading-none"
+      >
+        {STATUS_ICON[status]}
+      </span>
+      <span className="sr-only">{STATUS_SR[status]}</span>
+      <span className="truncate">{text}</span>
+      {userOverridden ? (
+        <span
+          aria-label="ручная отметка"
+          title="ручная отметка"
+          className="shrink-0 text-[color:var(--color-ink-muted)]"
+        >
+          ●
+        </span>
+      ) : null}
+    </>
+  );
+
+  const baseClass =
+    'inline-flex items-center gap-1 py-1 px-2.5 rounded-full text-[length:var(--text-xs)] ' +
+    'text-[color:var(--color-ink-secondary)] border border-[var(--color-border)] ' +
+    'bg-[var(--color-surface)] ' +
+    'transition-all duration-[var(--duration-fast)] max-w-full';
+
+  const hoverClass =
+    'hover:bg-[var(--color-surface-muted)] hover:border-[color-mix(in_srgb,var(--color-ink)_30%,transparent)] ' +
+    'hover:shadow-[var(--shadow-xs)] focus-visible:border-[var(--color-accent)] ' +
+    'focus-visible:bg-[var(--color-surface-muted)] focus-visible:outline-none';
+
+  if (interactive) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${baseClass} ${hoverClass} cursor-pointer`}
+        aria-label={`Переключить статус: ${text}`}
+        title={tooltip ?? 'Кликните, чтобы переключить ✓ ↔ ✗'}
+      >
+        {chipContent}
+      </button>
+    );
+  }
+
   return (
     <span
-      aria-hidden="true"
-      style={{ color: STATUS_COLOR_VAR[status] }}
-      className="shrink-0 font-bold text-[length:var(--text-sm)] w-4 text-center"
+      className={baseClass}
+      title={tooltip ?? undefined}
     >
-      {STATUS_ICON[status]}
+      {chipContent}
     </span>
   );
 }
 
-type CheckItemProps = {
+// ── Section ───────────────────────────────────────────────────────────────────
+
+type SectionItemProps = {
   text: string;
   status: RequirementCheckStatus;
   evidence?: string | null;
@@ -58,54 +112,9 @@ type CheckItemProps = {
   onClick?: () => void;
 };
 
-function CheckItem({ text, status, evidence, userOverridden, onClick }: CheckItemProps) {
-  const interactive = typeof onClick === 'function';
-  const Inner = (
-    <>
-      <div className="flex items-start gap-2">
-        <StatusIcon status={status} />
-        <span className="sr-only">{STATUS_SR[status]}</span>
-        <span className="text-[color:var(--color-ink-secondary)] text-[length:var(--text-sm)] leading-[var(--leading-snug)]">
-          {text}
-          {userOverridden ? (
-            <span
-              aria-label="ручная отметка"
-              title="ручная отметка"
-              className="ml-1 text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)]"
-            >
-              ●
-            </span>
-          ) : null}
-        </span>
-      </div>
-      {evidence ? (
-        <p className="ml-6 text-xs text-[color:var(--color-ink-muted)] leading-snug m-0">
-          {evidence}
-        </p>
-      ) : null}
-    </>
-  );
-  if (interactive) {
-    return (
-      <li className="flex flex-col gap-0.5">
-        <button
-          type="button"
-          onClick={onClick}
-          className="text-left cursor-pointer rounded-[var(--radius-md)] -mx-2 px-2 py-1 border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-surface-muted)] hover:shadow-[var(--shadow-xs)] focus-visible:border-[var(--color-accent)] focus-visible:bg-[var(--color-surface-muted)] focus-visible:outline-none transition-all duration-[var(--duration-fast)] flex flex-col gap-0.5"
-          aria-label={`Переключить статус: ${text}`}
-          title="Кликните, чтобы переключить ✓ ↔ ✗"
-        >
-          {Inner}
-        </button>
-      </li>
-    );
-  }
-  return <li className="flex flex-col gap-0.5">{Inner}</li>;
-}
-
 type SectionProps = {
   title: string;
-  items: CheckItemProps[];
+  items: SectionItemProps[];
 };
 
 function Section({ title, items }: SectionProps) {
@@ -113,9 +122,8 @@ function Section({ title, items }: SectionProps) {
 
   if (items.length === 0) return null;
 
-  const visible = !expanded && items.length > COLLAPSE_THRESHOLD
-    ? items.slice(0, COLLAPSE_THRESHOLD)
-    : items;
+  const visible =
+    !expanded && items.length > COLLAPSE_THRESHOLD ? items.slice(0, COLLAPSE_THRESHOLD) : items;
   const hiddenCount = items.length - COLLAPSE_THRESHOLD;
 
   return (
@@ -123,23 +131,43 @@ function Section({ title, items }: SectionProps) {
       <p className="m-0 text-[length:var(--text-xs)] font-medium text-[color:var(--color-ink-muted)] uppercase tracking-wide">
         {title}
       </p>
-      <ul className="list-none m-0 p-0 flex flex-col gap-2">
+
+      {/* Chip row — flex-wrap */}
+      <div className="flex flex-wrap gap-1.5">
         {visible.map((item, i) => (
-          <CheckItem key={i} {...item} />
+          <ChipItem
+            key={i}
+            text={item.text}
+            status={item.status}
+            userOverridden={item.userOverridden}
+            onClick={item.onClick}
+          />
         ))}
-      </ul>
-      {!expanded && hiddenCount > 0 ? (
+      </div>
+
+      {/* Collapse / expand toggle */}
+      {items.length > COLLAPSE_THRESHOLD ? (
         <button
           type="button"
-          onClick={() => setExpanded(true)}
-          className="self-start text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-ink-secondary)] underline underline-offset-2 transition-colors"
+          onClick={() => setExpanded((v) => !v)}
+          className="self-start inline-flex items-center gap-1 text-[length:var(--text-xs)] text-[color:var(--color-ink-muted)] hover:text-[color:var(--color-ink-secondary)] underline underline-offset-2 transition-colors"
         >
-          Показать ещё {hiddenCount}
+          {expanded ? (
+            <>
+              Свернуть <span aria-hidden="true" className="text-[10px] leading-none">▴</span>
+            </>
+          ) : (
+            <>
+              Показать ещё {hiddenCount} <span aria-hidden="true" className="text-[10px] leading-none">▾</span>
+            </>
+          )}
         </button>
       ) : null}
     </div>
   );
 }
+
+// ── Root component ─────────────────────────────────────────────────────────────
 
 type Props = {
   data: RequirementsCheck;
@@ -150,7 +178,7 @@ export default function RequirementsChecklist({ data, onToggle }: Props) {
   const handleClick = (section: Section, text: string, status: RequirementCheckStatus) =>
     onToggle ? () => onToggle(section, text, status) : undefined;
 
-  const experienceItem: CheckItemProps | null = data.experience
+  const experienceItem: SectionItemProps | null = data.experience
     ? {
         text: `Опыт работы — нужно ${data.experience.required_years} лет${
           data.experience.candidate_years != null
@@ -161,7 +189,7 @@ export default function RequirementsChecklist({ data, onToggle }: Props) {
       }
     : null;
 
-  const mustHaveItems: CheckItemProps[] = [
+  const mustHaveItems: SectionItemProps[] = [
     ...(experienceItem ? [experienceItem] : []),
     ...data.must_have.map((item: RequirementItem) => ({
       text: item.text,
@@ -172,7 +200,7 @@ export default function RequirementsChecklist({ data, onToggle }: Props) {
     })),
   ];
 
-  const niceToHaveItems: CheckItemProps[] = data.nice_to_have.map((item: RequirementItem) => ({
+  const niceToHaveItems: SectionItemProps[] = data.nice_to_have.map((item: RequirementItem) => ({
     text: item.text,
     status: item.status,
     evidence: item.evidence,

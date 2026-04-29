@@ -1940,62 +1940,64 @@ export default function DashboardPage() {
           <div className="workspace stagger-children">
             {/* ── Sidebar ─────────────────────────────────────────────── */}
             <aside className="flex flex-col gap-3.5 animate-fade-in">
-              {/* Upload card */}
-              <Card className="border-transparent shadow-none">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-[length:var(--text-2xl)]">Резюме</CardTitle>
-                  <CardDescription>
-                    PDF или DOCX
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  {/* Drop zone — only shown when user has no resume yet */}
-                  {resumes.length === 0 ? (
-                    <label
-                      className={[
-                        'flex flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-dashed',
-                        'px-4 py-6 cursor-pointer transition-colors duration-[var(--duration-fast)]',
-                        dragOver
-                          ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)]'
-                          : 'border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)]',
-                        busy ? 'opacity-50 pointer-events-none' : '',
-                      ].join(' ')}
-                      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                      onDragLeave={() => setDragOver(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setDragOver(false);
-                        const f = e.dataTransfer.files[0];
-                        if (f) void uploadResume(f);
-                      }}
-                    >
-                      <svg className="w-8 h-8 text-[color:var(--color-ink-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                      </svg>
-                      <div className="text-center select-none">
-                        <span className="block text-[color:var(--color-ink)] text-[length:var(--text-sm)] font-semibold">
-                          {busy ? 'Анализируем резюме…' : dragOver ? 'Отпустите файл' : 'Загрузите резюме'}
-                        </span>
-                        {!busy && !dragOver ? (
-                          <span className="block text-[color:var(--color-ink-muted)] text-[length:var(--text-xs)] mt-0.5">PDF или DOCX · перетащите или нажмите</span>
-                        ) : null}
-                      </div>
-                      <input
-                        type="file"
-                        className="sr-only"
-                        accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        disabled={busy}
-                        onChange={handleFileChange}
-                      />
-                    </label>
-                  ) : null}
-                  {message ? (
-                    <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
-                      {message}
-                    </p>
-                  ) : null}
-                </CardContent>
-              </Card>
+              {/* Upload card — shown only when no resume uploaded yet, or when there's a message */}
+              {(resumes.length === 0 || message) ? (
+                <Card className="border-transparent shadow-none">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-[length:var(--text-2xl)]">Резюме</CardTitle>
+                    <CardDescription>
+                      PDF или DOCX
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    {/* Drop zone — only shown when user has no resume yet */}
+                    {resumes.length === 0 ? (
+                      <label
+                        className={[
+                          'flex flex-col items-center justify-center gap-2 rounded-[var(--radius-lg)] border-2 border-dashed',
+                          'px-4 py-6 cursor-pointer transition-colors duration-[var(--duration-fast)]',
+                          dragOver
+                            ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)]'
+                            : 'border-[color-mix(in_srgb,var(--color-accent)_45%,transparent)] hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)]',
+                          busy ? 'opacity-50 pointer-events-none' : '',
+                        ].join(' ')}
+                        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                        onDragLeave={() => setDragOver(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setDragOver(false);
+                          const f = e.dataTransfer.files[0];
+                          if (f) void uploadResume(f);
+                        }}
+                      >
+                        <svg className="w-8 h-8 text-[color:var(--color-ink-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                        </svg>
+                        <div className="text-center select-none">
+                          <span className="block text-[color:var(--color-ink)] text-[length:var(--text-sm)] font-semibold">
+                            {busy ? 'Анализируем резюме…' : dragOver ? 'Отпустите файл' : 'Загрузите резюме'}
+                          </span>
+                          {!busy && !dragOver ? (
+                            <span className="block text-[color:var(--color-ink-muted)] text-[length:var(--text-xs)] mt-0.5">PDF или DOCX · перетащите или нажмите</span>
+                          ) : null}
+                        </div>
+                        <input
+                          type="file"
+                          className="sr-only"
+                          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                          disabled={busy}
+                          onChange={handleFileChange}
+                        />
+                      </label>
+                    ) : null}
+                    {message ? (
+                      <p className="rounded-[var(--radius-md)] px-3 py-2 bg-[var(--color-warning-subtle)] text-[color:var(--color-warning)] border border-[color-mix(in_srgb,var(--color-warning)_25%,transparent)] text-[length:var(--text-sm)]">
+                        {message}
+                      </p>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              ) : null}
 
               {/* ── Подобрать CTA block — primary action, no Card wrapper ── */}
               <div className="flex flex-col gap-1.5 px-1">
@@ -2020,12 +2022,9 @@ export default function DashboardPage() {
 
                 return (
                   <Card className="animate-fade-in border-transparent shadow-none">
-                    <CardHeader className="pb-3">
-                      <CardTitle>Что ищу</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-4 min-w-0">
-                      {/* F2: Pills inside disclosure — open by default for visibility */}
-                      <details open>
+                    <CardContent className="flex flex-col gap-4 min-w-0 pt-0">
+                      {/* F2: Pills inside disclosure — closed by default to reduce blank space */}
+                      <details>
                         <summary
                           className="cursor-pointer text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)] select-none list-none [&::-webkit-details-marker]:hidden"
                           style={{ fontWeight: 400 }}
@@ -2248,66 +2247,73 @@ export default function DashboardPage() {
                 );
               })()}
 
-              {/* Funnel card */}
+              {/* Funnel card — collapsed by default */}
               <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-[length:var(--text-2xl)]">Моя воронка</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  {(() => {
-                    const funnel = dashboardStats?.funnel;
-                    const nextEtaMs = funnel?.next_warmup_eta
-                      ? new Date(funnel.next_warmup_eta).getTime() - nowTick
-                      : null;
-                    const showCountdown =
-                      warmupStatus?.enabled &&
-                      funnel?.next_warmup_eta != null &&
-                      nextEtaMs !== null &&
-                      nextEtaMs > 0;
-                    return (
-                      <>
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Проанализировано</span>
-                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
-                            {funnel ? funnel.analyzed_count : '—'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Отобрано</span>
-                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
-                            {funnel && (funnel.selected_count > 0 || funnel.matched_count > 0)
-                              ? `${funnel.selected_count} / ${funnel.matched_count}`
-                              : '—'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Последний поиск</span>
-                          <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                            {funnel ? formatRelativeTimeRu(funnel.last_search_at) : '—'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Следующее обновление</span>
-                          <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
-                            {warmupStatus?.running ? 'идёт сейчас' : showCountdown ? formatCountdown(nextEtaMs as number) : '—'}
-                          </span>
-                        </div>
-                        {visibleMatches.length > 0 ? (
-                          <div className="flex justify-between items-baseline">
-                            <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Вакансий найдено</span>
-                            <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">{visibleMatches.length}</span>
-                          </div>
-                        ) : null}
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Поиск вакансий</span>
-                          <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
-                            {warmupStatus?.running ? 'идёт сейчас' : warmupStatus?.enabled ? 'активен' : 'выключен'}
-                          </span>
-                        </div>
-                      </>
-                    );
-                  })()}
-                </CardContent>
+                <Collapsible defaultOpen={false}>
+                  <CardHeader className="pb-3">
+                    <CollapsibleTrigger className="group flex items-center justify-between w-full text-left">
+                      <CardTitle className="text-[length:var(--text-2xl)]">Моя воронка</CardTitle>
+                      <span className="text-[color:var(--color-ink-muted)] transition-transform duration-[var(--duration-fast)] group-data-[state=open]:rotate-180 text-xs">▾</span>
+                    </CollapsibleTrigger>
+                  </CardHeader>
+                  <CollapsibleContent className="data-[state=open]:animate-slide-down">
+                    <CardContent className="flex flex-col gap-3 pt-0">
+                      {(() => {
+                        const funnel = dashboardStats?.funnel;
+                        const nextEtaMs = funnel?.next_warmup_eta
+                          ? new Date(funnel.next_warmup_eta).getTime() - nowTick
+                          : null;
+                        const showCountdown =
+                          warmupStatus?.enabled &&
+                          funnel?.next_warmup_eta != null &&
+                          nextEtaMs !== null &&
+                          nextEtaMs > 0;
+                        return (
+                          <>
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Проанализировано</span>
+                              <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
+                                {funnel ? funnel.analyzed_count : '—'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Отобрано</span>
+                              <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
+                                {funnel && (funnel.selected_count > 0 || funnel.matched_count > 0)
+                                  ? `${funnel.selected_count} / ${funnel.matched_count}`
+                                  : '—'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Последний поиск</span>
+                              <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                                {funnel ? formatRelativeTimeRu(funnel.last_search_at) : '—'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Следующее обновление</span>
+                              <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">
+                                {warmupStatus?.running ? 'идёт сейчас' : showCountdown ? formatCountdown(nextEtaMs as number) : '—'}
+                              </span>
+                            </div>
+                            {visibleMatches.length > 0 ? (
+                              <div className="flex justify-between items-baseline">
+                                <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Вакансий найдено</span>
+                                <span className="text-[length:var(--text-sm)] font-semibold font-[var(--font-mono)] text-[color:var(--color-ink)]">{visibleMatches.length}</span>
+                              </div>
+                            ) : null}
+                            <div className="flex justify-between items-baseline">
+                              <span className="text-[length:var(--text-sm)] text-[color:var(--color-ink-secondary)]">Поиск вакансий</span>
+                              <span className="text-[length:var(--text-sm)] font-semibold text-[color:var(--color-ink)]">
+                                {warmupStatus?.running ? 'идёт сейчас' : warmupStatus?.enabled ? 'активен' : 'выключен'}
+                              </span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
               </Card>
             </aside>
 
@@ -2315,10 +2321,7 @@ export default function DashboardPage() {
             <div className="workspace-main">
               {/* ── Резюме section ──────────────────────────────────── */}
               <Card className="animate-fade-in border-transparent shadow-none">
-                <CardHeader className="pb-3">
-                  <CardTitle>Моё резюме</CardTitle>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
+                <CardContent className="flex flex-col gap-4 pt-0">
                   {resumes.length === 0 ? (
                     <div className="flex flex-col items-center text-center gap-3 py-8">
                       <svg className="w-12 h-12 text-[color:var(--color-ink-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
@@ -2383,7 +2386,7 @@ export default function DashboardPage() {
 
               {/* ── Результаты подбора ───────────────────────────────── */}
               <Card className="animate-fade-in border-transparent shadow-none">
-                <CardContent className="flex flex-col gap-4 pt-4">
+                <CardContent className="flex flex-col gap-4 pt-2">
                   {matchingBusy ? (
                     <div className="progress-box">
                       <div className="progress-head">
@@ -2519,12 +2522,36 @@ export default function DashboardPage() {
                             <h3 className="min-w-0 text-[length:var(--text-xl)] font-[var(--font-display)] font-semibold leading-[var(--leading-tight)] tracking-[-0.025em] text-[color:var(--color-ink)]">
                               {match.title}
                             </h3>
-                            {/* Relevance + salary right-aligned, mono */}
-                            <div className="flex flex-col items-end gap-0.5 shrink-0 font-[var(--font-mono)] text-[length:var(--text-sm)]">
-                              <span className="font-semibold text-[color:var(--color-ink)]">
-                                {scoreToPercent(match.similarity_score)}
-                              </span>
-                              <span className="text-[length:var(--text-xs)] font-sans font-normal text-[color:var(--color-ink-muted)]">релевантность</span>
+                            {/* Score bar + salary right-aligned */}
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              {/* Progress bar + percentage */}
+                              <div className="flex items-center gap-1.5">
+                                <div
+                                  role="progressbar"
+                                  aria-valuenow={Math.round(match.similarity_score * 100)}
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-label={`Релевантность ${scoreToPercent(match.similarity_score)}`}
+                                  style={{ width: '80px', height: '6px', borderRadius: 'var(--radius-full)', background: 'var(--color-surface-muted)', overflow: 'hidden' }}
+                                >
+                                  <div
+                                    style={{
+                                      width: scoreToPercent(match.similarity_score),
+                                      height: '100%',
+                                      background: 'var(--color-accent)',
+                                      borderRadius: 'var(--radius-full)',
+                                      transition: 'width 0.35s var(--ease-out)',
+                                    }}
+                                  />
+                                </div>
+                                <span
+                                  className="font-[var(--font-mono)] text-[length:var(--text-xs)] font-semibold text-[color:var(--color-ink)]"
+                                  style={{ minWidth: '2.5rem', textAlign: 'right' }}
+                                >
+                                  {scoreToPercent(match.similarity_score)}
+                                </span>
+                              </div>
+                              {/* Salary badge if present */}
                               {(() => {
                                 const badge = renderSalaryBadge(match);
                                 if (!badge) return null;
@@ -2535,7 +2562,7 @@ export default function DashboardPage() {
                                       ? 'text-[color:var(--color-success)]'
                                       : 'text-[color:var(--color-ink-secondary)]';
                                 return (
-                                  <span className={fitColor}>
+                                  <span className={`font-[var(--font-mono)] text-[length:var(--text-xs)] ${fitColor}`}>
                                     {badge.text}
                                   </span>
                                 );
