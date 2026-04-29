@@ -2129,33 +2129,6 @@ def _build_resume_context(
     )
 
 
-def _match_percent_from_check(req_check: dict) -> int | None:
-    """Compute a 0..100 percent from the requirements checklist.
-
-    ``ok`` counts as 1.0, ``partial`` as 0.5; ``missing`` and ``unknown`` as 0.
-    Both must_have items and the experience row are weighted equally. Returns
-    None when the checklist has nothing to score against, so the UI can fall
-    back to ``similarity_score``.
-    """
-    items = []
-    must_have = req_check.get("must_have")
-    if isinstance(must_have, list):
-        items.extend(item for item in must_have if isinstance(item, dict))
-    experience = req_check.get("experience")
-    if isinstance(experience, dict):
-        items.append(experience)
-    if not items:
-        return None
-    score_sum = 0.0
-    for item in items:
-        status = item.get("status")
-        if status == "ok":
-            score_sum += 1.0
-        elif status == "partial":
-            score_sum += 0.5
-    return round(score_sum / len(items) * 100)
-
-
 def _candidate_to_match_dict(
     cand, *, tier: str, tier_reason: str | None = None, resume_context=None
 ) -> dict:
@@ -2170,7 +2143,6 @@ def _candidate_to_match_dict(
     req_check = annotations.get("requirements_check")
     if isinstance(req_check, dict):
         profile["requirements_check"] = req_check
-        profile["match_percent"] = _match_percent_from_check(req_check)
     if annotations.get("rerank_skipped"):
         profile["rerank_skipped"] = True
     confidence = annotations.get("llm_confidence")
@@ -2637,7 +2609,6 @@ def _apply_requirement_overrides(db: Session, *, resume_id: int, matches: list[d
             req_check = profile.get("requirements_check") if profile else None
             if not isinstance(req_check, dict) or not isinstance(vacancy_id, int):
                 continue
-            mutated = False
             for section in ("must_have", "nice_to_have"):
                 items = req_check.get(section)
                 if not isinstance(items, list):
@@ -2653,9 +2624,6 @@ def _apply_requirement_overrides(db: Session, *, resume_id: int, matches: list[d
                     if overridden:
                         item["status"] = overridden
                         item["user_overridden"] = True
-                        mutated = True
-            if mutated and isinstance(profile, dict):
-                profile["match_percent"] = _match_percent_from_check(req_check)
     except Exception as error:  # noqa: BLE001
         logger.warning("requirement override merge skipped (resume=%s): %s", resume_id, error)
 

@@ -81,7 +81,7 @@ type VacancyMatch = {
   salary_min?: number | null;
   salary_max?: number | null;
   salary_currency?: string | null;
-  profile: (Record<string, unknown> & { requirements_check?: RequirementsCheck | null; match_percent?: number | null }) | null;
+  profile: (Record<string, unknown> & { requirements_check?: RequirementsCheck | null }) | null;
   tier?: 'strong' | 'maybe' | null;
   match_run_id?: string | null;
 };
@@ -2524,16 +2524,11 @@ export default function DashboardPage() {
                             </h3>
                             {/* Score bar + salary right-aligned */}
                             <div className="flex flex-col items-end gap-1 shrink-0">
-                              {/* Progress bar + percentage — uses match_percent (checklist-based) if available, falls back to similarity_score */}
                               {(() => {
-                                const checklistPercent =
-                                  typeof match.profile?.match_percent === 'number'
-                                    ? Math.max(0, Math.min(100, Math.round(match.profile.match_percent)))
-                                    : null;
-                                const percent =
-                                  checklistPercent !== null
-                                    ? checklistPercent
-                                    : Math.round(match.similarity_score * 100);
+                                const percent = Math.max(
+                                  0,
+                                  Math.min(100, Math.round(match.similarity_score * 100)),
+                                );
                                 const percentLabel = `${percent}%`;
                                 return (
                                   <div className="flex items-center gap-1.5">
