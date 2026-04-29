@@ -384,6 +384,104 @@ class SweepDoesNotKillSegmentWarmupTest(unittest.TestCase):
             verify_db.close()
 
 
+class SweepStaleSegmentWarmupTest(unittest.TestCase):
+    """v0.22.1: a separate, longer-timeout sweep must catch segment_warmup
+    rows that got orphaned by a worker restart mid-crawl.
+
+    The v0.22 hardening (B2) deliberately removed segment_warmup from the
+    deep_scan sweep; without a replacement, orphaned rows stayed `running`
+    forever and blocked the unique partial index from re-enqueueing the
+    same segment_key.
+    """
+
+    def test_orphan_running_segment_warmup_is_failed_after_long_timeout(self):
+        from datetime import UTC, datetime, timedelta
+
+        from app.core.config import settings as app_settings
+        from app.services.recommendation_jobs import sweep_stale_segment_warmup_jobs
+
+        db = SessionLocal()
+        try:
+            user = _make_user(db)
+            resume = _make_resume(db, user.id)
+            stale_job = RecommendationJob(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                resume_id=resume.id,
+                job_type="segment_warmup",
+                status="running",
+                stage="collecting",
+                progress=10,
+                segment_key="orphan" + uuid.uuid4().hex[:6],
+                notify_user_id=user.id,
+                started_at=datetime.now(UTC)
+                - timedelta(seconds=app_settings.segment_warmup_timeout_seconds + 60),
+            )
+            db.add(stale_job)
+            db.commit()
+            stale_id = stale_job.id
+        finally:
+            db.close()
+
+        swept = sweep_stale_segment_warmup_jobs()
+        self.assertGreaterEqual(swept, 1)
+
+        verify_db = SessionLocal()
+        try:
+            row = verify_db.scalar(
+                select(RecommendationJob).where(RecommendationJob.id == stale_id)
+            )
+            self.assertIsNotNone(row)
+            self.assertEqual(row.status, "failed")
+            verify_db.delete(row)
+            verify_db.commit()
+        finally:
+            verify_db.close()
+
+    def test_recent_running_segment_warmup_not_swept(self):
+        """A segment_warmup that started 1 minute ago must NOT be swept —
+        the timeout is intentionally long so legitimate crawls finish."""
+        from datetime import UTC, datetime, timedelta
+
+        from app.services.recommendation_jobs import sweep_stale_segment_warmup_jobs
+
+        db = SessionLocal()
+        try:
+            user = _make_user(db)
+            resume = _make_resume(db, user.id)
+            recent_job = RecommendationJob(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                resume_id=resume.id,
+                job_type="segment_warmup",
+                status="running",
+                stage="collecting",
+                progress=20,
+                segment_key="recent" + uuid.uuid4().hex[:6],
+                notify_user_id=user.id,
+                started_at=datetime.now(UTC) - timedelta(seconds=60),
+            )
+            db.add(recent_job)
+            db.commit()
+            recent_id = recent_job.id
+        finally:
+            db.close()
+
+        sweep_stale_segment_warmup_jobs()
+
+        verify_db = SessionLocal()
+        try:
+            row = verify_db.scalar(
+                select(RecommendationJob).where(RecommendationJob.id == recent_id)
+            )
+            self.assertIsNotNone(row)
+            self.assertEqual(row.status, "running")
+            verify_db.delete(row)
+            verify_db.commit()
+        finally:
+            verify_db.close()
+
+
 # ---------------------------------------------------------------------------
 # T6: system_budget_scope isolates segment-warmup spend from user budgets
 # ---------------------------------------------------------------------------

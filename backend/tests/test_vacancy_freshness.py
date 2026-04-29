@@ -199,7 +199,13 @@ class SweepStaleVacanciesTest(VacancyFreshnessDbBase):
 
     def test_null_last_freshness_check_checked_before_recent(self) -> None:
         """Row with NULL last_freshness_check must be checked before vacancy2
-        which has a recent timestamp."""
+        which has a recent timestamp.
+
+        With a populated DB (~2k rows in dev/staging), sweep at limit=10000
+        used to take 2281 × 0.5s sleep = 19+ minutes and timed out the
+        runner. The fix: patch time.sleep + cap limit so the loop terminates
+        in seconds while still proving the ORDER BY contract.
+        """
         call_order: list[int] = []
 
         # Ensure self.vacancy has NULL last_freshness_check
@@ -213,8 +219,11 @@ class SweepStaleVacanciesTest(VacancyFreshnessDbBase):
             return True
 
         with patch.object(vacancy_freshness, "check_vacancy_alive", side_effect=_spy):
-            # Use a large limit so both rows are included
-            sweep_stale_vacancies(self.db, limit=10000)
+            with patch("app.services.vacancy_freshness.time.sleep"):
+                # Use a large enough limit to include both test rows even with
+                # other test/dev data in the DB, but bypass the 0.5s polite
+                # delay so the loop terminates in seconds.
+                sweep_stale_vacancies(self.db, limit=5000)
 
         # Both of our rows must have been reached
         self.assertIn(self.vacancy.id, call_order)

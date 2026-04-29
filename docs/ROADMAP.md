@@ -15,6 +15,17 @@ HR Assist — AI-ассистент для **соискателя** в IT. Не 
 
 ## Последние релизы
 
+### `v0.22.1` — HH-pagination + segment_warmup orphan fixes (2026-04-29)
+Patch-релиз поверх v0.22.0 после диагностики прода. Закрыл два бага:
+
+**Bug A — HH 400-storm.** `_build_rotation_offset` возвращал offset до 90 на retry, а HH public API режет `(page+1) × per_page > 2000` (для per_page=100 — page 19 максимум). Worker спамил 8 параллельных pages 21-46 на каждой ротации → ~185 «you can't look up more than 2000 items» 400-х за час, пожирали HH-quota и cycle time. Фикс: понизил cap rotation'а 90 → 11 в `vacancy_pipeline.py` + добавил early-return `if start_page >= 20: return []` в `_search_hh_public_api_vacancies` (`vacancy_sources.py`). Новая константа `HH_PAGE_CEILING_PER_PAGE_100 = 20`.
+
+**Bug B — Orphan running segment_warmup.** v0.22 hardening (B2) намеренно исключил `segment_warmup` из `sweep_stale_running_jobs` (правомерно — 60-vacancy crawl + LLM может занимать минуты), но не дал замены — задача после рестарта worker'а зависала в `running` навсегда, и unique partial index на `segment_key WHERE status IN ('queued','running')` блокировал re-enqueue. Производственный кейс: контейнер рестартует посреди crawl'а → сегмент мёртв до ручной очистки. Фикс: новая `sweep_stale_segment_warmup_jobs` с настройкой `segment_warmup_timeout_seconds = 1800` (30 мин) — wired в `vacancy_warmup._worker_loop` рядом с обычным sweep'ом. Длинный таймаут специально, чтобы НЕ убивать легитимные медленные crawl'ы.
+
+**Bonus.** Починил flaky-тест `test_null_last_freshness_check_checked_before_recent` из v0.22 — он итерировал 2281 строку × `time.sleep(0.5)` = 19+ мин и таймаутил CI. Теперь `patch('time.sleep')` + cap limit. Полный backend suite: 70 сек вместо 11 мин.
+
+Eval: +5 новых тестов (HH page-ceiling clamp ×3, segment_warmup orphan timeout ×2). 676/677 pass (1 pre-existing unrelated failure).
+
 ### `v0.22.0` — Freshness + ToS compliance (2026-04-29)
 Phase 6, шаг 4 (финал). Закрыли две дыры одновременно — зомби-вакансии в выдаче и фрейминг продукта против hh.ru ToS §3.11. **F1 (on-read freshness):** instant-эндпоинт после фильтрации по feedback'у параллельно дёргает HH `GET /vacancies/{id}` для top-N (default 20) через `httpx.AsyncClient`, archived-флаги или 404 → soft-delete (`status='archived'`, `archived_at=now()`) и исключение из ответа. Best-effort, не валит response при HH-сбое. **F2 (nightly sweep):** в `vacancy_warmup_worker._run_freshness_sweep_if_due` раз в сутки берёт до 500 строк по `last_freshness_check ASC NULLS FIRST, shown_count DESC`, серийно проверяет на HH с задержкой 0.5 сек между запросами. **F3 (framing):** каждая VacancyCard теперь рендерит видимую кнопку с хостом источника (например `hh.ru ↗`) с подчёркнутой visual weight'ом (border + accent fill), а не subtle «Источник →». README + README.ru + PRIVACY переписаны как «AI-помощник для поиска по hh.ru», не «своя база вакансий». Migration `0038_vacancy_freshness`: `last_freshness_check`, `archived_at`, `shown_count` columns. New service `vacancy_freshness.py` (~213 строк). Eval: 20 новых тестов (HH-id parsing, alive happy/archived/404/5xx/network, sweep ordering, instant integration, shown_count bumps, sweep-due-window). Acceptance: archived <2% в выдаче, каждая карточка имеет ссылку на hh.ru, 0 жалоб от hh.ru — отслеживаем по факту.
 

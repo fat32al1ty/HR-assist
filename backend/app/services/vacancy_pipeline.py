@@ -252,12 +252,17 @@ def _build_vacancy_analysis_input(
 
 
 def _build_rotation_offset(query: str, count: int, attempt: int) -> int:
-    # Rotate pages between retries to avoid repeatedly taking the same top results.
-    # We use a wider offset range so repeated runs can reach deeper unseen pages.
+    # Rotate pages between retries to avoid repeatedly taking the same top
+    # results. Capped at 11 because HH public API refuses pages where
+    # (page+1) * per_page > 2000 (per_page=100 → max page 19), and our wave
+    # fetches up to 8 pages ahead — any start_page above 11 turns into 8+
+    # guaranteed 400s per retry. The previous 90-cap predated the HH-only
+    # architecture and was producing ~185 bad requests per worker cycle in
+    # prod (observed 2026-04-29).
     five_minute_bucket = int(time.time() // 300)
-    base = abs(hash((query.lower().strip(), five_minute_bucket))) % 12
-    step = max(2, min(20, count // 20))
-    return max(1, min(90, base + (attempt * step)))
+    base = abs(hash((query.lower().strip(), five_minute_bucket))) % 6
+    step = max(1, min(3, count // 40))
+    return max(1, min(11, base + (attempt * step)))
 
 
 def discover_and_index_vacancies(

@@ -272,6 +272,42 @@ def sweep_stale_running_jobs() -> int:
         db.close()
 
 
+SEGMENT_WARMUP_TIMEOUT_MESSAGE = (
+    "Прогрев сегмента остановлен по тайм-ауту. Подбор продолжит работу с тем, "
+    "что уже успело попасть в индекс."
+)
+
+
+def sweep_stale_segment_warmup_jobs() -> int:
+    """Fail segment_warmup jobs running past `segment_warmup_timeout_seconds`.
+
+    Called once per warmup cycle. Counterpart to `sweep_stale_running_jobs`
+    — `sweep_stale_running_jobs` deliberately excludes segment_warmup
+    because deep crawls are legitimately slow, but a worker that died
+    mid-crawl leaves the row stuck in `running` forever, blocking new
+    enqueues for the same segment_key (unique partial index dedup).
+    Use a much longer timeout (default 30 min) so we only kill rows
+    that are clearly orphaned, not slow.
+    """
+    db = SessionLocal()
+    try:
+        cutoff = datetime.now(UTC) - timedelta(seconds=settings.segment_warmup_timeout_seconds)
+        stale = db.scalars(
+            select(RecommendationJob)
+            .where(RecommendationJob.status == "running")
+            .where(RecommendationJob.job_type == "segment_warmup")
+            .where(RecommendationJob.started_at.is_not(None))
+            .where(RecommendationJob.started_at < cutoff)
+        ).all()
+        swept = 0
+        for job in stale:
+            fail_job(db, job, error_message=SEGMENT_WARMUP_TIMEOUT_MESSAGE)
+            swept += 1
+        return swept
+    finally:
+        db.close()
+
+
 def check_job_alive(db, job: RecommendationJob) -> None:
     """Raise if the user has requested cancel or the job has timed out.
 

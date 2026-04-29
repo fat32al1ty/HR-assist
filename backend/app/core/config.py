@@ -117,6 +117,12 @@ class Settings(BaseSettings):
     segment_warmup_max_analyzed: int = 30
     segment_warmup_daily_cap: int = 100
     segment_warmup_discover_count: int = 60
+    # Long-form timeout for segment_warmup jobs only (deep_scan stays at
+    # `recommendation_job_timeout_seconds`). 60 vacancies × LLM analyze
+    # legitimately takes minutes. Anything past this is a stuck/orphaned
+    # row from a worker restart — sweep flips it to failed so the unique
+    # partial index releases the segment_key for re-enqueue.
+    segment_warmup_timeout_seconds: int = 1800
     openai_system_request_budget_usd: float = 0.20
     vacancy_freshness_check_enabled: bool = True
     vacancy_freshness_check_top_n: int = 20

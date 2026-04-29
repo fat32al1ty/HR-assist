@@ -14,7 +14,10 @@ from app.models.user_vacancy_feedback import UserVacancyFeedback
 from app.models.vacancy import Vacancy
 from app.repositories.recommendation_jobs import complete_job, fail_job, mark_job_running
 from app.services.openai_usage import system_budget_scope
-from app.services.recommendation_jobs import sweep_stale_running_jobs
+from app.services.recommendation_jobs import (
+    sweep_stale_running_jobs,
+    sweep_stale_segment_warmup_jobs,
+)
 from app.services.segment_keys import (
     query_from_resume_analysis as _query_from_resume_analysis,
 )
@@ -291,6 +294,16 @@ def _worker_loop() -> None:
         try:
             queries, metrics = _run_warmup_cycle()
             sweep_stale_running_jobs()
+            try:
+                segment_swept = sweep_stale_segment_warmup_jobs()
+                if segment_swept > 0:
+                    logger.info(
+                        "segment_warmup_stale_swept count=%d timeout_seconds=%d",
+                        segment_swept,
+                        settings.segment_warmup_timeout_seconds,
+                    )
+            except Exception as seg_sweep_err:
+                logger.warning("segment_warmup_sweep_error error=%s", seg_sweep_err)
             try:
                 _run_freshness_sweep_if_due()
             except Exception as fsweep_err:

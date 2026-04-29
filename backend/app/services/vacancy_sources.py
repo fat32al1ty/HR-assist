@@ -107,6 +107,11 @@ FETCH_TIMEOUT_SECONDS = 4
 ENRICH_TIME_BUDGET_SECONDS = 4
 HH_PUBLIC_API_URL = "https://api.hh.ru/vacancies"
 HH_CONCURRENCY = 3
+# HH public API rejects requests where (page + 1) * per_page > 2000 with a
+# 400 "you can't look up more than 2000 items in the list". With per_page=100
+# the hard ceiling is page index 19. The retry-rotation path can produce
+# start_page=90, so we clamp here instead of trusting upstream.
+HH_PAGE_CEILING_PER_PAGE_100 = 20  # 0..19 inclusive
 # Level 2 D1: stop HH pagination once the already-indexed ratio on a page
 # crosses this threshold. Further pages are extremely likely to return the
 # same stale inventory — keep API round-trips bounded and surface the event
@@ -612,13 +617,24 @@ def _search_hh_public_api_vacancies(
     vacancies: list[dict[str, Any]] = []
     seen_urls: set[str] = set()
     per_page = min(max(count, 30), 100)
-    # HH public API caps each search at page * per_page ≤ 2000, so with
-    # per_page=100 the hard ceiling is 20 pages. Scale max_pages with the
-    # requested count so admin deep scans (count=2000) can actually reach
+    # HH public API caps each search at (page+1) * per_page ≤ 2000, so with
+    # per_page=100 the hard ceiling is 20 pages (0..19). Scale max_pages with
+    # the requested count so admin deep scans (count=2000) can actually reach
     # page 19; small user counts keep the old 8-page minimum.
     pages_needed = (count + per_page - 1) // max(1, per_page)
     max_pages = min(20, max(MAX_API_SOURCE_PAGES, 8, pages_needed + 2))
+    # Hard cap the absolute page index against HH's own ceiling.
+    # `_build_rotation_offset` can produce start_page values up to ~90 to spread
+    # across deeper pages on retries — but HH refuses anything past page 19,
+    # so without this clamp the worker burns ~8 HH calls per retry on guaranteed
+    # 400s. If we're already past the ceiling (or the requested window
+    # overshoots), skip this source entirely instead of spamming bad requests.
+    page_ceiling = HH_PAGE_CEILING_PER_PAGE_100
+    if start_page >= page_ceiling:
+        return vacancies
     first_page = max(0, start_page)
+    if first_page + max_pages > page_ceiling:
+        max_pages = page_ceiling - first_page
 
     def _should_truncate_by_indexed(page_vacancies: list[dict[str, Any]]) -> bool:
         if already_indexed_probe is None:
