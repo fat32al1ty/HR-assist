@@ -97,6 +97,7 @@ class TestFallbackSkippedWhenEnoughPrefetched(CursorFallbackBase):
             use_prefetched_index=True,
             discover_if_few_matches=True,
             min_prefetched_matches=5,
+            freshness_pass=False,
         )
 
         self.assertEqual(mock_discover.call_count, 0)

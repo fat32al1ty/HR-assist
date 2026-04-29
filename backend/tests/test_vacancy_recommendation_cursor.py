@@ -138,6 +138,7 @@ class VacancyRecommendationCursorTest(unittest.TestCase):
             use_prefetched_index=True,
             discover_if_few_matches=True,
             min_prefetched_matches=5,
+            freshness_pass=False,
         )
 
         self.db.refresh(self.user)

@@ -48,6 +48,7 @@ class RecommendationInteractiveLimitsTest(unittest.TestCase):
             discover_if_few_matches=True,
             min_prefetched_matches=5,
             max_runtime_seconds=300,
+            freshness_pass=False,
         )
 
         self.assertIsInstance(query, str)

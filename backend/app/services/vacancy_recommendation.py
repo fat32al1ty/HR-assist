@@ -46,6 +46,15 @@ ADMIN_MAX_OPENAI_ANALYZED = 1000
 HH_CURSOR_OVERLAP = timedelta(hours=6)
 INTERACTIVE_MAX_DEEP_QUERIES = 6
 HIGH_QUALITY_MATCH_THRESHOLD = 0.55
+# Per-job freshness pass: even when use_prefetched_index=True (default in
+# UI), pull a small principal-query batch from HH so the pool stays current
+# under each user's profile. Without this, instant-mode users with full
+# pools never see vacancies posted since their last visit. Cost is ~3-5s
+# wall-clock + ~10 LLM analyses; gated by FRESHNESS_PASS_MIN_COOLDOWN to
+# avoid hitting HH twice in the same minute.
+FRESHNESS_PASS_COUNT = 15
+FRESHNESS_PASS_ANALYZED = 15
+FRESHNESS_PASS_MIN_COOLDOWN = timedelta(minutes=30)
 
 
 def _resolve_scan_budgets(user: User | None, *, is_cold_start: bool) -> tuple[int, int, int, int]:
@@ -393,6 +402,7 @@ def recommend_vacancies_for_resume(
     progress_callback: Callable[[str, int, dict | None], None] | None = None,
     max_runtime_seconds: int | None = None,
     preference_overrides: dict | None = None,
+    freshness_pass: bool = True,
 ) -> tuple[str, VacancyDiscoveryMetrics, list[dict]]:
     last_progress = 0
     started_at = time.monotonic()
@@ -492,6 +502,30 @@ def recommend_vacancies_for_resume(
     fetch_succeeded = False
     _cut_short = False
     report("collecting", 5, aggregate_metrics)
+
+    if freshness_pass and use_prefetched_index and not is_admin:
+        cooldown_elapsed = (
+            user is None
+            or user.last_hh_seen_at is None
+            or (datetime.now(UTC) - user.last_hh_seen_at) > FRESHNESS_PASS_MIN_COOLDOWN
+        )
+        if cooldown_elapsed:
+            try:
+                freshness_result = discover_and_index_vacancies(
+                    db,
+                    query=query,
+                    count=FRESHNESS_PASS_COUNT,
+                    rf_only=rf_only,
+                    force_reindex=False,
+                    use_brave_fallback=False,
+                    max_analyzed=FRESHNESS_PASS_ANALYZED,
+                    date_from=cursor_from,
+                )
+                aggregate_metrics = _merge_metrics(aggregate_metrics, freshness_result.metrics)
+                fetch_succeeded = True
+                report("collecting", 12, aggregate_metrics)
+            except Exception as error:  # noqa: BLE001
+                logger.warning("freshness pass failed: %s", error)
 
     if use_prefetched_index:
         report("matching", 45, aggregate_metrics)
