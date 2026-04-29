@@ -68,7 +68,7 @@ function ChipItem({ text, status, userOverridden, onClick, tooltip }: ChipItemPr
   );
 
   const baseClass =
-    'inline-flex items-center gap-1 py-1 px-2.5 rounded-full text-[length:var(--text-xs)] ' +
+    'inline-flex items-center gap-1 py-1 px-2.5 rounded-full text-[length:var(--text-sm)] font-medium ' +
     'text-[color:var(--color-ink-secondary)] border border-[var(--color-border)] ' +
     'bg-[var(--color-surface)] ' +
     'transition-all duration-[var(--duration-fast)] max-w-full';
